@@ -195,8 +195,7 @@ namespace KinectKids.Input
         {
             if (sensor == null || joint.TrackingState == JointTrackingState.NotTracked) return new Point(-1, -1);
             var depth = sensor.CoordinateMapper.MapSkeletonPointToDepthPoint(joint.Position, DepthImageFormat.Resolution320x240Fps30);
-            // Spegelvänd X-led ger den naturliga "spegelkänslan" barn förväntar sig.
-            return new Point(1 - Clamp(depth.X / 320.0), Clamp(depth.Y / 240.0));
+            return new Point(Clamp(depth.X / 320.0), Clamp(depth.Y / 240.0));
         }
 
         private static double Clamp(double value) => Math.Max(0, Math.Min(1, value));
