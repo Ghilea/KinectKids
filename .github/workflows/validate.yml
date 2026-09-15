@@ -1,0 +1,26 @@
+name: Validate project
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  structure:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate XML and project references
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml](Get-Content './src/KinectKids/KinectKids.csproj') | Out-Null
+          [xml](Get-Content './src/KinectKids/App.xaml') | Out-Null
+          [xml](Get-Content './src/KinectKids/MainWindow.xaml') | Out-Null
+          $project = [xml](Get-Content './src/KinectKids/KinectKids.csproj')
+          $manager = New-Object System.Xml.XmlNamespaceManager($project.NameTable)
+          $manager.AddNamespace('m', 'http://schemas.microsoft.com/developer/msbuild/2003')
+          foreach ($node in $project.SelectNodes('//m:Compile|//m:Page|//m:ApplicationDefinition', $manager)) {
+            $path = Join-Path './src/KinectKids' $node.Include
+            if (-not (Test-Path $path)) { throw "Projektfilen refererar till en fil som saknas: $path" }
+          }
+          Write-Host 'Alla XAML/XML-filer och projektreferenser är giltiga.'
