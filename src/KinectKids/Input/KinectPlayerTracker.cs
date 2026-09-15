@@ -137,8 +137,10 @@ namespace KinectKids.Input
                     tracked.Add(ToPlayer(primarySkeleton));
                     var secondarySkeleton = raw
                         .Where(item => item.TrackingId != primarySkeleton.TrackingId)
-                        .Where(item => now - candidates[item.TrackingId].FirstSeen >= TimeSpan.FromMilliseconds(1500))
-                        .Where(item => Math.Abs(item.Position.X - primarySkeleton.Position.X) >= 0.28f)
+                        .Where(item => now - candidates[item.TrackingId].FirstSeen >= TimeSpan.FromMilliseconds(2200))
+                        .Where(HasTrackedUpperBody)
+                        .Where(item => Math.Abs(item.Position.X - primarySkeleton.Position.X) >= 0.38f)
+                        .Where(item => Math.Abs(item.Position.Z - primarySkeleton.Position.Z) <= 0.85f)
                         .OrderBy(item => item.Position.Z)
                         .FirstOrDefault();
                     if (secondarySkeleton != null) tracked.Add(ToPlayer(secondarySkeleton));
@@ -189,6 +191,14 @@ namespace KinectKids.Input
             if (skeleton.Position.Z < 0.8f || skeleton.Position.Z > 4.5f)
                 return false;
             return head.Position.Y - hip.Position.Y >= 0.25f;
+        }
+
+        private static bool HasTrackedUpperBody(Skeleton skeleton)
+        {
+            return skeleton.Joints[JointType.ShoulderLeft].TrackingState == JointTrackingState.Tracked
+                   && skeleton.Joints[JointType.ShoulderRight].TrackingState == JointTrackingState.Tracked
+                   && skeleton.Joints[JointType.HandLeft].TrackingState != JointTrackingState.NotTracked
+                   && skeleton.Joints[JointType.HandRight].TrackingState != JointTrackingState.NotTracked;
         }
 
         private Point Map(Joint joint)

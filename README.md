@@ -1,10 +1,14 @@
 # Rörelselek för Kinect 360
 
-Ett svenskt, barnvänligt rörelsespel för **Xbox 360 Kinect (Kinect v1)** på Windows 10. Ett eller två barn använder händerna för att smälla ballonger på skärmen. Ingen handkontroll behövs.
+Ett svenskt, barnvänligt rörelsespel för **Xbox 360 Kinect (Kinect v1)** på Windows 10. Ett eller två barn använder händerna för att spela Ballongjakten eller åka genom Zombietåget. Ingen handkontroll behövs.
 
-## Det som finns i version 1.1
+## Det som finns i version 1.2
 
-- Balloon Pop med 60-sekundersrundor
+- Ballongjakten med 60-sekundersrundor
+- Zombietåget: ett barnvänligt äventyr på räls genom station och tunnel
+- tydligt handsikte: håll handen på en zombie tills den gula mätaren fylls
+- zombier som kommer närmare och en konduktörsboss mot slutet
+- animerad färd med mjuka bakgrundsrörelser och övergång mellan två miljöer
 - automatisk spårning av en eller två spelare
 - stora, tydliga handmarkörer och barnvänligt gränssnitt
 - komplett skelettvy i kalibreringen och under spelet
@@ -48,7 +52,8 @@ Du kan även öppna `KinectKids.sln` i Visual Studio, välja `Release | x86` och
 
 | Kontroll | Funktion |
 |---|---|
-| Händerna | Smäll ballonger |
+| Händerna i Ballongjakten | Smäll ballonger |
+| Håll en handring på en zombie | Fyll den gula mätaren och träffa |
 | Höger hand över en knapp | Fyll mätaren och tryck på knappen |
 | `Mellanslag` | Paus / fortsätt |
 | `F11` | Helskärm / fönster |
@@ -75,7 +80,8 @@ Vanliga orsaker:
 
 ```text
 src/KinectKids/
-  Game/       Balloon Pop-motor och modeller
+  Assets/     Stations-, tunnel- och zombieillustrationer
+  Game/       Ballong- och Zombietåget-motorer
   Input/      Kinect- och musspårning bakom samma gränssnitt
   Models/     Normaliserad spelardata
   MainWindow  WPF-gränssnitt och spelläge

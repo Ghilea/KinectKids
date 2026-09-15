@@ -54,6 +54,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Resource Include="Assets\zombie-station.jpg" />
+    <Resource Include="Assets\zombie-tunnel.jpg" />
+    <Resource Include="Assets\zombie-scout.png" />
+    <Resource Include="Assets\zombie-conductor-boss.png" />
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
@@ -62,6 +66,9 @@
     </Compile>
     <Compile Include="Game\Balloon.cs" />
     <Compile Include="Game\GameEngine.cs" />
+    <Compile Include="Game\ZombieAimResult.cs" />
+    <Compile Include="Game\ZombieRailEngine.cs" />
+    <Compile Include="Game\ZombieTarget.cs" />
     <Compile Include="Input\IPlayerTracker.cs" />
     <Compile Include="Input\KinectPlayerTracker.cs" Condition=" '$(UseKinectStub)' != 'true' " />
     <Compile Include="Input\KinectPlayerTracker.Stub.cs" Condition=" '$(UseKinectStub)' == 'true' " />

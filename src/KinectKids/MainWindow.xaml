@@ -63,17 +63,20 @@
                 <Border Background="#29FFFFFF" CornerRadius="14" Padding="14,7" HorizontalAlignment="Left" Margin="0,0,0,22">
                     <TextBlock Text="1–2 SPELARE • HELA KROPPEN" Foreground="#D4F4FA" FontWeight="Bold" FontSize="13" />
                 </Border>
-                <TextBlock Text="Hoppa in och&#x0a;smäll ballonger!" Foreground="White" FontSize="58" FontWeight="Black" LineHeight="62" />
-                <TextBlock Text="Ett enkelt rörelsespel där barnen använder händerna.&#x0a;Ingen handkontroll behövs och ingen kamerabild sparas." Foreground="#DCECF4" FontSize="20" LineHeight="30" Margin="0,20,0,28" />
+                <TextBlock Text="Välj ert&#x0a;rörelseäventyr!" Foreground="White" FontSize="58" FontWeight="Black" LineHeight="62" />
+                <TextBlock Text="Smäll ballonger eller åk spöktåg genom zombiestationen.&#x0a;Styr med händerna – ingen handkontroll behövs." Foreground="#DCECF4" FontSize="20" LineHeight="30" Margin="0,20,0,28" />
                 <WrapPanel>
-                    <Button Content="Starta spelet" Click="StartButton_Click" Margin="0,0,14,12" />
+                    <Button Content="Ballongjakten" Click="StartButton_Click" Margin="0,0,14,12" />
+                    <Button Content="Zombietåget" Click="ZombieStartButton_Click" Background="#8B55D9" Margin="0,0,14,12" />
                     <Button x:Name="InputModeButton" Content="Testa med mus" Click="MouseModeButton_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,0,12" />
                 </WrapPanel>
                 <TextBlock Text="Tips: stå 1,5–3 meter från sensorn. Håll höger hand över en knapp för att trycka." Foreground="#9FC8D8" FontSize="14" Margin="2,8,0,0" />
             </StackPanel>
 
-            <Border Grid.Column="1" Background="#20FFFFFF" CornerRadius="40" BorderBrush="#35FFFFFF" BorderThickness="1" Margin="18">
+            <Border Grid.Column="1" Background="#20FFFFFF" CornerRadius="40" BorderBrush="#35FFFFFF" BorderThickness="1" Margin="18" ClipToBounds="True">
                 <Grid ClipToBounds="True">
+                    <Image Source="/KinectKids;component/Assets/zombie-station.jpg" Stretch="UniformToFill" Opacity="0.66" />
+                    <Border Background="#4810213D" />
                     <Ellipse Width="460" Height="460" Fill="#18FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     <Ellipse Width="330" Height="330" Fill="#18FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     <Canvas Width="440" Height="470" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -108,7 +111,7 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <StackPanel HorizontalAlignment="Center">
-                        <TextBlock Text="Ställ er framför kameran" Foreground="White" FontSize="38" FontWeight="Bold" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="CalibrationTitle" Text="Ställ er framför kameran" Foreground="White" FontSize="38" FontWeight="Bold" HorizontalAlignment="Center" />
                         <TextBlock x:Name="CalibrationStatus" Text="Vi väntar tills Kinect ser minst en spelare…" Foreground="#C9E6F1" FontSize="19" Margin="0,9,0,0" HorizontalAlignment="Center" />
                         <TextBlock Text="De stora färgade ringarna är dina händer." Foreground="#FFCF5A" FontSize="16" FontWeight="SemiBold" Margin="0,7,0,0" HorizontalAlignment="Center" />
                     </StackPanel>
@@ -130,11 +133,36 @@
         </Grid>
 
         <Grid x:Name="GamePanel" Grid.RowSpan="2" Visibility="Collapsed" Background="#10213D" Panel.ZIndex="30">
-            <Canvas x:Name="Playfield" Background="#102B46" ClipToBounds="True" />
-            <Canvas x:Name="GameSkeletonCanvas" Background="Transparent" ClipToBounds="True" IsHitTestVisible="False" Opacity="0.72" />
+            <Grid x:Name="ZombieBackdrop" Visibility="Collapsed" ClipToBounds="True">
+                <Image x:Name="ZombieStationBackground" Source="/KinectKids;component/Assets/zombie-station.jpg" Stretch="UniformToFill" RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="StationScale" ScaleX="1.04" ScaleY="1.04" />
+                            <TranslateTransform x:Name="StationTranslate" />
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+                <Image x:Name="ZombieTunnelBackground" Source="/KinectKids;component/Assets/zombie-tunnel.jpg" Stretch="UniformToFill" Opacity="0" RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="TunnelScale" ScaleX="1.04" ScaleY="1.04" />
+                            <TranslateTransform x:Name="TunnelTranslate" />
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+                <Border Background="#33031220" />
+                <Border BorderBrush="#552FE4D0" BorderThickness="8" CornerRadius="25" Margin="10" />
+            </Grid>
+            <Border x:Name="BalloonBackdrop" Background="#102B46" />
+            <Canvas x:Name="GameSkeletonCanvas" Background="Transparent" ClipToBounds="True" IsHitTestVisible="False" Opacity="0.52" />
+            <Canvas x:Name="Playfield" Background="Transparent" ClipToBounds="True" />
 
             <Border x:Name="GameInstruction" Background="#DAFFFFFF" CornerRadius="18" Padding="22,11" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,104,0,0" Panel.ZIndex="8">
-                <TextBlock Text="De färgade ringarna är dina händer – rör en ring in i en ballong!" Foreground="#17324A" FontSize="18" FontWeight="Bold" />
+                <TextBlock x:Name="GameInstructionText" Text="De färgade ringarna är dina händer – rör en ring in i en ballong!" Foreground="#17324A" FontSize="18" FontWeight="Bold" />
+            </Border>
+
+            <Border x:Name="BossBanner" Visibility="Collapsed" Background="#E58B55D9" CornerRadius="18" Padding="24,10" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28" Panel.ZIndex="9">
+                <TextBlock Text="BOSS: ZOMBIEKONDUKTÖREN!" Foreground="White" FontSize="21" FontWeight="Black" />
             </Border>
 
             <Grid VerticalAlignment="Top" Margin="28,22">

@@ -43,11 +43,14 @@ namespace KinectKids
 
         private readonly DispatcherTimer gameTimer;
         private readonly Stopwatch frameClock = new Stopwatch();
-        private readonly Ellipse[] handCursors = new Ellipse[4];
+        private readonly Grid[] handCursors = new Grid[4];
+        private readonly Border[] handAimProgress = new Border[4];
         private readonly int[] scores = new int[2];
         private IPlayerTracker tracker;
         private GameEngine game;
+        private ZombieRailEngine zombieGame;
         private IReadOnlyList<TrackedPlayer> players = Array.Empty<TrackedPlayer>();
+        private GameMode selectedGame = GameMode.Balloons;
         private DateTime roundEndsAt;
         private bool isPlaying;
         private bool isPaused;
@@ -62,6 +65,7 @@ namespace KinectKids
         {
             InitializeComponent();
             game = new GameEngine(Playfield);
+            zombieGame = new ZombieRailEngine(Playfield);
             CreateHandCursors();
 
             gameTimer = new DispatcherTimer(DispatcherPriority.Render)
@@ -124,6 +128,13 @@ namespace KinectKids
 
         private void StartButton_Click(object sender, RoutedEventArgs e)
         {
+            selectedGame = GameMode.Balloons;
+            ShowCalibration();
+        }
+
+        private void ZombieStartButton_Click(object sender, RoutedEventArgs e)
+        {
+            selectedGame = GameMode.ZombieTrain;
             ShowCalibration();
         }
 
@@ -141,6 +152,9 @@ namespace KinectKids
             HomePanel.Visibility = Visibility.Collapsed;
             GamePanel.Visibility = Visibility.Collapsed;
             CalibrationPanel.Visibility = Visibility.Visible;
+            CalibrationTitle.Text = selectedGame == GameMode.ZombieTrain
+                ? "Gör er redo för Zombietåget"
+                : "Gör er redo för Ballongjakten";
             UpdateCalibration();
         }
 
@@ -200,6 +214,8 @@ namespace KinectKids
             PauseButton.Visibility = Visibility.Visible;
             GameInstruction.Visibility = Visibility.Visible;
             game.Reset();
+            zombieGame.Reset();
+            ConfigureGameMode();
             scores[0] = 0;
             scores[1] = 0;
             UpdateScoreboard();
@@ -220,9 +236,23 @@ namespace KinectKids
             isPlaying = true;
             isPaused = false;
             roundEndsAt = DateTime.UtcNow.AddSeconds(60);
-            instructionHidesAt = DateTime.UtcNow.AddSeconds(8);
+            instructionHidesAt = DateTime.UtcNow.AddSeconds(selectedGame == GameMode.ZombieTrain ? 11 : 8);
             frameClock.Restart();
             gameTimer.Start();
+        }
+
+        private void ConfigureGameMode()
+        {
+            bool zombies = selectedGame == GameMode.ZombieTrain;
+            ZombieBackdrop.Visibility = zombies ? Visibility.Visible : Visibility.Collapsed;
+            BalloonBackdrop.Visibility = zombies ? Visibility.Collapsed : Visibility.Visible;
+            Playfield.Background = Brushes.Transparent;
+            GameSkeletonCanvas.Opacity = zombies ? 0.46 : 0.72;
+            BossBanner.Visibility = Visibility.Collapsed;
+            TimeText.Text = "60";
+            GameInstructionText.Text = zombies
+                ? "Håll en handring på en zombie tills mätaren under handen fylls!"
+                : "De färgade ringarna är dina händer – rör en ring in i en ballong!";
         }
 
         private void OnGameTick(object sender, EventArgs e)
@@ -230,7 +260,16 @@ namespace KinectKids
             if (!isPlaying || isPaused) return;
             double elapsed = Math.Min(0.05, frameClock.Elapsed.TotalSeconds);
             frameClock.Restart();
-            game.Update(elapsed);
+            if (selectedGame == GameMode.ZombieTrain)
+            {
+                zombieGame.Update(elapsed);
+                UpdateRailBackground();
+                BossBanner.Visibility = zombieGame.BossIsActive ? Visibility.Visible : Visibility.Collapsed;
+            }
+            else
+            {
+                game.Update(elapsed);
+            }
             if (DateTime.UtcNow >= instructionHidesAt)
                 GameInstruction.Visibility = Visibility.Collapsed;
 
@@ -243,10 +282,26 @@ namespace KinectKids
             TimeText.Text = Math.Ceiling(remaining.TotalSeconds).ToString("0");
         }
 
+        private void UpdateRailBackground()
+        {
+            double progress = Math.Max(0, Math.Min(1, 1 - (roundEndsAt - DateTime.UtcNow).TotalSeconds / 60.0));
+            double crossFade = Math.Max(0, Math.Min(1, (progress - 0.44) / 0.16));
+            ZombieStationBackground.Opacity = 1 - crossFade;
+            ZombieTunnelBackground.Opacity = crossFade;
+            StationScale.ScaleX = StationScale.ScaleY = 1.04 + progress * 0.09;
+            TunnelScale.ScaleX = TunnelScale.ScaleY = 1.02 + Math.Max(0, progress - 0.4) * 0.11;
+            StationTranslate.X = Math.Sin(progress * Math.PI * 5) * 9;
+            TunnelTranslate.X = Math.Sin(progress * Math.PI * 6 + 1.2) * 11;
+        }
+
         private void UpdateHands()
         {
             if (GamePanel.Visibility != Visibility.Visible || Playfield.ActualWidth <= 0) return;
-            for (int index = 0; index < handCursors.Length; index++) handCursors[index].Visibility = Visibility.Collapsed;
+            for (int index = 0; index < handCursors.Length; index++)
+            {
+                handCursors[index].Visibility = Visibility.Collapsed;
+                handAimProgress[index].Width = 0;
+            }
 
             var activePlayers = players.Where(item => item.IsReady).Take(2).ToArray();
             PlayerTwoScoreBox.Visibility = activePlayers.Length > 1 ? Visibility.Visible : Visibility.Collapsed;
@@ -256,21 +311,43 @@ namespace KinectKids
                 ShowHand(playerIndex * 2, activePlayers[playerIndex].LeftHand, playerIndex);
                 ShowHand(playerIndex * 2 + 1, activePlayers[playerIndex].RightHand, playerIndex);
             }
+
+            if (selectedGame == GameMode.ZombieTrain)
+            {
+                for (int index = activePlayers.Length * 2; index < handCursors.Length; index++)
+                    zombieGame.ClearAim(index);
+            }
         }
 
         private void ShowHand(int cursorIndex, Point normalized, int playerIndex)
         {
-            if (normalized.X < 0 || normalized.Y < 0) return;
+            if (normalized.X < 0 || normalized.Y < 0)
+            {
+                if (selectedGame == GameMode.ZombieTrain) zombieGame.ClearAim(cursorIndex);
+                return;
+            }
             var cursor = handCursors[cursorIndex];
             double x = normalized.X * Playfield.ActualWidth;
             double y = normalized.Y * Playfield.ActualHeight;
             cursor.Visibility = Visibility.Visible;
             Canvas.SetLeft(cursor, x - cursor.Width / 2);
-            Canvas.SetTop(cursor, y - cursor.Height / 2);
+            Canvas.SetTop(cursor, y - 31);
 
             if (isPlaying && !isPaused)
             {
-                int points = game.PopAt(new Point(x, y), cursor.Width * 0.42);
+                int points;
+                if (selectedGame == GameMode.ZombieTrain)
+                {
+                    ZombieAimResult result = zombieGame.AimAt(new Point(x, y), cursorIndex, DateTime.UtcNow);
+                    handAimProgress[cursorIndex].Width = 64 * result.Progress;
+                    points = result.Points;
+                }
+                else
+                {
+                    handAimProgress[cursorIndex].Width = 0;
+                    points = game.PopAt(new Point(x, y), 29);
+                }
+
                 if (points > 0)
                 {
                     scores[playerIndex] += points;
@@ -308,6 +385,8 @@ namespace KinectKids
             Canvas.SetTop(score, point.Y - 42);
             Playfield.Children.Add(ring);
             Playfield.Children.Add(score);
+            Panel.SetZIndex(ring, 1800);
+            Panel.SetZIndex(score, 1801);
 
             var scale = new ScaleTransform(0.7, 0.7);
             ring.RenderTransform = scale;
@@ -324,7 +403,7 @@ namespace KinectKids
             score.BeginAnimation(OpacityProperty, fade);
         }
 
-        private static void Pulse(Ellipse cursor)
+        private static void Pulse(FrameworkElement cursor)
         {
             cursor.RenderTransformOrigin = new Point(0.5, 0.5);
             var scale = new ScaleTransform(1.35, 1.35);
@@ -339,17 +418,57 @@ namespace KinectKids
             for (int index = 0; index < handCursors.Length; index++)
             {
                 bool playerTwo = index >= 2;
-                var cursor = new Ellipse
+                Brush playerColor = playerTwo ? BrushFrom("#FFFF7694") : BrushFrom("#FF5EAEFF");
+                var hand = new Ellipse
                 {
                     Width = 58,
                     Height = 58,
                     Fill = playerTwo ? BrushFrom("#CFFF7694") : BrushFrom("#CF5EAEFF"),
                     Stroke = Brushes.White,
-                    StrokeThickness = 5,
+                    StrokeThickness = 5
+                };
+                var center = new Ellipse
+                {
+                    Width = 12,
+                    Height = 12,
+                    Fill = Brushes.White,
+                    Stroke = playerColor,
+                    StrokeThickness = 3,
+                    VerticalAlignment = VerticalAlignment.Top,
+                    Margin = new Thickness(0, 23, 0, 0)
+                };
+                var fill = new Border
+                {
+                    Width = 0,
+                    Height = 9,
+                    Background = BrushFrom("#FFFFCF5A"),
+                    CornerRadius = new CornerRadius(5),
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+                var track = new Border
+                {
+                    Width = 68,
+                    Height = 13,
+                    Background = BrushFrom("#AA14213D"),
+                    BorderBrush = Brushes.White,
+                    BorderThickness = new Thickness(2),
+                    CornerRadius = new CornerRadius(7),
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Child = fill
+                };
+                var cursor = new Grid
+                {
+                    Width = 78,
+                    Height = 78,
                     Visibility = Visibility.Collapsed,
                     IsHitTestVisible = false
                 };
+                cursor.Children.Add(hand);
+                cursor.Children.Add(center);
+                cursor.Children.Add(track);
                 handCursors[index] = cursor;
+                handAimProgress[index] = fill;
+                Panel.SetZIndex(cursor, 1500);
                 Playfield.Children.Add(cursor);
             }
         }
@@ -532,9 +651,11 @@ namespace KinectKids
             isPaused = false;
             gameTimer.Stop();
             game.Reset();
+            zombieGame.Reset();
             PauseOverlay.Visibility = Visibility.Collapsed;
             ResultOverlay.Visibility = Visibility.Collapsed;
             CountdownOverlay.Visibility = Visibility.Collapsed;
+            BossBanner.Visibility = Visibility.Collapsed;
         }
 
         private void FullscreenButton_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
@@ -565,5 +686,11 @@ namespace KinectKids
         }
 
         private static Brush BrushFrom(string color) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+
+        private enum GameMode
+        {
+            Balloons,
+            ZombieTrain
+        }
     }
 }
