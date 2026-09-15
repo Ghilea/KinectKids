@@ -2,6 +2,12 @@
 
 Ett svenskt, barnvänligt rörelsespel för **Xbox 360 Kinect (Kinect v1)** på Windows 10. Ett eller två barn använder händerna för att spela Ballongjakten eller åka genom Zombietåget. Ingen handkontroll behövs.
 
+## Ny 3D-version under utveckling
+
+En separat Unity-baserad version av Spökjakten finns nu i [`unity/KinectKids3D`](unity/KinectKids3D). Den första vertical slice-versionen har riktig 3D-räls, spökvagn, flera miljözoner, tredimensionella mål, Kinect-handsikte och en zombie-konduktör som boss. Den befintliga WPF-versionen ligger kvar tills 3D-versionen är redo att ersätta den.
+
+Se [start- och testinstruktionerna för KinectKids 3D](unity/KinectKids3D/README.md).
+
 ## Det som finns i version 1.2
 
 - Ballongjakten med 60-sekundersrundor
