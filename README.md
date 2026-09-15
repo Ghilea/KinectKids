@@ -1,0 +1,87 @@
+# Rörelselek för Kinect 360
+
+Ett svenskt, barnvänligt rörelsespel för **Xbox 360 Kinect (Kinect v1)** på Windows 10. Ett eller två barn använder händerna för att smälla ballonger på skärmen. Ingen handkontroll behövs.
+
+## Det som finns i version 1.0
+
+- Balloon Pop med 60-sekundersrundor
+- automatisk spårning av en eller två spelare
+- stora, tydliga handmarkörer och barnvänligt gränssnitt
+- kalibreringsvy före varje runda
+- individuella poäng i tvåspelarläge
+- helskärmsläge, paus och omstart
+- begripliga svenska fel för saknad ström och otillräcklig USB-bandbredd
+- musläge för att prova spelet utan Kinect
+- ingen inspelning eller lagring av kamera-, djup- eller skelettdata
+
+## Krav
+
+- Windows 10 (64-bit fungerar; appen byggs som x86 för SDK-kompatibilitet)
+- Xbox 360 Kinect med nät-/USB-adapter
+- [Kinect for Windows SDK 1.8](https://www.microsoft.com/en-us/download/details.aspx?id=40278)
+- .NET Framework 4.8
+- Visual Studio 2022 med arbetsbelastningen **.NET desktop development**
+
+Sensorn bör sitta direkt i en USB 2.0-port som har tillräcklig bandbredd. Om appen visar `För lite USB-bandbredd`, stäng andra kameror/USB-ljudenheter och prova en annan portgrupp på datorns baksida.
+
+## Starta på din dator
+
+Enklast är att högerklicka på `scripts/Run.ps1` och välja **Kör med PowerShell**. Skriptet:
+
+1. kontrollerar att Kinect SDK 1.8 finns,
+2. hittar Visual Studios MSBuild,
+3. bygger Release-versionen,
+4. startar spelet.
+
+Om PowerShell blockerar lokala skript kan du öppna PowerShell i projektmappen och köra:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Run.ps1
+```
+
+Du kan även öppna `KinectKids.sln` i Visual Studio, välja `Release | x86` och trycka `F5`.
+
+## Kontroller
+
+| Kontroll | Funktion |
+|---|---|
+| Händerna | Smäll ballonger |
+| `Mellanslag` | Paus / fortsätt |
+| `F11` | Helskärm / fönster |
+| `Esc` | Tillbaka / lämna helskärm |
+
+I **Testa med mus** fungerar muspekaren som båda händerna för spelare 1.
+
+## Felsökning
+
+Kör först:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Check-Kinect.ps1
+```
+
+Vanliga orsaker:
+
+- **Ingen Kinect hittades:** kontrollera nätadaptern och USB-kabeln.
+- **För lite USB-bandbredd:** använd en annan fysisk USB-controller/portgrupp och koppla ur andra högbandbreddsenheter.
+- **Microsoft.Kinect.dll saknas vid bygge:** installera Kinect for Windows SDK 1.8, inte SDK 2.0.
+- **Blinkande grön lampa:** normalt i vänteläge. När spelet öppnar sensorn ska den bli aktiv.
+
+## Projektstruktur
+
+```text
+src/KinectKids/
+  Game/       Balloon Pop-motor och modeller
+  Input/      Kinect- och musspårning bakom samma gränssnitt
+  Models/     Normaliserad spelardata
+  MainWindow  WPF-gränssnitt och spelläge
+scripts/      kontroll, bygge och start
+```
+
+## Integritet och säkerhet
+
+Programmet använder bara ledpositionerna som SDK:n beräknar i realtid. Det öppnar inte färgkamerans bildström och skriver ingen sensorinformation till disk eller nätverk. Se till att barnen har fri golvyta och att sensorn står stadigt.
+
+## Licens
+
+MIT. Se [LICENSE](LICENSE).
