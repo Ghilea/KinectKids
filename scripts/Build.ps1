@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release'
@@ -27,9 +27,10 @@ if (-not $msbuild) { throw 'MSBuild hittades inte i Visual Studio-installationen
 
 Write-Host "Bygger $Configuration | x86…" -ForegroundColor Cyan
 & $msbuild $solution /restore /m /p:Configuration=$Configuration /p:Platform=x86 /verbosity:minimal
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($LASTEXITCODE -ne 0) {
+    throw "Bygget misslyckades med MSBuild-felkod $LASTEXITCODE. Se felet ovan."
+}
 
 $output = Join-Path $projectRoot "src\KinectKids\bin\$Configuration\KinectKids.exe"
 if (-not (Test-Path $output)) { throw "Bygget lyckades men programfilen hittades inte: $output" }
 Write-Host "Klart: $output" -ForegroundColor Green
-Write-Output $output

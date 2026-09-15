@@ -1,8 +1,13 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
-$executable = & (Join-Path $PSScriptRoot 'Build.ps1') -Configuration Release | Select-Object -Last 1
+$projectRoot = Split-Path -Parent $PSScriptRoot
+$buildScript = Join-Path $PSScriptRoot 'Build.ps1'
+$executable = Join-Path $projectRoot 'src\KinectKids\bin\Release\KinectKids.exe'
+
+# Kör byggskriptet utan en pipeline så att riktiga MSBuild-fel syns i konsolen.
+& $buildScript -Configuration Release
 if (-not (Test-Path $executable)) { throw "Programfilen hittades inte: $executable" }
 
 Write-Host 'Startar Rörelselek…' -ForegroundColor Cyan
