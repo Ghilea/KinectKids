@@ -39,7 +39,7 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Xaml" />
     <Reference Include="WindowsBase" />
-    <Reference Include="Microsoft.Kinect">
+    <Reference Include="Microsoft.Kinect" Condition=" '$(UseKinectStub)' != 'true' ">
       <HintPath Condition="Exists('$(KINECTSDK10_DIR)Assemblies\Microsoft.Kinect.dll')">$(KINECTSDK10_DIR)Assemblies\Microsoft.Kinect.dll</HintPath>
       <HintPath Condition="!Exists('$(KINECTSDK10_DIR)Assemblies\Microsoft.Kinect.dll')">$(ProgramFiles)\Microsoft SDKs\Kinect\v1.8\Assemblies\Microsoft.Kinect.dll</HintPath>
       <Private>false</Private>
@@ -63,7 +63,8 @@
     <Compile Include="Game\Balloon.cs" />
     <Compile Include="Game\GameEngine.cs" />
     <Compile Include="Input\IPlayerTracker.cs" />
-    <Compile Include="Input\KinectPlayerTracker.cs" />
+    <Compile Include="Input\KinectPlayerTracker.cs" Condition=" '$(UseKinectStub)' != 'true' " />
+    <Compile Include="Input\KinectPlayerTracker.Stub.cs" Condition=" '$(UseKinectStub)' == 'true' " />
     <Compile Include="Input\MousePlayerTracker.cs" />
     <Compile Include="Models\TrackedPlayer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
