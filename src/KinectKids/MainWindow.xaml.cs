@@ -18,6 +18,29 @@ namespace KinectKids
 {
     public partial class MainWindow : Window
     {
+        private static readonly BodyJoint[][] Bones =
+        {
+            new[] { BodyJoint.Head, BodyJoint.ShoulderCenter },
+            new[] { BodyJoint.ShoulderCenter, BodyJoint.ShoulderLeft },
+            new[] { BodyJoint.ShoulderLeft, BodyJoint.ElbowLeft },
+            new[] { BodyJoint.ElbowLeft, BodyJoint.WristLeft },
+            new[] { BodyJoint.WristLeft, BodyJoint.HandLeft },
+            new[] { BodyJoint.ShoulderCenter, BodyJoint.ShoulderRight },
+            new[] { BodyJoint.ShoulderRight, BodyJoint.ElbowRight },
+            new[] { BodyJoint.ElbowRight, BodyJoint.WristRight },
+            new[] { BodyJoint.WristRight, BodyJoint.HandRight },
+            new[] { BodyJoint.ShoulderCenter, BodyJoint.Spine },
+            new[] { BodyJoint.Spine, BodyJoint.HipCenter },
+            new[] { BodyJoint.HipCenter, BodyJoint.HipLeft },
+            new[] { BodyJoint.HipLeft, BodyJoint.KneeLeft },
+            new[] { BodyJoint.KneeLeft, BodyJoint.AnkleLeft },
+            new[] { BodyJoint.AnkleLeft, BodyJoint.FootLeft },
+            new[] { BodyJoint.HipCenter, BodyJoint.HipRight },
+            new[] { BodyJoint.HipRight, BodyJoint.KneeRight },
+            new[] { BodyJoint.KneeRight, BodyJoint.AnkleRight },
+            new[] { BodyJoint.AnkleRight, BodyJoint.FootRight }
+        };
+
         private readonly DispatcherTimer gameTimer;
         private readonly Stopwatch frameClock = new Stopwatch();
         private readonly Ellipse[] handCursors = new Ellipse[4];
@@ -30,6 +53,10 @@ namespace KinectKids
         private bool isPaused;
         private TimeSpan pausedRemaining;
         private bool isFullscreen;
+        private DateTime instructionHidesAt;
+        private Button dwellButton;
+        private DateTime dwellStartedAt;
+        private bool dwellTriggered;
 
         public MainWindow()
         {
@@ -79,8 +106,11 @@ namespace KinectKids
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 players = snapshot;
+                RenderSkeletons(CalibrationSkeletonCanvas);
+                RenderSkeletons(GameSkeletonCanvas);
                 UpdateCalibration();
                 UpdateHands();
+                UpdateMenuControl();
             }));
         }
 
@@ -127,21 +157,25 @@ namespace KinectKids
 
             ContinueButton.IsEnabled = ready.Length > 0;
             ContinueButton.Opacity = ready.Length > 0 ? 1 : 0.45;
-            PositionReadyMarker(PlayerOneReady, ready.ElementAtOrDefault(0));
-            PositionReadyMarker(PlayerTwoReady, ready.ElementAtOrDefault(1));
+            var first = ready.ElementAtOrDefault(0);
+            var second = ready.ElementAtOrDefault(1);
+            PositionHandMarker(PlayerOneLeftHand, first?.LeftHand);
+            PositionHandMarker(PlayerOneRightHand, first?.RightHand);
+            PositionHandMarker(PlayerTwoLeftHand, second?.LeftHand);
+            PositionHandMarker(PlayerTwoRightHand, second?.RightHand);
         }
 
-        private void PositionReadyMarker(Ellipse marker, TrackedPlayer player)
+        private void PositionHandMarker(Ellipse marker, Point? hand)
         {
-            if (player == null || CalibrationCanvas.ActualWidth <= 0)
+            if (!hand.HasValue || hand.Value.X < 0 || CalibrationCanvas.ActualWidth <= 0)
             {
                 marker.Visibility = Visibility.Collapsed;
                 return;
             }
 
             marker.Visibility = Visibility.Visible;
-            double x = player.Hip.X * CalibrationCanvas.ActualWidth - marker.Width / 2;
-            double y = player.Hip.Y * CalibrationCanvas.ActualHeight - marker.Height / 2;
+            double x = hand.Value.X * CalibrationCanvas.ActualWidth - marker.Width / 2;
+            double y = hand.Value.Y * CalibrationCanvas.ActualHeight - marker.Height / 2;
             Canvas.SetLeft(marker, x);
             Canvas.SetTop(marker, y);
         }
@@ -164,6 +198,7 @@ namespace KinectKids
             PauseOverlay.Visibility = Visibility.Collapsed;
             ResultOverlay.Visibility = Visibility.Collapsed;
             PauseButton.Visibility = Visibility.Visible;
+            GameInstruction.Visibility = Visibility.Visible;
             game.Reset();
             scores[0] = 0;
             scores[1] = 0;
@@ -185,6 +220,7 @@ namespace KinectKids
             isPlaying = true;
             isPaused = false;
             roundEndsAt = DateTime.UtcNow.AddSeconds(60);
+            instructionHidesAt = DateTime.UtcNow.AddSeconds(8);
             frameClock.Restart();
             gameTimer.Start();
         }
@@ -195,6 +231,8 @@ namespace KinectKids
             double elapsed = Math.Min(0.05, frameClock.Elapsed.TotalSeconds);
             frameClock.Restart();
             game.Update(elapsed);
+            if (DateTime.UtcNow >= instructionHidesAt)
+                GameInstruction.Visibility = Visibility.Collapsed;
 
             var remaining = roundEndsAt - DateTime.UtcNow;
             if (remaining <= TimeSpan.Zero)
@@ -238,8 +276,52 @@ namespace KinectKids
                     scores[playerIndex] += points;
                     UpdateScoreboard();
                     Pulse(cursor);
+                    ShowPopFeedback(new Point(x, y), points, playerIndex);
                 }
             }
+        }
+
+        private void ShowPopFeedback(Point point, int points, int playerIndex)
+        {
+            var color = playerIndex == 0 ? BrushFrom("#FF5EAEFF") : BrushFrom("#FFFF7694");
+            var ring = new Ellipse
+            {
+                Width = 70,
+                Height = 70,
+                Stroke = color,
+                StrokeThickness = 8,
+                Fill = Brushes.Transparent,
+                IsHitTestVisible = false,
+                RenderTransformOrigin = new Point(0.5, 0.5)
+            };
+            var score = new TextBlock
+            {
+                Text = "+" + points,
+                Foreground = Brushes.White,
+                FontSize = 27,
+                FontWeight = FontWeights.Black,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(ring, point.X - 35);
+            Canvas.SetTop(ring, point.Y - 35);
+            Canvas.SetLeft(score, point.X + 27);
+            Canvas.SetTop(score, point.Y - 42);
+            Playfield.Children.Add(ring);
+            Playfield.Children.Add(score);
+
+            var scale = new ScaleTransform(0.7, 0.7);
+            ring.RenderTransform = scale;
+            var grow = new System.Windows.Media.Animation.DoubleAnimation(0.7, 1.65, TimeSpan.FromMilliseconds(320));
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+            var fade = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(420));
+            fade.Completed += (sender, args) =>
+            {
+                Playfield.Children.Remove(ring);
+                Playfield.Children.Remove(score);
+            };
+            ring.BeginAnimation(OpacityProperty, fade);
+            score.BeginAnimation(OpacityProperty, fade);
         }
 
         private static void Pulse(Ellipse cursor)
@@ -271,6 +353,133 @@ namespace KinectKids
                 Playfield.Children.Add(cursor);
             }
         }
+
+        private void RenderSkeletons(Canvas canvas)
+        {
+            canvas.Children.Clear();
+            if (!canvas.IsVisible || canvas.ActualWidth < 1 || canvas.ActualHeight < 1) return;
+
+            var visiblePlayers = players.Where(item => item.IsReady).Take(2).ToArray();
+            for (int playerIndex = 0; playerIndex < visiblePlayers.Length; playerIndex++)
+            {
+                var player = visiblePlayers[playerIndex];
+                Brush color = playerIndex == 0 ? BrushFrom("#FF5EAEFF") : BrushFrom("#FFFF7694");
+
+                foreach (var bone in Bones)
+                {
+                    Point start = player.Joint(bone[0]);
+                    Point end = player.Joint(bone[1]);
+                    if (!IsTracked(start) || !IsTracked(end)) continue;
+                    canvas.Children.Add(new Line
+                    {
+                        X1 = start.X * canvas.ActualWidth,
+                        Y1 = start.Y * canvas.ActualHeight,
+                        X2 = end.X * canvas.ActualWidth,
+                        Y2 = end.Y * canvas.ActualHeight,
+                        Stroke = color,
+                        StrokeThickness = 7,
+                        StrokeStartLineCap = PenLineCap.Round,
+                        StrokeEndLineCap = PenLineCap.Round,
+                        IsHitTestVisible = false
+                    });
+                }
+
+                foreach (var point in player.Joints.Values.Where(IsTracked))
+                {
+                    var joint = new Ellipse
+                    {
+                        Width = 13,
+                        Height = 13,
+                        Fill = Brushes.White,
+                        Stroke = color,
+                        StrokeThickness = 3,
+                        IsHitTestVisible = false
+                    };
+                    Canvas.SetLeft(joint, point.X * canvas.ActualWidth - joint.Width / 2);
+                    Canvas.SetTop(joint, point.Y * canvas.ActualHeight - joint.Height / 2);
+                    canvas.Children.Add(joint);
+                }
+            }
+        }
+
+        private void UpdateMenuControl()
+        {
+            bool menuVisible = HomePanel.Visibility == Visibility.Visible
+                               || CalibrationPanel.Visibility == Visibility.Visible
+                               || PauseOverlay.Visibility == Visibility.Visible
+                               || ResultOverlay.Visibility == Visibility.Visible;
+            var player = players.FirstOrDefault(item => item.IsReady);
+            if (!menuVisible || KinectMenuCanvas.ActualWidth < 1 || player == null || tracker is MousePlayerTracker || !IsTracked(player.RightHand))
+            {
+                ResetMenuDwell();
+                return;
+            }
+
+            Point hand = player.RightHand;
+            double x = hand.X * KinectMenuCanvas.ActualWidth;
+            double y = hand.Y * KinectMenuCanvas.ActualHeight;
+            MenuHandIndicator.Visibility = Visibility.Visible;
+            Canvas.SetLeft(MenuHandIndicator, x - MenuHandIndicator.Width / 2);
+            Canvas.SetTop(MenuHandIndicator, y - 34);
+
+            Button target = FindButtonAt(new Point(x, y));
+            if (target != dwellButton)
+            {
+                dwellButton = target;
+                dwellStartedAt = DateTime.UtcNow;
+                dwellTriggered = false;
+                MenuDwellProgress.Width = 0;
+            }
+
+            if (target == null) return;
+            double progress = Math.Min(1, (DateTime.UtcNow - dwellStartedAt).TotalMilliseconds / 1100.0);
+            MenuDwellProgress.Width = 72 * progress;
+            if (progress >= 1 && !dwellTriggered)
+            {
+                dwellTriggered = true;
+                target.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, target));
+            }
+        }
+
+        private Button FindButtonAt(Point point)
+        {
+            foreach (var button in FindVisualChildren<Button>(this).Where(item => item.IsVisible && item.IsEnabled))
+            {
+                try
+                {
+                    Point topLeft = button.TransformToAncestor(this).Transform(new Point(0, 0));
+                    var bounds = new Rect(topLeft, new Size(button.ActualWidth, button.ActualHeight));
+                    if (bounds.Contains(point)) return button;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Elementet hann döljas när en annan meny öppnades.
+                }
+            }
+            return null;
+        }
+
+        private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject
+        {
+            if (parent == null) yield break;
+            for (int index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+            {
+                DependencyObject child = VisualTreeHelper.GetChild(parent, index);
+                var match = child as T;
+                if (match != null) yield return match;
+                foreach (var descendant in FindVisualChildren<T>(child)) yield return descendant;
+            }
+        }
+
+        private void ResetMenuDwell()
+        {
+            MenuHandIndicator.Visibility = Visibility.Collapsed;
+            MenuDwellProgress.Width = 0;
+            dwellButton = null;
+            dwellTriggered = false;
+        }
+
+        private static bool IsTracked(Point point) => point.X >= 0 && point.X <= 1 && point.Y >= 0 && point.Y <= 1;
 
         private void UpdateScoreboard()
         {

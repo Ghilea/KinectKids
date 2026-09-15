@@ -2,13 +2,16 @@
 
 Ett svenskt, barnvänligt rörelsespel för **Xbox 360 Kinect (Kinect v1)** på Windows 10. Ett eller två barn använder händerna för att smälla ballonger på skärmen. Ingen handkontroll behövs.
 
-## Det som finns i version 1.0
+## Det som finns i version 1.1
 
 - Balloon Pop med 60-sekundersrundor
 - automatisk spårning av en eller två spelare
 - stora, tydliga handmarkörer och barnvänligt gränssnitt
+- komplett skelettvy i kalibreringen och under spelet
+- Kinect-styrda menyer: håll höger hand över en knapp i drygt en sekund
 - kalibreringsvy före varje runda
 - individuella poäng i tvåspelarläge
+- stabilitetsfilter som motverkar falsk spelare två
 - helskärmsläge, paus och omstart
 - begripliga svenska fel för saknad ström och otillräcklig USB-bandbredd
 - musläge för att prova spelet utan Kinect
@@ -46,6 +49,7 @@ Du kan även öppna `KinectKids.sln` i Visual Studio, välja `Release | x86` och
 | Kontroll | Funktion |
 |---|---|
 | Händerna | Smäll ballonger |
+| Höger hand över en knapp | Fyll mätaren och tryck på knappen |
 | `Mellanslag` | Paus / fortsätt |
 | `F11` | Helskärm / fönster |
 | `Esc` | Tillbaka / lämna helskärm |

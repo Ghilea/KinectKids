@@ -66,6 +66,7 @@
     <Compile Include="Input\KinectPlayerTracker.cs" Condition=" '$(UseKinectStub)' != 'true' " />
     <Compile Include="Input\KinectPlayerTracker.Stub.cs" Condition=" '$(UseKinectStub)' == 'true' " />
     <Compile Include="Input\MousePlayerTracker.cs" />
+    <Compile Include="Models\BodyJoint.cs" />
     <Compile Include="Models\TrackedPlayer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

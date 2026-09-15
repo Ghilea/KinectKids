@@ -69,7 +69,7 @@
                     <Button Content="Starta spelet" Click="StartButton_Click" Margin="0,0,14,12" />
                     <Button x:Name="InputModeButton" Content="Testa med mus" Click="MouseModeButton_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,0,12" />
                 </WrapPanel>
-                <TextBlock Text="Tips: stå 1,5–3 meter från sensorn. Tryck Esc för att gå tillbaka." Foreground="#9FC8D8" FontSize="14" Margin="2,8,0,0" />
+                <TextBlock Text="Tips: stå 1,5–3 meter från sensorn. Håll höger hand över en knapp för att trycka." Foreground="#9FC8D8" FontSize="14" Margin="2,8,0,0" />
             </StackPanel>
 
             <Border Grid.Column="1" Background="#20FFFFFF" CornerRadius="40" BorderBrush="#35FFFFFF" BorderThickness="1" Margin="18">
@@ -110,11 +110,17 @@
                     <StackPanel HorizontalAlignment="Center">
                         <TextBlock Text="Ställ er framför kameran" Foreground="White" FontSize="38" FontWeight="Bold" HorizontalAlignment="Center" />
                         <TextBlock x:Name="CalibrationStatus" Text="Vi väntar tills Kinect ser minst en spelare…" Foreground="#C9E6F1" FontSize="19" Margin="0,9,0,0" HorizontalAlignment="Center" />
+                        <TextBlock Text="De stora färgade ringarna är dina händer." Foreground="#FFCF5A" FontSize="16" FontWeight="SemiBold" Margin="0,7,0,0" HorizontalAlignment="Center" />
                     </StackPanel>
-                    <Canvas x:Name="CalibrationCanvas" Grid.Row="1" Background="Transparent" Margin="10" ClipToBounds="True">
-                        <Ellipse x:Name="PlayerOneReady" Width="170" Height="170" Fill="#245EAEFF" Stroke="#5EAEFF" StrokeThickness="4" Visibility="Collapsed" />
-                        <Ellipse x:Name="PlayerTwoReady" Width="170" Height="170" Fill="#24FF7694" Stroke="#FF7694" StrokeThickness="4" Visibility="Collapsed" />
-                    </Canvas>
+                    <Grid Grid.Row="1" Margin="10" ClipToBounds="True">
+                        <Canvas x:Name="CalibrationSkeletonCanvas" Background="Transparent" />
+                        <Canvas x:Name="CalibrationCanvas" Background="Transparent">
+                            <Ellipse x:Name="PlayerOneLeftHand" Width="72" Height="72" Fill="#CC5EAEFF" Stroke="#FFFFFF" StrokeThickness="5" Visibility="Collapsed" />
+                            <Ellipse x:Name="PlayerOneRightHand" Width="72" Height="72" Fill="#CC5EAEFF" Stroke="#FFFFFF" StrokeThickness="5" Visibility="Collapsed" />
+                            <Ellipse x:Name="PlayerTwoLeftHand" Width="72" Height="72" Fill="#CCFF7694" Stroke="#FFFFFF" StrokeThickness="5" Visibility="Collapsed" />
+                            <Ellipse x:Name="PlayerTwoRightHand" Width="72" Height="72" Fill="#CCFF7694" Stroke="#FFFFFF" StrokeThickness="5" Visibility="Collapsed" />
+                        </Canvas>
+                    </Grid>
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
                         <Button x:Name="ContinueButton" Content="Kör igång!" Click="ContinueButton_Click" IsEnabled="False" Opacity="0.45" Margin="0,0,14,0" />
                         <Button Content="Tillbaka" Click="HomeButton_Click" Style="{StaticResource SecondaryButton}" />
@@ -125,6 +131,11 @@
 
         <Grid x:Name="GamePanel" Grid.RowSpan="2" Visibility="Collapsed" Background="#10213D" Panel.ZIndex="30">
             <Canvas x:Name="Playfield" Background="#102B46" ClipToBounds="True" />
+            <Canvas x:Name="GameSkeletonCanvas" Background="Transparent" ClipToBounds="True" IsHitTestVisible="False" Opacity="0.72" />
+
+            <Border x:Name="GameInstruction" Background="#DAFFFFFF" CornerRadius="18" Padding="22,11" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,104,0,0" Panel.ZIndex="8">
+                <TextBlock Text="De färgade ringarna är dina händer – rör en ring in i en ballong!" Foreground="#17324A" FontSize="18" FontWeight="Bold" />
+            </Border>
 
             <Grid VerticalAlignment="Top" Margin="28,22">
                 <Grid.ColumnDefinitions>
@@ -177,5 +188,17 @@
                 </StackPanel>
             </Border>
         </Grid>
+
+        <Canvas x:Name="KinectMenuCanvas" Grid.RowSpan="2" Background="Transparent" IsHitTestVisible="False" Panel.ZIndex="200">
+            <Grid x:Name="MenuHandIndicator" Width="82" Height="98" Visibility="Collapsed">
+                <Ellipse Width="68" Height="68" HorizontalAlignment="Center" VerticalAlignment="Top" Fill="#DD5EAEFF" Stroke="White" StrokeThickness="5" />
+                <Ellipse Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,23,0,0" Fill="White" />
+                <Border Width="74" Height="10" VerticalAlignment="Bottom" CornerRadius="5" Background="#55FFFFFF" BorderBrush="#88FFFFFF" BorderThickness="1">
+                    <Grid ClipToBounds="True">
+                        <Border x:Name="MenuDwellProgress" Width="0" HorizontalAlignment="Left" Background="#FFCF5A" CornerRadius="4" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Canvas>
     </Grid>
 </Window>

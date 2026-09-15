@@ -11,6 +11,7 @@ namespace KinectKids.Input
     {
         private KinectSensor sensor;
         private Skeleton[] skeletons;
+        private readonly Dictionary<long, CandidateState> candidates = new Dictionary<long, CandidateState>();
         private string status = "Letar efter Kinect…";
 
         public event EventHandler<IReadOnlyList<TrackedPlayer>> PlayersChanged;
@@ -79,6 +80,7 @@ namespace KinectKids.Input
             }
             sensor = null;
             skeletons = null;
+            candidates.Clear();
         }
 
         private void OnSensorStatusChanged(object sender, StatusChangedEventArgs e)
@@ -102,12 +104,47 @@ namespace KinectKids.Input
                 if (frame == null || skeletons == null) return;
                 frame.CopySkeletonDataTo(skeletons);
 
-                var tracked = skeletons
-                    .Where(item => item.TrackingState == SkeletonTrackingState.Tracked)
-                    .Take(2)
-                    .Select(ToPlayer)
-                    .OrderBy(item => item.Hip.X)
+                DateTime now = DateTime.UtcNow;
+                var raw = skeletons
+                    .Where(item => item.TrackingState == SkeletonTrackingState.Tracked && IsPlausibleBody(item))
                     .ToList();
+
+                foreach (var skeleton in raw)
+                {
+                    CandidateState state;
+                    if (!candidates.TryGetValue(skeleton.TrackingId, out state))
+                    {
+                        state = new CandidateState { FirstSeen = now };
+                        candidates[skeleton.TrackingId] = state;
+                    }
+                    state.LastSeen = now;
+                }
+
+                foreach (var expired in candidates.Where(item => now - item.Value.LastSeen > TimeSpan.FromSeconds(1)).Select(item => item.Key).ToArray())
+                    candidates.Remove(expired);
+
+                // En första kropp visas snabbt. En andra måste vara stabil längre och
+                // stå tydligt åtskild, så möbler/reflektioner inte blir spelare två.
+                var primarySkeleton = raw
+                    .Where(item => now - candidates[item.TrackingId].FirstSeen >= TimeSpan.FromMilliseconds(350))
+                    .OrderBy(item => item.Position.Z)
+                    .ThenBy(item => candidates[item.TrackingId].FirstSeen)
+                    .FirstOrDefault();
+
+                var tracked = new List<TrackedPlayer>();
+                if (primarySkeleton != null)
+                {
+                    tracked.Add(ToPlayer(primarySkeleton));
+                    var secondarySkeleton = raw
+                        .Where(item => item.TrackingId != primarySkeleton.TrackingId)
+                        .Where(item => now - candidates[item.TrackingId].FirstSeen >= TimeSpan.FromMilliseconds(1500))
+                        .Where(item => Math.Abs(item.Position.X - primarySkeleton.Position.X) >= 0.28f)
+                        .OrderBy(item => item.Position.Z)
+                        .FirstOrDefault();
+                    if (secondarySkeleton != null) tracked.Add(ToPlayer(secondarySkeleton));
+                }
+
+                tracked = tracked.OrderBy(item => item.Hip.X).ToList();
 
                 PlayersChanged?.Invoke(this, tracked);
             }
@@ -115,13 +152,43 @@ namespace KinectKids.Input
 
         private TrackedPlayer ToPlayer(Skeleton skeleton)
         {
-            var left = Map(skeleton.Joints[JointType.HandLeft]);
-            var right = Map(skeleton.Joints[JointType.HandRight]);
-            var head = Map(skeleton.Joints[JointType.Head]);
-            var hip = Map(skeleton.Joints[JointType.HipCenter]);
+            var joints = new Dictionary<BodyJoint, Point>
+            {
+                [BodyJoint.Head] = Map(skeleton.Joints[JointType.Head]),
+                [BodyJoint.ShoulderCenter] = Map(skeleton.Joints[JointType.ShoulderCenter]),
+                [BodyJoint.ShoulderLeft] = Map(skeleton.Joints[JointType.ShoulderLeft]),
+                [BodyJoint.ShoulderRight] = Map(skeleton.Joints[JointType.ShoulderRight]),
+                [BodyJoint.ElbowLeft] = Map(skeleton.Joints[JointType.ElbowLeft]),
+                [BodyJoint.ElbowRight] = Map(skeleton.Joints[JointType.ElbowRight]),
+                [BodyJoint.WristLeft] = Map(skeleton.Joints[JointType.WristLeft]),
+                [BodyJoint.WristRight] = Map(skeleton.Joints[JointType.WristRight]),
+                [BodyJoint.HandLeft] = Map(skeleton.Joints[JointType.HandLeft]),
+                [BodyJoint.HandRight] = Map(skeleton.Joints[JointType.HandRight]),
+                [BodyJoint.Spine] = Map(skeleton.Joints[JointType.Spine]),
+                [BodyJoint.HipCenter] = Map(skeleton.Joints[JointType.HipCenter]),
+                [BodyJoint.HipLeft] = Map(skeleton.Joints[JointType.HipLeft]),
+                [BodyJoint.HipRight] = Map(skeleton.Joints[JointType.HipRight]),
+                [BodyJoint.KneeLeft] = Map(skeleton.Joints[JointType.KneeLeft]),
+                [BodyJoint.KneeRight] = Map(skeleton.Joints[JointType.KneeRight]),
+                [BodyJoint.AnkleLeft] = Map(skeleton.Joints[JointType.AnkleLeft]),
+                [BodyJoint.AnkleRight] = Map(skeleton.Joints[JointType.AnkleRight]),
+                [BodyJoint.FootLeft] = Map(skeleton.Joints[JointType.FootLeft]),
+                [BodyJoint.FootRight] = Map(skeleton.Joints[JointType.FootRight])
+            };
             bool ready = skeleton.Joints[JointType.HandLeft].TrackingState != JointTrackingState.NotTracked
                          && skeleton.Joints[JointType.HandRight].TrackingState != JointTrackingState.NotTracked;
-            return new TrackedPlayer(skeleton.TrackingId, left, right, head, hip, ready);
+            return new TrackedPlayer(skeleton.TrackingId, joints, ready);
+        }
+
+        private static bool IsPlausibleBody(Skeleton skeleton)
+        {
+            var head = skeleton.Joints[JointType.Head];
+            var hip = skeleton.Joints[JointType.HipCenter];
+            if (head.TrackingState == JointTrackingState.NotTracked || hip.TrackingState == JointTrackingState.NotTracked)
+                return false;
+            if (skeleton.Position.Z < 0.8f || skeleton.Position.Z > 4.5f)
+                return false;
+            return head.Position.Y - hip.Position.Y >= 0.25f;
         }
 
         private Point Map(Joint joint)
@@ -161,5 +228,11 @@ namespace KinectKids.Input
         }
 
         public void Dispose() => Stop();
+
+        private sealed class CandidateState
+        {
+            public DateTime FirstSeen { get; set; }
+            public DateTime LastSeen { get; set; }
+        }
     }
 }
