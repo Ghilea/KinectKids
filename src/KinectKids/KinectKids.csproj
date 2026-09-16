@@ -79,7 +79,8 @@
     <Compile Include="Models\TrackedPlayer.cs" />
     <Compile Include="Models\MathQuestion.cs" />
     <Compile Include="Services\ProgressionService.cs" />
-    <Compile Include="Input\IKinectGestureHandler.cs" />
+    <Compile Include="Input\IKinectGestureHandler.cs" Condition=" '$(UseKinectStub)' != 'true' " />
+    <Compile Include="Input\KinectSkeletonTypes.cs" />
     <Compile Include="Input\MousePlayerTracker.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
