@@ -17,7 +17,9 @@ namespace KinectKids3D
     {
         private readonly object sync = new object();
         private readonly List<AimSample> latest = new List<AimSample>(4);
+        private readonly List<PlayerPose> latestPoses = new List<PlayerPose>(2);
         private readonly Dictionary<long, DateTime> firstSeen = new Dictionary<long, DateTime>();
+        private readonly Dictionary<int, HandGestureState> handGestures = new Dictionary<int, HandGestureState>();
         private Assembly assembly;
         private object sensor;
         private object coordinateMapper;
@@ -96,6 +98,11 @@ namespace KinectKids3D
             lock (sync) return latest.ToArray();
         }
 
+        public IReadOnlyList<PlayerPose> GetPlayerPoses()
+        {
+            lock (sync) return latestPoses.ToArray();
+        }
+
         private void OnSkeletonFrame(object sender, object eventArgs)
         {
             object frame = null;
@@ -143,15 +150,24 @@ namespace KinectKids3D
 
                 accepted = accepted.OrderBy(body => ReadFloat(GetProperty(body, "Position"), "X")).ToList();
                 var next = new List<AimSample>(4);
+                var nextPoses = new List<PlayerPose>(2);
                 for (int player = 0; player < accepted.Count; player++)
                 {
-                    AddHand(next, accepted[player], player, player * 2, "HandLeft");
-                    AddHand(next, accepted[player], player, player * 2 + 1, "HandRight");
+                    object body = accepted[player];
+                    long trackingId = Convert.ToInt64(GetProperty(body, "TrackingId"));
+                    object shoulder = GetJointPoint(body, "ShoulderCenter");
+                    object head = GetJointPoint(body, "Head");
+                    nextPoses.Add(new PlayerPose(player, trackingId,
+                        ReadFloat(shoulder, "X"), ReadFloat(head, "Y")));
+                    AddHand(next, body, player, player * 2, "HandLeft", shoulder, now);
+                    AddHand(next, body, player, player * 2 + 1, "HandRight", shoulder, now);
                 }
                 lock (sync)
                 {
                     latest.Clear();
                     latest.AddRange(next);
+                    latestPoses.Clear();
+                    latestPoses.AddRange(nextPoses);
                 }
             }
             catch
@@ -165,18 +181,64 @@ namespace KinectKids3D
             }
         }
 
-        private void AddHand(List<AimSample> output, object body, int player, int handId, string handName)
+        private void AddHand(List<AimSample> output, object body, int player, int handId, string handName,
+            object shoulderPoint, DateTime now)
         {
-            object joints = GetProperty(body, "Joints");
-            object enumValue = Enum.Parse(jointType, handName);
-            PropertyInfo indexer = joints.GetType().GetProperty("Item");
-            object joint = indexer.GetValue(joints, new[] { enumValue });
+            object joint = GetJoint(body, handName);
             if (GetProperty(joint, "TrackingState").ToString() == "NotTracked") return;
             object point = GetProperty(joint, "Position");
             object depthPoint = mapToDepth.Invoke(coordinateMapper, new[] { point, depthFormat });
             float x = Convert.ToSingle(GetProperty(depthPoint, "X")) / 320f;
             float y = Convert.ToSingle(GetProperty(depthPoint, "Y")) / 240f;
-            output.Add(new AimSample(player, handId, new Vector2(Mathf.Clamp01(x), Mathf.Clamp01(y))));
+            float handZ = ReadFloat(point, "Z");
+            float handY = ReadFloat(point, "Y");
+            float shoulderZ = ReadFloat(shoulderPoint, "Z");
+            float shoulderY = ReadFloat(shoulderPoint, "Y");
+
+            HandGestureState gesture;
+            if (!handGestures.TryGetValue(handId, out gesture))
+            {
+                gesture = new HandGestureState();
+                handGestures[handId] = gesture;
+            }
+
+            bool fire = false;
+            if (gesture.Initialized)
+            {
+                float dt = Mathf.Max(0.001f, (float)(now - gesture.LastAt).TotalSeconds);
+                float forwardSpeed = (gesture.LastDepth - handZ) / dt;
+                bool handIsReady = handY > shoulderY - 0.38f && handZ > shoulderZ - 0.13f;
+                if (handIsReady) gesture.Armed = true;
+                if (gesture.Armed && now >= gesture.CooldownUntil
+                    && forwardSpeed > 0.72f && handZ < shoulderZ - 0.17f)
+                {
+                    fire = true;
+                    gesture.Armed = false;
+                    gesture.CooldownUntil = now.AddMilliseconds(430);
+                }
+            }
+
+            gesture.Initialized = true;
+            gesture.LastDepth = handZ;
+            gesture.LastAt = now;
+            float progress = gesture.Armed
+                ? Mathf.Clamp01((shoulderZ - handZ + 0.13f) / 0.32f)
+                : 0f;
+            output.Add(new AimSample(player, handId,
+                new Vector2(Mathf.Clamp01(x), Mathf.Clamp01(y)), fire, progress));
+        }
+
+        private object GetJoint(object body, string jointName)
+        {
+            object joints = GetProperty(body, "Joints");
+            object enumValue = Enum.Parse(jointType, jointName);
+            PropertyInfo indexer = joints.GetType().GetProperty("Item");
+            return indexer.GetValue(joints, new[] { enumValue });
+        }
+
+        private object GetJointPoint(object body, string jointName)
+        {
+            return GetProperty(GetJoint(body, jointName), "Position");
         }
 
         private bool IsPlausible(object body)
@@ -251,7 +313,21 @@ namespace KinectKids3D
             {
             }
             sensor = null;
-            lock (sync) latest.Clear();
+            handGestures.Clear();
+            lock (sync)
+            {
+                latest.Clear();
+                latestPoses.Clear();
+            }
+        }
+
+        private sealed class HandGestureState
+        {
+            public bool Initialized;
+            public bool Armed;
+            public float LastDepth;
+            public DateTime LastAt;
+            public DateTime CooldownUntil;
         }
     }
 }

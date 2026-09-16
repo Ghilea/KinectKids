@@ -40,6 +40,10 @@ jobs:
             './unity/KinectKids3D/Assets/Scripts/DarkRideWorld.cs',
             './unity/KinectKids3D/Assets/Scripts/GhostTarget.cs',
             './unity/KinectKids3D/Assets/Scripts/KinectV1AimProvider.cs',
+            './unity/KinectKids3D/Assets/Scripts/PlayerPose.cs',
+            './unity/KinectKids3D/Assets/Scripts/RideHazard.cs',
+            './unity/KinectKids3D/Assets/Scripts/HauntedProp.cs',
+            './unity/KinectKids3D/Assets/Scripts/MagicBolt.cs',
             './unity/KinectKids3D/Assets/Editor/KinectKidsProjectSetup.cs'
           )
           foreach ($path in $required) {

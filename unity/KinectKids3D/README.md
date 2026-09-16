@@ -10,9 +10,13 @@ Det här är den nya 3D-grunden för KinectKids. Den ligger bredvid den tidigare
 - tredimensionella spöken, zombies och en zombie-konduktör som boss
 - mål blir naturligt större när vagnen närmar sig
 - båda Kinect-händerna fungerar som separata sikten
+- sikta, dra handen tillbaka mot kroppen och kasta den snabbt framåt för att skjuta spökmagi
+- kroppshinder där spelaren måste ducka eller väja åt vänster/höger
+- ståhöjd och kroppens mitt kalibreras automatiskt per spelare
 - en eller två spelare kan samla egna poäng
 - musreserv om Kinect inte kan öppnas
-- procedurgenererade träff- och bakgrundsljud
+- procedurgenererad spökmusik, miljöljud, kast- och träffljud
+- fladdermöss, flimrande ljus och fler rörliga delar i miljön
 
 All grafik i den här första versionen byggs av riktiga 3D-objekt när spelet startar. Det gör att vi kan prova kamerafärd, avstånd, tempo och Kinect-sikte innan vi lägger tid på slutliga modeller och animationer.
 
@@ -31,9 +35,12 @@ Kinect SDK 1.8 hittas automatiskt från den vanliga installationsmappen. Om sens
 
 | Kontroll | Funktion |
 |---|---|
-| Vänster eller höger Kinect-hand | Sikta |
-| Håll siktet på en figur | Fyll mätaren och träffa |
-| Musen | Reservsikte utan Kinect |
+| Vänster eller höger Kinect-hand | Sikta på ett spöke |
+| Dra tillbaka och kasta handen framåt | Kasta spökmagi |
+| Ducka | Undvik den svängande spökbommen |
+| Luta kroppen åt visad sida | Väj för anflygande spöken |
+| Musen + vänsterklick | Reservsikte och kast utan Kinect |
+| `S`/`↓`, `A`/`←`, `D`/`→` | Testa ducka/väj i musläge |
 | `Mellanslag` eller `P` | Paus |
 | `F11` | Helskärm |
 | `R` efter målgång | Ny åktur |
@@ -44,6 +51,6 @@ Den här versionen är en **vertical slice/greybox**, inte slutgrafiken. Nästa 
 
 1. modulära 3D-miljöer och handgjorda figurer,
 2. animationer och överraskningssekvenser,
-3. riktig musik, röster och rumsliga ljudeffekter,
+3. inspelad musik, röster och rumsliga ljudeffekter som ersätter prototypens procedurljud,
 4. fler sorters interaktiva mål och kombopoäng,
 5. barnmeny och färdig Windows-build som startas utan Unity.

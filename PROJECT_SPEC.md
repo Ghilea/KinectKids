@@ -40,7 +40,10 @@ Vi ska bygga dessa spel i ordning baserat på komplexitet och pedagogisk värde:
 #### Kategori B: Nöjesmoduler (Belöning) - Låsta tills poängmål nås i A
 4.  **Spökjakt: Slottet** (Ny utveckling från "Zombietåg")
     *   *Logik:* En renad version av Zombietåget med "spöken" istället för zombies, mörkare tema.
-    *   *Mekani:* Kasta magi (handgest) på monster som kommer från tunnelbanan.
+    *   *Mekanik:* Sikta, dra handen bakåt och gör en snabb kaströrelse framåt för att skjuta spökmagi. Att bara hålla handen på målet ger ingen träff.
+    *   *Kroppshinder:* Spelaren måste ducka under bommar och luta kroppen åt angiven sida när faror kommer mot vagnen.
+    *   *Miljö:* Procedurgenererad prototypmusik, miljöljud, rörliga fladdermöss, flimrande lampor och överraskningshändelser längs rälsen.
+    *   *Tillgänglighet:* Kroppens mitt och ståhöjd kalibreras separat för varje spårad spelare. Mus och tangentbord finns kvar som testläge.
 5.  **Simon Säger: Rörelselektron**
     *   *Logik:* "Händer upp!", "Ducka!", "Sträck ut!".
     *   *Variation:* 30s, 60s, 90s runder. Topplistor (lokalt utan namnlagring).

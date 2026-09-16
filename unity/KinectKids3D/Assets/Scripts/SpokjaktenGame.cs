@@ -10,10 +10,13 @@ namespace KinectKids3D
         private const float CountdownSeconds = 3f;
         private const float RideSeconds = 75f;
         private const float RideSpeed = 2.32f;
-        private const float LockSeconds = 0.46f;
+        private const float TargetGraceSeconds = 0.48f;
         private readonly List<GhostTarget> targets = new List<GhostTarget>();
+        private readonly List<RideHazard> hazards = new List<RideHazard>();
         private readonly Dictionary<int, AimLock> aimLocks = new Dictionary<int, AimLock>();
         private readonly Dictionary<int, ReticleState> reticles = new Dictionary<int, ReticleState>();
+        private readonly Dictionary<long, PoseCalibration> poseCalibrations = new Dictionary<long, PoseCalibration>();
+        private readonly Dictionary<int, PoseState> currentPoses = new Dictionary<int, PoseState>();
         private readonly int[] scores = new int[2];
         private Camera rideCamera;
         private IAimProvider aimProvider;
@@ -34,6 +37,15 @@ namespace KinectKids3D
         private AudioSource effects;
         private AudioClip hitSound;
         private AudioClip bossSound;
+        private AudioClip castSound;
+        private AudioClip movementSuccessSound;
+        private AudioClip collisionSound;
+        private AudioClip scareSound;
+        private RideHazard currentHazard;
+        private float cameraShakeUntil;
+        private int nextScareIndex;
+        private string actionMessage;
+        private float actionMessageUntil;
 
         private void Start()
         {
@@ -71,7 +83,7 @@ namespace KinectKids3D
             if (kinect.TryStart())
             {
                 aimProvider = kinect;
-                inputStatus = kinect.Status;
+                inputStatus = kinect.Status + " – sikta, dra tillbaka och kasta";
             }
             else
             {
@@ -88,6 +100,10 @@ namespace KinectKids3D
             effects.spatialBlend = 0;
             hitSound = CreateTone("Träff", 640f, 0.10f, 0.20f);
             bossSound = CreateTone("Bossträff", 185f, 0.22f, 0.28f);
+            castSound = CreateNoiseBurst("Magikast", 0.12f, 0.16f, 1101);
+            movementSuccessSound = CreateTone("Undanmanöver", 880f, 0.22f, 0.20f);
+            collisionSound = CreateNoiseBurst("Krock", 0.34f, 0.26f, 9001);
+            scareSound = CreateNoiseBurst("Överraskning", 0.25f, 0.11f, 4404);
 
             AudioSource ambience = gameObject.AddComponent<AudioSource>();
             ambience.clip = CreateAmbience();
@@ -95,20 +111,40 @@ namespace KinectKids3D
             ambience.volume = 0.20f;
             ambience.spatialBlend = 0;
             ambience.Play();
+
+            AudioSource music = gameObject.AddComponent<AudioSource>();
+            music.clip = CreateRideMusic();
+            music.loop = true;
+            music.volume = 0.32f;
+            music.spatialBlend = 0;
+            music.Play();
         }
 
         private void ResetRide()
         {
             foreach (GhostTarget target in targets.Where(item => item != null)) Destroy(target.gameObject);
+            foreach (RideHazard hazard in hazards.Where(item => item != null)) Destroy(hazard.gameObject);
             targets.Clear();
+            hazards.Clear();
             aimLocks.Clear();
             reticles.Clear();
+            poseCalibrations.Clear();
+            currentPoses.Clear();
             scores[0] = scores[1] = 0;
             gameTime = 0;
             nextSpawnAt = 4.3f;
             bossSpawned = false;
             finished = false;
             paused = false;
+            currentHazard = null;
+            cameraShakeUntil = 0;
+            nextScareIndex = 0;
+            actionMessage = string.Empty;
+            actionMessageUntil = 0;
+            hazards.Add(RideHazard.Create(HazardKind.Duck, 43f));
+            hazards.Add(RideHazard.Create(HazardKind.DodgeLeft, 78f));
+            hazards.Add(RideHazard.Create(HazardKind.DodgeRight, 111f));
+            hazards.Add(RideHazard.Create(HazardKind.Duck, 143f));
             PositionCamera(0);
         }
 
@@ -122,10 +158,13 @@ namespace KinectKids3D
             gameTime += Time.deltaTime;
             float rideTime = Mathf.Max(0, gameTime - CountdownSeconds);
             float distance = Mathf.Min(DarkRideWorld.TrackLength - 3f, rideTime * RideSpeed);
+            UpdatePlayerPoses();
             PositionCamera(distance);
             if (gameTime < CountdownSeconds) return;
 
             UpdateTargets(rideTime, distance);
+            UpdateHazards(distance);
+            UpdateEnvironmentEvents(rideTime);
             UpdateAim();
             if (rideTime >= RideSeconds)
             {
@@ -138,6 +177,11 @@ namespace KinectKids3D
         {
             float x = DarkRideWorld.TrackCenter(z);
             float bounce = Mathf.Sin(Time.time * 4.4f) * 0.018f;
+            if (Time.time < cameraShakeUntil)
+            {
+                x += UnityEngine.Random.Range(-0.12f, 0.12f);
+                bounce += UnityEngine.Random.Range(-0.09f, 0.09f);
+            }
             Vector3 position = new Vector3(x, 1.72f + bounce, z);
             Vector3 look = new Vector3(DarkRideWorld.TrackCenter(z + 7f), 1.62f, z + 7f);
             rideCamera.transform.position = position;
@@ -183,6 +227,90 @@ namespace KinectKids3D
                 new Vector3(DarkRideWorld.TrackCenter(z) + lane, y, z)));
         }
 
+        private void UpdatePlayerPoses()
+        {
+            currentPoses.Clear();
+            foreach (PlayerPose pose in aimProvider.GetPlayerPoses())
+            {
+                PoseCalibration calibration;
+                if (!poseCalibrations.TryGetValue(pose.TrackingId, out calibration))
+                {
+                    calibration = new PoseCalibration
+                    {
+                        CenterX = pose.CenterX,
+                        StandingHeadY = pose.HeadY
+                    };
+                    poseCalibrations[pose.TrackingId] = calibration;
+                }
+
+                calibration.StandingHeadY = Mathf.Max(calibration.StandingHeadY, pose.HeadY);
+                if (currentHazard == null)
+                    calibration.CenterX = Mathf.Lerp(calibration.CenterX, pose.CenterX, 0.035f);
+
+                currentPoses[pose.PlayerIndex] = new PoseState
+                {
+                    DuckAmount = calibration.StandingHeadY - pose.HeadY,
+                    LeanAmount = pose.CenterX - calibration.CenterX
+                };
+            }
+        }
+
+        private void UpdateHazards(float distance)
+        {
+            currentHazard = null;
+            foreach (RideHazard hazard in hazards.Where(item => item != null && !item.Resolved))
+            {
+                float gap = hazard.TrackZ - distance;
+                if (gap <= 11f && gap >= -1.25f && (currentHazard == null || gap < currentHazard.TrackZ - distance))
+                    currentHazard = hazard;
+
+                if (gap <= 5.2f && gap >= -0.45f)
+                {
+                    foreach (KeyValuePair<int, PoseState> pair in currentPoses)
+                    {
+                        bool succeeds = hazard.Kind == HazardKind.Duck
+                            ? pair.Value.DuckAmount >= 0.20f
+                            : hazard.Kind == HazardKind.DodgeLeft
+                                ? pair.Value.LeanAmount <= -0.17f
+                                : pair.Value.LeanAmount >= 0.17f;
+                        if (!succeeds || !hazard.MarkSuccess(pair.Key)) continue;
+                        int player = Mathf.Clamp(pair.Key, 0, 1);
+                        scores[player] += 40;
+                        effects.PlayOneShot(movementSuccessSound);
+                        actionMessage = "SNYGGT, SPELARE " + (player + 1) + "!  +40";
+                        actionMessageUntil = Time.time + 1.25f;
+                    }
+                }
+
+                if (gap >= -1.25f) continue;
+                bool everyoneSucceeded = true;
+                foreach (int player in currentPoses.Keys.ToArray())
+                {
+                    if (hazard.HasSucceeded(player)) continue;
+                    everyoneSucceeded = false;
+                    scores[Mathf.Clamp(player, 0, 1)] = Mathf.Max(0, scores[Mathf.Clamp(player, 0, 1)] - 25);
+                }
+                hazard.Resolved = true;
+                hazard.ResolveVisual(everyoneSucceeded);
+                if (!everyoneSucceeded)
+                {
+                    effects.PlayOneShot(collisionSound);
+                    cameraShakeUntil = Time.time + 0.55f;
+                    actionMessage = "OJ!  -25";
+                    actionMessageUntil = Time.time + 1.1f;
+                }
+            }
+        }
+
+        private void UpdateEnvironmentEvents(float rideTime)
+        {
+            float[] scareTimes = { 11.5f, 27.5f, 44f, 62f };
+            if (nextScareIndex >= scareTimes.Length || rideTime < scareTimes[nextScareIndex]) return;
+            nextScareIndex++;
+            effects.PlayOneShot(scareSound);
+            cameraShakeUntil = Mathf.Max(cameraShakeUntil, Time.time + 0.16f);
+        }
+
         private void UpdateAim()
         {
             IReadOnlyList<AimSample> samples = aimProvider.GetAimSamples();
@@ -202,47 +330,49 @@ namespace KinectKids3D
                     aimLock = new AimLock();
                     aimLocks[sample.HandId] = aimLock;
                 }
+                if (target != null)
+                {
+                    aimLock.RecentTarget = target;
+                    aimLock.LastTargetAt = Time.time;
+                }
 
-                float progress = 0;
-                if (Time.time < aimLock.CooldownUntil)
+                if (sample.Fire && Time.time >= aimLock.CooldownUntil)
                 {
-                    target = null;
-                }
-                else if (target == null)
-                {
-                    aimLock.Target = null;
-                }
-                else
-                {
-                    if (aimLock.Target != target)
+                    GhostTarget firedTarget = target;
+                    if (firedTarget == null && Time.time - aimLock.LastTargetAt <= TargetGraceSeconds)
+                        firedTarget = aimLock.RecentTarget;
+
+                    int player = Mathf.Clamp(sample.PlayerIndex, 0, 1);
+                    Color boltColor = player == 1 ? new Color(1f, 0.28f, 0.62f) : new Color(0.22f, 0.75f, 1f);
+                    Vector3 boltStart = rideCamera.transform.position + rideCamera.transform.forward * 0.65f;
+                    Vector3 boltEnd = firedTarget != null
+                        ? firedTarget.transform.position + Vector3.up
+                        : ray.GetPoint(18f);
+                    MagicBolt.Launch(boltStart, boltEnd, boltColor);
+                    effects.PlayOneShot(castSound);
+                    if (firedTarget != null)
                     {
-                        aimLock.Target = target;
-                        aimLock.StartedAt = Time.time;
-                    }
-                    progress = Mathf.Clamp01((Time.time - aimLock.StartedAt) / LockSeconds);
-                    if (progress >= 1f)
-                    {
-                        int player = Mathf.Clamp(sample.PlayerIndex, 0, 1);
-                        int points = target.Hit();
+                        int points = firedTarget.Hit();
                         scores[player] += points;
-                        effects.PlayOneShot(target.IsBoss ? bossSound : hitSound);
-                        aimLock.Target = null;
-                        aimLock.CooldownUntil = Time.time + 0.20f;
-                        progress = 0;
+                        effects.PlayOneShot(firedTarget.IsBoss ? bossSound : hitSound);
+                        actionMessage = "+" + points;
+                        actionMessageUntil = Time.time + 0.7f;
                     }
+                    aimLock.RecentTarget = null;
+                    aimLock.CooldownUntil = Time.time + 0.28f;
                 }
 
                 reticles[sample.HandId] = new ReticleState
                 {
                     PlayerIndex = sample.PlayerIndex,
                     Position = sample.Position,
-                    Progress = progress,
+                    Progress = sample.GestureProgress,
                     OnTarget = target != null
                 };
             }
 
             foreach (int handId in aimLocks.Keys.Where(id => !seenHands.Contains(id)).ToArray())
-                aimLocks[handId].Target = null;
+                aimLocks[handId].RecentTarget = null;
         }
 
         private void OnGUI()
@@ -251,9 +381,9 @@ namespace KinectKids3D
             float rideTime = Mathf.Max(0, gameTime - CountdownSeconds);
             float remaining = Mathf.Max(0, RideSeconds - rideTime);
 
-            GUI.Box(new Rect(18, 16, 330, 78), string.Empty);
-            GUI.Label(new Rect(34, 23, 300, 34), "SPÖKJAKTEN 3D", titleStyle);
-            GUI.Label(new Rect(35, 58, 300, 26), inputStatus, smallStyle);
+            GUI.Box(new Rect(18, 16, 430, 82), string.Empty);
+            GUI.Label(new Rect(34, 23, 400, 34), "SPÖKJAKTEN 3D", titleStyle);
+            GUI.Label(new Rect(35, 58, 400, 32), inputStatus, smallStyle);
 
             GUI.Box(new Rect(Screen.width - 315, 16, 297, 78), string.Empty);
             GUI.Label(new Rect(Screen.width - 298, 23, 280, 32), "SPELARE 1   " + scores[0], hudStyle);
@@ -274,6 +404,22 @@ namespace KinectKids3D
                 GUI.DrawTexture(new Rect(x - 32, y + 41, 64 * reticle.Progress, 5), goldTexture);
             }
 
+            if (currentHazard != null)
+            {
+                float gap = currentHazard.TrackZ - Mathf.Min(DarkRideWorld.TrackLength - 3f, rideTime * RideSpeed);
+                float pulse = 1f + Mathf.Sin(Time.time * 9f) * 0.06f;
+                float width = 470f * pulse;
+                GUI.Box(new Rect(Screen.width * 0.5f - width * 0.5f, 104, width, 76), string.Empty);
+                GUI.Label(new Rect(Screen.width * 0.5f - 220, 114, 440, 52),
+                    currentHazard.Instruction + "\n" + (gap > 5.2f ? "GÖR DIG REDO" : "NU!"), centerStyle);
+            }
+
+            if (Time.time < actionMessageUntil)
+            {
+                GUI.Label(new Rect(Screen.width * 0.5f - 190, Screen.height * 0.34f, 380, 54),
+                    actionMessage, centerStyle);
+            }
+
             GhostTarget boss = targets.FirstOrDefault(item => item != null && item.IsBoss);
             if (boss != null)
             {
@@ -291,13 +437,13 @@ namespace KinectKids3D
                 GUI.Label(new Rect(Screen.width * 0.5f - 220, Screen.height * 0.5f - 68, 440, 60),
                     Mathf.CeilToInt(CountdownSeconds - gameTime).ToString(), centerStyle);
                 GUI.Label(new Rect(Screen.width * 0.5f - 220, Screen.height * 0.5f + 8, 440, 58),
-                    "Håll handringen på ett lysande mål\ntills den gula mätaren fylls", centerStyle);
+                    "SIKTA PÅ ETT SPÖKE\nDra handen bakåt och kasta den framåt!", centerStyle);
             }
             else if (rideTime < 9f)
             {
-                GUI.Box(new Rect(Screen.width * 0.5f - 310, 112, 620, 48), string.Empty);
-                GUI.Label(new Rect(Screen.width * 0.5f - 295, 120, 590, 30),
-                    "Vagnen kör själv – ni jagar spöken och zombies!", centerStyle);
+                GUI.Box(new Rect(Screen.width * 0.5f - 330, 112, 660, 68), string.Empty);
+                GUI.Label(new Rect(Screen.width * 0.5f - 315, 118, 630, 54),
+                    "Kasta magi på spökena – ducka och väj när något kommer mot vagnen!", centerStyle);
             }
 
             if (paused)
@@ -400,6 +546,55 @@ namespace KinectKids3D
             return clip;
         }
 
+        private static AudioClip CreateRideMusic()
+        {
+            const int sampleRate = 22050;
+            const int seconds = 16;
+            float[] samples = new float[sampleRate * seconds];
+            float[] melody = { 220f, 261.63f, 293.66f, 329.63f, 293.66f, 261.63f, 246.94f, 196f };
+            float[] bass = { 55f, 65.41f, 49f, 55f };
+            var random = new System.Random(1313);
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float t = i / (float)sampleRate;
+                int melodyStep = Mathf.FloorToInt(t * 2f) % melody.Length;
+                int bassStep = Mathf.FloorToInt(t / 4f) % bass.Length;
+                float notePhase = (t * 2f) % 1f;
+                float noteEnvelope = Mathf.Clamp01(1f - notePhase * 1.15f);
+                float arpeggio = Mathf.Sin(t * melody[melodyStep] * Mathf.PI * 2f) * noteEnvelope * 0.055f;
+                float bell = Mathf.Sin(t * melody[melodyStep] * 2f * Mathf.PI * 2f) * noteEnvelope * 0.014f;
+                float lowDrone = Mathf.Sin(t * bass[bassStep] * Mathf.PI * 2f) * 0.052f;
+                float beatPhase = (t * 2f) % 1f;
+                float beat = beatPhase < 0.055f
+                    ? ((float)random.NextDouble() * 2f - 1f) * (1f - beatPhase / 0.055f) * 0.055f
+                    : 0f;
+                float swell = Mathf.Sin(t * Mathf.PI / 4f) * 0.018f;
+                samples[i] = Mathf.Clamp(arpeggio + bell + lowDrone + beat + swell, -0.35f, 0.35f);
+            }
+            AudioClip clip = AudioClip.Create("Spökjaktens musik", samples.Length, 1, sampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateNoiseBurst(string clipName, float duration, float volume, int seed)
+        {
+            const int sampleRate = 22050;
+            int length = Mathf.CeilToInt(sampleRate * duration);
+            float[] samples = new float[length];
+            var random = new System.Random(seed);
+            float filtered = 0f;
+            for (int i = 0; i < length; i++)
+            {
+                float envelope = Mathf.Pow(1f - i / (float)length, 2f);
+                float noise = (float)random.NextDouble() * 2f - 1f;
+                filtered = Mathf.Lerp(filtered, noise, 0.16f);
+                samples[i] = filtered * envelope * volume;
+            }
+            AudioClip clip = AudioClip.Create(clipName, length, 1, sampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
         private void OnDestroy()
         {
             if (aimProvider != null) aimProvider.Dispose();
@@ -407,9 +602,21 @@ namespace KinectKids3D
 
         private sealed class AimLock
         {
-            public GhostTarget Target;
-            public float StartedAt;
+            public GhostTarget RecentTarget;
+            public float LastTargetAt;
             public float CooldownUntil;
+        }
+
+        private sealed class PoseCalibration
+        {
+            public float CenterX;
+            public float StandingHeadY;
+        }
+
+        private struct PoseState
+        {
+            public float DuckAmount;
+            public float LeanAmount;
         }
 
         private struct ReticleState

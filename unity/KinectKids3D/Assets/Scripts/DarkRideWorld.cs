@@ -91,6 +91,8 @@ namespace KinectKids3D
             CreateSign(14f, "SPÖKJAKTEN 3D", purpleGlow);
             CreateFloatingOrb(32f, -3.4f, 1.5f, purpleGlow);
             CreateFloatingOrb(38f, 3.1f, 2.2f, greenGlow);
+            CreateBatSwarm(25f, -2.6f, 3.35f);
+            CreateBatSwarm(44f, 2.4f, 2.75f);
         }
 
         private void BuildCrypt()
@@ -108,6 +110,7 @@ namespace KinectKids3D
             }
             CreateFloatingOrb(71f, -2.8f, 3.1f, purpleGlow);
             CreateFloatingOrb(92f, 2.9f, 2.4f, greenGlow);
+            CreateBatSwarm(63f, 2.2f, 3.2f);
         }
 
         private void BuildMonsterWorkshop()
@@ -117,10 +120,13 @@ namespace KinectKids3D
                 float center = TrackCenter(z);
                 CreateCube("Rör vänster", new Vector3(center - 4.3f, 2.1f, z), new Vector3(0.35f, 4.2f, 0.35f), rail);
                 CreateCube("Rör höger", new Vector3(center + 4.3f, 2.1f, z + 3f), new Vector3(0.35f, 4.2f, 0.35f), rail);
-                CreateSphere("Giftbubbla", new Vector3(center - 3.3f, 0.6f, z + 2f), Vector3.one * 0.55f, greenGlow);
-                CreateSphere("Giftbubbla", new Vector3(center + 3.5f, 1.2f, z + 5f), Vector3.one * 0.38f, purpleGlow);
+                GameObject leftBubble = CreateSphere("Giftbubbla", new Vector3(center - 3.3f, 0.6f, z + 2f), Vector3.one * 0.55f, greenGlow);
+                GameObject rightBubble = CreateSphere("Giftbubbla", new Vector3(center + 3.5f, 1.2f, z + 5f), Vector3.one * 0.38f, purpleGlow);
+                HauntedProp.Attach(leftBubble, HauntedMotion.Bob, 0.22f, 2.1f);
+                HauntedProp.Attach(rightBubble, HauntedMotion.Bob, 0.18f, 2.8f);
                 CreateLamp(z + 4f, z % 18 < 1 ? -4.6f : 4.6f, new Color(0.1f, 1f, 0.35f));
             }
+            CreateBatSwarm(128f, -2.3f, 3.65f);
         }
 
         private void BuildFinalHall()
@@ -156,12 +162,35 @@ namespace KinectKids3D
             light.intensity = 2.6f;
             light.range = 9f;
             light.shadows = LightShadows.None;
+            HauntedProp.Attach(lamp, HauntedMotion.Flicker, 0f, Random.Range(6.5f, 10.5f));
         }
 
         private void CreateFloatingOrb(float z, float localX, float y, Material material)
         {
             Vector3 position = new Vector3(TrackCenter(z) + localX, y, z);
-            CreateSphere("Svävande spökljus", position, Vector3.one * 0.44f, material);
+            GameObject orb = CreateSphere("Svävande spökljus", position, Vector3.one * 0.44f, material);
+            HauntedProp.Attach(orb, HauntedMotion.Bob, 0.32f, Random.Range(1.4f, 2.4f));
+        }
+
+        private void CreateBatSwarm(float z, float localX, float y)
+        {
+            GameObject swarm = new GameObject("Flygande fladdermöss");
+            swarm.transform.SetParent(root, false);
+            swarm.transform.position = new Vector3(TrackCenter(z) + localX, y, z);
+            Material batMaterial = GlowMaterial(new Color(0.22f, 0.08f, 0.38f), 1.15f);
+            for (int i = 0; i < 5; i++)
+            {
+                GameObject bat = new GameObject("Fladdermus " + (i + 1));
+                bat.transform.SetParent(swarm.transform, false);
+                bat.transform.localPosition = new Vector3((i - 2) * 0.55f, (i % 2) * 0.35f, i * 0.28f);
+                CreateChildCube(bat.transform, "Kropp", Vector3.zero, new Vector3(0.18f, 0.16f, 0.34f), batMaterial);
+                CreateChildCube(bat.transform, "Vänster vinge", new Vector3(-0.28f, 0f, 0f),
+                    new Vector3(0.48f, 0.06f, 0.22f), batMaterial);
+                CreateChildCube(bat.transform, "Höger vinge", new Vector3(0.28f, 0f, 0f),
+                    new Vector3(0.48f, 0.06f, 0.22f), batMaterial);
+                HauntedProp.Attach(bat, HauntedMotion.Flutter, 0.35f + i * 0.025f, 2.7f + i * 0.3f);
+            }
+            HauntedProp.Attach(swarm, HauntedMotion.Flutter, 1.15f, 0.75f);
         }
 
         private void CreateSign(float z, string text, Material material)

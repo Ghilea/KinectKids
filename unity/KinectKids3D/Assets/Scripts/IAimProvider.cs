@@ -8,5 +8,6 @@ namespace KinectKids3D
         bool IsAvailable { get; }
         string Status { get; }
         IReadOnlyList<AimSample> GetAimSamples();
+        IReadOnlyList<PlayerPose> GetPlayerPoses();
     }
 }
