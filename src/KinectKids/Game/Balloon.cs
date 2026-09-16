@@ -3,7 +3,7 @@ using System.Windows.Shapes;
 
 namespace KinectKids.Game
 {
-    public sealed class Balloon
+    public class Balloon
     {
         public Ellipse Shape { get; set; }
         public double X { get; set; }
@@ -19,7 +19,8 @@ namespace KinectKids.Game
     /// </summary>
     public sealed class MathBalloon : Balloon
     {
-        public string AnswerText { get; set; }
-        public bool IsQuestionBalloon { get; set; } = false;
+        public System.Windows.Controls.TextBlock Label { get; set; }
+        public int Answer { get; set; }
+        public double BaseY { get; set; }
     }
 }

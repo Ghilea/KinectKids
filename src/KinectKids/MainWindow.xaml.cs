@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -13,6 +14,7 @@ using System.Windows.Threading;
 using KinectKids.Game;
 using KinectKids.Input;
 using KinectKids.Models;
+using KinectKids.Services;
 
 namespace KinectKids
 {
@@ -49,6 +51,10 @@ namespace KinectKids
         private IPlayerTracker tracker;
         private GameEngine game;
         private ZombieRailEngine zombieGame;
+        private MathGame mathGame;
+        private SimonSaysGame simonGame;
+        private readonly GameManager moduleManager = new GameManager();
+        private readonly ProgressionService progression = new ProgressionService();
         private IReadOnlyList<TrackedPlayer> players = Array.Empty<TrackedPlayer>();
         private GameMode selectedGame = GameMode.Balloons;
         private DateTime roundEndsAt;
@@ -66,7 +72,11 @@ namespace KinectKids
             InitializeComponent();
             game = new GameEngine(Playfield);
             zombieGame = new ZombieRailEngine(Playfield);
+            mathGame = new MathGame(Playfield);
+            simonGame = new SimonSaysGame();
+            moduleManager.GameEvent += OnModuleGameEvent;
             CreateHandCursors();
+            UpdateProgressionUi();
 
             gameTimer = new DispatcherTimer(DispatcherPriority.Render)
             {
@@ -110,6 +120,7 @@ namespace KinectKids
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 players = snapshot;
+                simonGame.SetPlayers(snapshot);
                 RenderSkeletons(CalibrationSkeletonCanvas);
                 RenderSkeletons(GameSkeletonCanvas);
                 UpdateCalibration();
@@ -132,10 +143,48 @@ namespace KinectKids
             ShowCalibration();
         }
 
+        private void MathStartButton_Click(object sender, RoutedEventArgs e)
+        {
+            selectedGame = GameMode.Math;
+            ShowCalibration();
+        }
+
+        private void SimonStartButton_Click(object sender, RoutedEventArgs e)
+        {
+            selectedGame = GameMode.SimonSays;
+            ShowCalibration();
+        }
+
         private void ZombieStartButton_Click(object sender, RoutedEventArgs e)
         {
             selectedGame = GameMode.ZombieTrain;
             ShowCalibration();
+        }
+
+        private void SpookyAdventureButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!progression.IsGameUnlocked("SpookyAdventure3D"))
+            {
+                UpdateProgressionUi();
+                return;
+            }
+
+            string executable = FindSpookyAdventureExecutable();
+            if (executable == null)
+            {
+                MessageBox.Show(
+                    "Spökjakten 3D är upplåst men behöver byggas i Unity först.\n\n" +
+                    "Öppna unity\\KinectKids3D i Unity 6 och bygg Windows-versionen till " +
+                    "unity\\KinectKids3D\\Build.",
+                    "Spökjakten 3D",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            tracker?.Stop();
+            Process.Start(new ProcessStartInfo(executable) { WorkingDirectory = Path.GetDirectoryName(executable) });
+            Close();
         }
 
         private void MouseModeButton_Click(object sender, RoutedEventArgs e)
@@ -152,9 +201,21 @@ namespace KinectKids
             HomePanel.Visibility = Visibility.Collapsed;
             GamePanel.Visibility = Visibility.Collapsed;
             CalibrationPanel.Visibility = Visibility.Visible;
-            CalibrationTitle.Text = selectedGame == GameMode.ZombieTrain
-                ? "Gör er redo för Zombietåget"
-                : "Gör er redo för Ballongjakten";
+            switch (selectedGame)
+            {
+                case GameMode.Math:
+                    CalibrationTitle.Text = "Gör er redo för Matematikbanan";
+                    break;
+                case GameMode.SimonSays:
+                    CalibrationTitle.Text = "Gör er redo för Simon säger";
+                    break;
+                case GameMode.ZombieTrain:
+                    CalibrationTitle.Text = "Gör er redo för Zombietåget";
+                    break;
+                default:
+                    CalibrationTitle.Text = "Gör er redo för Ballongjakten";
+                    break;
+            }
             UpdateCalibration();
         }
 
@@ -215,6 +276,12 @@ namespace KinectKids
             GameInstruction.Visibility = Visibility.Visible;
             game.Reset();
             zombieGame.Reset();
+            mathGame.Reset();
+            simonGame.Reset();
+            IGame selectedModule = null;
+            if (selectedGame == GameMode.Math) selectedModule = mathGame;
+            if (selectedGame == GameMode.SimonSays) selectedModule = simonGame;
+            moduleManager.Select(selectedModule);
             ConfigureGameMode();
             scores[0] = 0;
             scores[1] = 0;
@@ -235,6 +302,7 @@ namespace KinectKids
 
             isPlaying = true;
             isPaused = false;
+            if (moduleManager.CurrentGame != null) moduleManager.Start();
             roundEndsAt = DateTime.UtcNow.AddSeconds(60);
             instructionHidesAt = DateTime.UtcNow.AddSeconds(selectedGame == GameMode.ZombieTrain ? 11 : 8);
             frameClock.Restart();
@@ -246,13 +314,28 @@ namespace KinectKids
             bool zombies = selectedGame == GameMode.ZombieTrain;
             ZombieBackdrop.Visibility = zombies ? Visibility.Visible : Visibility.Collapsed;
             BalloonBackdrop.Visibility = zombies ? Visibility.Collapsed : Visibility.Visible;
+            BalloonBackdrop.Background = selectedGame == GameMode.Math
+                ? BrushFrom("#173D63")
+                : selectedGame == GameMode.SimonSays ? BrushFrom("#282B57") : BrushFrom("#102B46");
             Playfield.Background = Brushes.Transparent;
-            GameSkeletonCanvas.Opacity = zombies ? 0.46 : 0.72;
+            GameSkeletonCanvas.Opacity = selectedGame == GameMode.SimonSays ? 0.9 : zombies ? 0.46 : 0.72;
             BossBanner.Visibility = Visibility.Collapsed;
             TimeText.Text = "60";
-            GameInstructionText.Text = zombies
-                ? "Håll en handring på en zombie tills mätaren under handen fylls!"
-                : "De färgade ringarna är dina händer – rör en ring in i en ballong!";
+            switch (selectedGame)
+            {
+                case GameMode.Math:
+                    GameInstructionText.Text = "Träffa ballongen med rätt svar!";
+                    break;
+                case GameMode.SimonSays:
+                    GameInstructionText.Text = "Följ rörelsen som Simon visar!";
+                    break;
+                case GameMode.ZombieTrain:
+                    GameInstructionText.Text = "Håll en handring på en zombie tills mätaren under handen fylls!";
+                    break;
+                default:
+                    GameInstructionText.Text = "De färgade ringarna är dina händer – rör en ring in i en ballong!";
+                    break;
+            }
         }
 
         private void OnGameTick(object sender, EventArgs e)
@@ -266,11 +349,19 @@ namespace KinectKids
                 UpdateRailBackground();
                 BossBanner.Visibility = zombieGame.BossIsActive ? Visibility.Visible : Visibility.Collapsed;
             }
+            else if (selectedGame == GameMode.Math || selectedGame == GameMode.SimonSays)
+            {
+                moduleManager.Update(elapsed);
+                if (moduleManager.CurrentGame != null)
+                    GameInstructionText.Text = moduleManager.CurrentGame.Instruction;
+            }
             else
             {
                 game.Update(elapsed);
             }
-            if (DateTime.UtcNow >= instructionHidesAt)
+            if (selectedGame != GameMode.Math
+                && selectedGame != GameMode.SimonSays
+                && DateTime.UtcNow >= instructionHidesAt)
                 GameInstruction.Visibility = Visibility.Collapsed;
 
             var remaining = roundEndsAt - DateTime.UtcNow;
@@ -341,6 +432,16 @@ namespace KinectKids
                     ZombieAimResult result = zombieGame.AimAt(new Point(x, y), cursorIndex, DateTime.UtcNow);
                     handAimProgress[cursorIndex].Width = 64 * result.Progress;
                     points = result.Points;
+                }
+                else if (selectedGame == GameMode.Math)
+                {
+                    handAimProgress[cursorIndex].Width = 0;
+                    points = mathGame.PopAt(new Point(x, y), 29, playerIndex);
+                }
+                else if (selectedGame == GameMode.SimonSays)
+                {
+                    handAimProgress[cursorIndex].Width = 0;
+                    points = 0;
                 }
                 else
                 {
@@ -606,15 +707,46 @@ namespace KinectKids
             PlayerTwoScore.Text = scores[1].ToString();
         }
 
+        private void OnModuleGameEvent(object sender, GameEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(e.Message))
+                GameInstructionText.Text = e.Message;
+
+            if (selectedGame == GameMode.SimonSays && e.ScoreDelta > 0)
+            {
+                int playerIndex = Math.Max(0, Math.Min(1, e.PlayerIndex));
+                scores[playerIndex] += e.ScoreDelta;
+                UpdateScoreboard();
+                ShowPopFeedback(new Point(Playfield.ActualWidth / 2, Playfield.ActualHeight / 2),
+                    e.ScoreDelta, playerIndex);
+            }
+        }
+
         private void FinishRound()
         {
             isPlaying = false;
             gameTimer.Stop();
+            moduleManager.Stop();
             PauseButton.Visibility = Visibility.Collapsed;
             ResultOverlay.Visibility = Visibility.Visible;
-            ResultText.Text = PlayerTwoScoreBox.Visibility == Visibility.Visible
+            string scoreText = PlayerTwoScoreBox.Visibility == Visibility.Visible
                 ? $"Spelare 1: {scores[0]}  •  Spelare 2: {scores[1]}"
                 : $"Du fick {scores[0]} poäng";
+
+            if (selectedGame == GameMode.Math)
+            {
+                bool unlocked = progression.AddMathScore(0, scores[0]);
+                if (PlayerTwoScoreBox.Visibility == Visibility.Visible)
+                    unlocked = progression.AddMathScore(1, scores[1]) || unlocked;
+
+                scoreText += unlocked
+                    ? "\nSpökjakten 3D är nu upplåst!"
+                    : "\n" + progression.GetRemainingForSpookyAdventure() +
+                      " mattepoäng kvar till Spökjakten 3D.";
+                UpdateProgressionUi();
+            }
+
+            ResultText.Text = scoreText;
         }
 
         private void PauseButton_Click(object sender, RoutedEventArgs e)
@@ -643,6 +775,7 @@ namespace KinectKids
             CalibrationPanel.Visibility = Visibility.Collapsed;
             GamePanel.Visibility = Visibility.Collapsed;
             HomePanel.Visibility = Visibility.Visible;
+            UpdateProgressionUi();
         }
 
         private void StopRound()
@@ -652,6 +785,9 @@ namespace KinectKids
             gameTimer.Stop();
             game.Reset();
             zombieGame.Reset();
+            moduleManager.Stop();
+            mathGame.Reset();
+            simonGame.Reset();
             PauseOverlay.Visibility = Visibility.Collapsed;
             ResultOverlay.Visibility = Visibility.Collapsed;
             CountdownOverlay.Visibility = Visibility.Collapsed;
@@ -687,10 +823,39 @@ namespace KinectKids
 
         private static Brush BrushFrom(string color) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
 
+        private void UpdateProgressionUi()
+        {
+            if (SpookyAdventureButton == null || ProgressText == null) return;
+            bool unlocked = progression.IsGameUnlocked("SpookyAdventure3D");
+            SpookyAdventureButton.IsEnabled = unlocked;
+            SpookyAdventureButton.Opacity = unlocked ? 1 : 0.58;
+            SpookyAdventureButton.Content = unlocked
+                ? "Spökjakten 3D"
+                : "Spökjakten 3D 🔒";
+            ProgressText.Text = unlocked
+                ? "Belöning upplåst: Spökjakten 3D är redo."
+                : "Samla " + progression.GetRemainingForSpookyAdventure() +
+                  " mattepoäng till för att låsa upp Spökjakten 3D.";
+        }
+
+        private static string FindSpookyAdventureExecutable()
+        {
+            string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            string[] candidates =
+            {
+                Path.Combine(baseDirectory, "KinectKids3D.exe"),
+                Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..",
+                    "unity", "KinectKids3D", "Build", "KinectKids3D.exe"))
+            };
+            return candidates.FirstOrDefault(File.Exists);
+        }
+
         private enum GameMode
         {
             Balloons,
-            ZombieTrain
+            ZombieTrain,
+            Math,
+            SimonSays
         }
     }
 }

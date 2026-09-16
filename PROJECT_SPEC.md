@@ -1,9 +1,9 @@
 # Projekt: KinectKids - "Kanon i Realitet" (Skolversion)
-## Status: Version 1.2 -> Utveckling av Version 2.0 (Pedagogisk Edition)
+## Status: Version 1.3 -> Pedagogisk grund implementerad, integrationstest pågår
 ## Språk: C# (.NET 6/8), WPF, Microsoft Kinect SDK v1.8
 
 ### 1. VISION & MÅL
-**Mål:** Att skapa ett plattform för fysisk rörelse i skola där barn "löser" ämnen (matte, språk, logik) via Kinect, och belönas med låsta nöjespel (zombie-tåg, spökjakt).
+**Mål:** Att skapa en plattform för fysisk rörelse i skolan där barn "löser" ämnen (matte, språk, logik) via Kinect och belönas med låsta nöjespel (zombie-tåg, spökjakt).
 **Nyckelvärd:** Ingen handkontroll. Helt kroppsstyrning. Säker integritet (inga kamerabilder lagras, bara skelettdata i minnet).
 **Plattform:** Windows 10/11 x86 (för kompatibilitet med Kinect v1).
 
@@ -51,12 +51,13 @@ Vi ska bygga dessa spel i ordning baserat på komplexitet och pedagogisk värde:
 ### 4. KRAV & KRITERIER FÖR NYA VERSIONER
 
 #### Version 1.3: Pedagogisk Grund (MVP för skolan)
-*   **Implementera `IGame`-patern:** Flytta alla specifik logik till nya klasser (`MathGame.cs`, `SimonSaysGame.cs`).
-*   **Skapa "ProgressionSystem":** En central databas i minnet (XAML/Settings) som sparar:
+*   **Implementera `IGame`-mönstret:** `MathGame.cs` och `SimonSaysGame.cs` finns bakom ett gemensamt kontrakt och en `GameManager`.
+*   **Skapa "ProgressionSystem":** En lokal anonym XML-fil sparar:
     *   `MathLevelUnlocked`
     *   `SpookyAdventureLevelUnlocked`
     *   Total poäng för varje barn.
-*   **UI-Överläggning:** Lägg till en meny över spelaren som visar "Nästa uppgift" (t.ex. "Ladda upp: 2+2") när man är i träningsläge.
+*   **UI-överläggning:** Nästa uppgift eller rörelse visas över spelaren under hela träningsrundan.
+*   **Belöningskoppling:** Spökjakten 3D ligger kvar i Unity-projektet och låses upp efter 120 mattepoäng.
 
 #### Version 1.4: Nätverk & Multiplayer
 *   **Lokal Server (SimpleX/UDP):** Tillåt att flera datorer på skolan kan sända samma "Hinder-Data" till flera Kinect-kameror om de spelar samtidigt på samma station.
@@ -67,10 +68,10 @@ Vi ska bygga dessa spel i ordning baserat på komplexitet och pedagogisk värde:
 *   **USB-kompatibilitet:** Måste fungera på USB 2.0 (baksida av PC). Hantera "Bandbredd-fel" snyggt med svenska meddelanden.
 *   **Kalibrering:** En enkel vy där barnen ställer sig för att kalibrera sensorn innan varje session.
 
-### 5. OMDÖMNING AV NÄSTA STEG
-Jag behöver hjälp att:
-1.  Skapa `MathGame.cs` och `SimonSaysGame.cs` som implementerar `IGame`.
-2.  Designa en enkel "ProgressionManager" som spårar vilka spel som är låsta.
-3.  Kodar en UI-skärma ("Meny") som visas över spelaren och visar instruktioner (t.ex. "Hitta den blå balongen!").
+### 5. NÄSTA STEG
+1.  Verifiera Matematikbanan och Simon säger med den fysiska Kinect-sensorn.
+2.  Justera rörelsetrösklar efter barnens verkliga avstånd och längd.
+3.  Göra en Windows-build av Unity-projektet så Spökjakten 3D kan startas direkt från huvudmenyn.
+4.  Därefter bygga Färg & Form Labyrint som nästa pedagogiska modul.
 
 **Notera:** Vi fortsätter använda Kinect SDK v1.8 (.NET 4.8) för att hålla kompatibilitet med skolors äldre utrustning, men vi bygger på en modern .NET Core/Standard arkitektur där möjligt.

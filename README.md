@@ -1,10 +1,19 @@
-# Rörelselek för Kinect 360
+# KinectKids – lär och lek med Kinect 360
 
-Ett svenskt, barnvänligt rörelsespel för **Xbox 360 Kinect (Kinect v1)** på Windows 10. Ett eller två barn använder händerna för att spela Ballongjakten eller åka genom Zombietåget. Ingen handkontroll behövs.
+En svensk, barnvänlig plattform för **Xbox 360 Kinect (Kinect v1)** på Windows 10. Ett eller två barn löser uppgifter och spelar rörelsespel helt utan handkontroll. Pedagogiska poäng låser upp nöjesspel, samtidigt som inga kamera-, ljud- eller skelettdata sparas.
+
+## Pedagogisk version 1.3 under utveckling
+
+- **Matematikbanan:** träffa ballongen med rätt svar på addition och subtraktion.
+- **Simon säger:** händer upp, armar ut, händer tillsammans och ducka.
+- anonym lokal progression för Spelare 1 och Spelare 2
+- Spökjakten 3D låses upp efter sammanlagt 120 mattepoäng
+- gemensamt `IGame`-kontrakt och `GameManager` för nya moduler
+- instruktionen för nästa uppgift ligger alltid synlig under träningsspel
 
 ## Ny 3D-version under utveckling
 
-En separat Unity-baserad version av Spökjakten finns nu i [`unity/KinectKids3D`](unity/KinectKids3D). Den första vertical slice-versionen har riktig 3D-räls, spökvagn, flera miljözoner, tredimensionella mål, Kinect-handsikte och en zombie-konduktör som boss. Den befintliga WPF-versionen ligger kvar tills 3D-versionen är redo att ersätta den.
+En separat Unity-baserad version av Spökjakten finns i [`unity/KinectKids3D`](unity/KinectKids3D). Den första vertical slice-versionen har riktig 3D-räls, spökvagn, flera miljözoner, tredimensionella mål, Kinect-handsikte och en zombie-konduktör som boss. Den finns kvar som belöningsspel och kan startas från huvudmenyn när en Windows-build ligger i `unity/KinectKids3D/Build`.
 
 Se [start- och testinstruktionerna för KinectKids 3D](unity/KinectKids3D/README.md).
 
@@ -87,10 +96,12 @@ Vanliga orsaker:
 ```text
 src/KinectKids/
   Assets/     Stations-, tunnel- och zombieillustrationer
-  Game/       Ballong- och Zombietåget-motorer
+  Game/       Pedagogiska moduler samt Ballong- och Zombietåget-motorer
   Input/      Kinect- och musspårning bakom samma gränssnitt
-  Models/     Normaliserad spelardata
+  Models/     Normaliserad spelardata och mattefrågor
+  Services/   Anonym lokal progression
   MainWindow  WPF-gränssnitt och spelläge
+unity/        Spökjakten 3D i Unity
 scripts/      kontroll, bygge och start
 ```
 

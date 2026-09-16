@@ -1,36 +1,45 @@
 using System;
-using System.Windows;
+using System.Windows.Media;
 
 namespace KinectKids.Game
 {
+    /// <summary>
+    /// Gemensamt kontrakt för fristående spelmoduler. Kinect- och musinmatning
+    /// hålls utanför modulen så att samma spel kan testas utan en sensor.
+    /// </summary>
     public interface IGame
     {
-        event EventHandler<GameEventArgs> OnGameEvent;
+        event EventHandler<GameEventArgs> GameEvent;
+
+        string Id { get; }
+        string DisplayName { get; }
+        string Instruction { get; }
+        int CurrentScore { get; }
+        bool IsActive { get; }
+
         void Start();
         void Stop();
         void Reset();
-        void Update(double dt);
-        void Draw(DrawingContext context);
+        void Update(double elapsedSeconds);
+        void Render(DrawingContext context);
         void OnKinectGesture(GestureType gesture);
-        int CurrentScore { get; }
-        bool IsActive { get; }
     }
 
     public enum GestureType
     {
+        None,
         HandsUp,
-        PointLeft,
-        PointRight,
-        HandsParallel,
-        HandDuck,
-        HandsPlus,
-        Punch,
-        None
+        ArmsOut,
+        HandsTogether,
+        Duck,
+        Punch
     }
 
-    public class GameEventArgs : EventArgs
+    public sealed class GameEventArgs : EventArgs
     {
-        public int ScoreDelta { get; set; }
         public string Message { get; set; }
+        public int ScoreDelta { get; set; }
+        public int PlayerIndex { get; set; }
+        public bool RoundCompleted { get; set; }
     }
 }

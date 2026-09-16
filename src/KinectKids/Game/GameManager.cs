@@ -1,110 +1,74 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Windows;
+using System.Windows.Media;
 
 namespace KinectKids.Game
 {
+    /// <summary>
+    /// Livscykel för en aktiv IGame-modul. Huvudfönstret kan stegvis flyttas
+    /// över till denna utan att de redan fungerande spelen behöver skrivas om.
+    /// </summary>
     public sealed class GameManager
     {
-        private IGame _currentGame;
-        private bool _gameActive;
-        private DateTime _instructionHideAt;
-        private string _calibrationMessage;
+        private IGame currentGame;
 
-        public event EventHandler<GameEventArgs> OnGameManagerEvent;
+        public event EventHandler<GameEventArgs> GameEvent;
 
-        public IGame CurrentGame => _currentGame;
-        public int CurrentScore => _currentGame?.CurrentScore ?? 0;
-        public bool IsActive => _gameActive;
+        public IGame CurrentGame => currentGame;
+        public bool IsActive => currentGame != null && currentGame.IsActive;
+        public int CurrentScore => currentGame == null ? 0 : currentGame.CurrentScore;
 
-        public void SetActiveGame(IGame game)
+        public void Select(IGame game)
         {
-            if (_currentGame != null)
+            if (ReferenceEquals(currentGame, game)) return;
+            if (currentGame != null)
             {
-                _currentGame.Stop();
+                currentGame.GameEvent -= ForwardEvent;
+                currentGame.Stop();
             }
 
-            _currentGame = game;
-            OnGameManagerEvent?.Invoke(this, new GameEventArgs 
-            {
-                Message = $"Byter till spel: {game.GetType().Name}"
-            });
+            currentGame = game;
+            if (currentGame != null)
+                currentGame.GameEvent += ForwardEvent;
         }
 
         public void Start()
         {
-            if (_currentGame == null)
-            {
-                throw new InvalidOperationException("Inget spel s\u00E4tts.");
-            }
-
-            _gameActive = true;
-            _instructionHideAt = DateTime.UtcNow.AddSeconds(10);
-            _currentGame.Start();
+            if (currentGame == null)
+                throw new InvalidOperationException("Välj ett spel innan rundan startas.");
+            currentGame.Start();
         }
 
         public void Stop()
         {
-            if (_currentGame != null)
-            {
-                _currentGame.Stop();
-                _currentGame = null;
-            }
-            _gameActive = false;
+            if (currentGame != null) currentGame.Stop();
         }
 
         public void Reset()
         {
-            if (_currentGame != null)
-            {
-                _currentGame.Reset();
-            }
+            if (currentGame != null) currentGame.Reset();
         }
 
-        public void Update(double dt)
+        public void Update(double elapsedSeconds)
         {
-            if (_currentGame == null) return;
-            
-            _currentGame.Update(dt);
-            OnGameManagerEvent?.Invoke(this, new GameEventArgs 
-            {
-                Message = $"Po\u00E5ng: {_currentGame.CurrentScore}"
-            });
+            if (currentGame != null && currentGame.IsActive)
+                currentGame.Update(elapsedSeconds);
         }
 
-        public void Draw(DrawingContext context)
+        public void Render(DrawingContext context)
         {
-            if (_currentGame != null)
-            {
-                _currentGame.Draw(context);
-            }
+            if (currentGame != null)
+                currentGame.Render(context);
         }
 
-        public void OnKinectGesture(GestureType gesture)
+        public void HandleGesture(GestureType gesture)
         {
-            if (_currentGame != null && _gameActive)
-            {
-                _currentGame.OnKinectGesture(gesture);
-            }
+            if (currentGame != null && currentGame.IsActive)
+                currentGame.OnKinectGesture(gesture);
         }
 
-        public string CalibrationMessage => _calibrationMessage;
-        public void SetCalibrationMessage(string message)
+        private void ForwardEvent(object sender, GameEventArgs e)
         {
-            _calibrationMessage = message;
-        }
-
-        public void HideInstruction()
-        {
-            DateTime now = DateTime.UtcNow;
-            if (now >= _instructionHideAt && _currentGame != null)
-            {
-                OnGameManagerEvent?.Invoke(this, new GameEventArgs 
-                { 
-                    Message = "Instruktion d\u00F6ljd." 
-                });
-            }
+            GameEvent?.Invoke(this, e);
         }
     }
 }

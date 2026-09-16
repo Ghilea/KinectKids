@@ -1,145 +1,106 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Text.Json;
+using System.Xml.Serialization;
 
 namespace KinectKids.Services
 {
-    public class ProgressionService
+    /// <summary>
+    /// Lokal, anonym progression. Filen innehåller bara två spelarplatser,
+    /// poäng och upplåsningar – aldrig namn, bild, ljud eller skelettdata.
+    /// </summary>
+    public sealed class ProgressionService
     {
-        private const string DataFile = "Data/player_progress.json";
-        
-        private static readonly Dictionary<string, string> DefaultLockedGames = new Dictionary<string, string>
-        {
-            { "MathGame", "L\u00E5st" },
-            { "SpookyAdventure", "L\u00E5st" }
-        };
+        public const int SpookyAdventureUnlockScore = 120;
+        private const string SpookyAdventureId = "SpookyAdventure3D";
+        private readonly string dataFile;
+        private ProgressionState state;
 
-        public string PlayerId => GetAnonymousPlayerId();
-
-        private static string GetAnonymousPlayerId()
+        public ProgressionService()
         {
-            int randomId = new Random().Next(1, 1000);
-            return $"AnonPlayer_{randomId}";
+            string folder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "KinectKids");
+            dataFile = Path.Combine(folder, "progress.xml");
+            state = Load();
         }
 
-        private Dictionary<string, object> GetData()
+        public int GetMathScore(int playerIndex)
         {
-            if (!File.Exists(DataFile))
-            {
-                return new Dictionary<string, object>
-                {
-                    ["playerId"] = GetAnonymousPlayerId(),
-                    ["score"] = 0,
-                    ["unlockedGames"] = new List<string>(),
-                    ["lastPlayed"] = DateTime.UtcNow.ToString("o")
-                };
-            }
+            return playerIndex == 1 ? state.PlayerTwoMathScore : state.PlayerOneMathScore;
+        }
 
+        public int GetCombinedMathScore()
+        {
+            return state.PlayerOneMathScore + state.PlayerTwoMathScore;
+        }
+
+        public int GetRemainingForSpookyAdventure()
+        {
+            return Math.Max(0, SpookyAdventureUnlockScore - GetCombinedMathScore());
+        }
+
+        public bool IsGameUnlocked(string gameId)
+        {
+            if (!string.Equals(gameId, SpookyAdventureId, StringComparison.OrdinalIgnoreCase))
+                return true;
+            return state.SpookyAdventureUnlocked || GetCombinedMathScore() >= SpookyAdventureUnlockScore;
+        }
+
+        public bool AddMathScore(int playerIndex, int points)
+        {
+            if (points <= 0) return false;
+
+            bool wasUnlocked = IsGameUnlocked(SpookyAdventureId);
+            if (playerIndex == 1)
+                state.PlayerTwoMathScore += points;
+            else
+                state.PlayerOneMathScore += points;
+
+            state.SpookyAdventureUnlocked = GetCombinedMathScore() >= SpookyAdventureUnlockScore;
+            state.LastPlayedUtc = DateTime.UtcNow;
+            Save();
+            return !wasUnlocked && state.SpookyAdventureUnlocked;
+        }
+
+        private ProgressionState Load()
+        {
+            if (!File.Exists(dataFile)) return new ProgressionState();
             try
             {
-                string json = File.ReadAllText(DataFile);
-                var data = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-                return data;
+                var serializer = new XmlSerializer(typeof(ProgressionState));
+                using (FileStream stream = File.OpenRead(dataFile))
+                    return (ProgressionState)serializer.Deserialize(stream);
             }
-            catch (Exception)
+            catch (InvalidOperationException)
             {
-                return new Dictionary<string, object>
-                {
-                    ["playerId"] = GetAnonymousPlayerId(),
-                    ["score"] = 0,
-                    ["unlockedGames"] = new List<string>(),
-                    ["lastPlayed"] = DateTime.UtcNow.ToString("o")
-                };
+                return new ProgressionState();
             }
-        }
-
-        private void SaveData(Dictionary<string, object> data)
-        {
-            EnsureDataDirectory();
-            string json = JsonSerializer.Serialize(data, new JsonSerializerOptions 
-            { 
-                WriteIndented = true,
-                DefaultDateTimeHandler = (value, options) => value.ToString("o")
-            });
-            File.WriteAllText(DataFile, json);
-        }
-
-        private void EnsureDataDirectory()
-        {
-            string directory = Path.GetDirectoryName(DataFile);
-            if (!Directory.Exists(directory))
+            catch (IOException)
             {
-                Directory.CreateDirectory(directory);
+                return new ProgressionState();
             }
         }
 
-        public int GetTotalScore()
+        private void Save()
         {
-            var data = GetData();
-            return Convert.ToInt32(data["score"] ?? 0);
+            string folder = Path.GetDirectoryName(dataFile);
+            if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+
+            string temporary = dataFile + ".tmp";
+            var serializer = new XmlSerializer(typeof(ProgressionState));
+            using (FileStream stream = File.Create(temporary))
+                serializer.Serialize(stream, state);
+
+            if (File.Exists(dataFile)) File.Delete(dataFile);
+            File.Move(temporary, dataFile);
         }
+    }
 
-        public void AddScore(int points)
-        {
-            var data = GetData();
-            data["score"] = (Convert.ToInt32(data["score"] ?? 0)) + points;
-            SaveData(data);
-        }
-
-        public bool IsGameUnlocked(string gameName)
-        {
-            if (!DefaultLockedGames.ContainsKey(gameName))
-            {
-                return true; // Default: all games unlocked if not in locked list
-            }
-
-            var data = GetData();
-            List<string> unlockedGames = GetUnlockedGamesList(data);
-
-            return unlockedGames.Contains(gameName);
-        }
-
-        public void UnlockGame(string gameName)
-        {
-            if (!IsGameUnlocked(gameName))
-            {
-                var data = GetData();
-                List<string> unlockedGames = GetUnlockedGamesList(data);
-                if (!unlockedGames.Contains(gameName))
-                {
-                    unlockedGames.Add(gameName);
-                    data["unlockedGames"] = unlockedGames;
-                    SaveData(data);
-                }
-            }
-        }
-
-        private List<string> GetUnlockedGamesList(Dictionary<string, object> data)
-        {
-            return JsonSerializer.Deserialize<List<string>>(data["unlockedGames"] ?? new List<string>()) ?? 
-                   new List<string>();
-        }
-
-        public string GetLastPlayed()
-        {
-            var data = GetData();
-            string lastPlayed = data["lastPlayed"]?.ToString();
-            if (string.IsNullOrEmpty(lastPlayed))
-            {
-                return DateTime.UtcNow.ToString("o");
-            }
-            return lastPlayed;
-        }
-
-        public void SetLastPlayed()
-        {
-            var data = GetData();
-            data["lastPlayed"] = DateTime.UtcNow.ToString("o");
-            SaveData(data);
-        }
-
-        public Dictionary<string, string> GetLockedGames() => DefaultLockedGames;
+    public sealed class ProgressionState
+    {
+        public int PlayerOneMathScore { get; set; }
+        public int PlayerTwoMathScore { get; set; }
+        public bool SpookyAdventureUnlocked { get; set; }
+        public DateTime LastPlayedUtc { get; set; }
     }
 }
-
