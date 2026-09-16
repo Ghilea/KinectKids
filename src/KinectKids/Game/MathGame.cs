@@ -4,287 +4,410 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Shapes;
+using Microsoft.Kinect;
 
 namespace KinectKids.Game
 {
-    /// <summary>
-    /// Matte-spel där barnen löser matematiska uttryck genom att fånga rätt färgkodade balonger.
-    /// </summary>
     public sealed class MathGame : IGame
     {
-        private readonly Canvas canvas;
-        private readonly List<Balloon> balloons = new List<Balloon>();
-        private string currentQuestion;
-        private int correctAnswerValue;
-        private int currentScore;
-        private bool isWaitingForAnswer;
+        private static readonly Random Random = new Random();
+        private const int SpawnCooldown = 0.5;
+        private const int TimeoutSeconds = 8;
 
-        public MathGame(Canvas canvas)
+        public event EventHandler<GameEventArgs> OnGameEvent;
+        public int CurrentScore { get; private set; }
+        public bool IsActive => _gameActive;
+
+        private bool _gameActive;
+        private readonly Stack<MathBalloon> balloons = new Stack<MathBalloon>();
+        private readonly Queue<MathQuestion> questionQueue = new Queue<MathQuestion>();
+        private double spawnTimer;
+        private DateTime timeoutAt;
+
+        public void Start()
         {
-            this.canvas = canvas;
-            currentScore = 0;
-            Reset();
+            _gameActive = true;
+            SpawnNewQuestion();
+            OnGameEvent?.Invoke(this, new GameEventArgs 
+            { 
+                Message = "Mata ut svaret p\u00E5 fr\u00E5gan!" 
+            });
         }
 
-        /// <summary>
-        /// Nuvarande poäng.
-        /// </summary>
-        public int CurrentScore => currentScore;
+        public void Stop()
+        {
+            _gameActive = false;
+            foreach (var balloon in balloons)
+            {
+                Canvas.SetZIndex(balloon.Shape, 1);
+            }
+        }
 
-        /// <summary>
-        /// Är spelet aktivt?
-        /// </summary>
-        public bool IsActive { get; private set; } = true;
-
-        /// <summary>
-        /// Återställer speltillståndet.
-        /// </summary>
         public void Reset()
         {
-            foreach (var balloon in balloons)
-                canvas.Children.Remove(((MathBalloon)balloon).Shape);
+            _gameActive = false;
+            CurrentScore = 0;
             balloons.Clear();
-            currentQuestion = null;
-            isWaitingForAnswer = false;
+            questionQueue.Clear();
+            spawnTimer = 0;
+            timeoutAt = DateTime.MinValue;
+            OnGameEvent?.Invoke(this, new GameEventArgs { Message = "Redo!" });
         }
 
-        /// <summary>
-        /// Uppdaterar spellogiken.
-        /// </summary>
-        public void Update(double elapsedSeconds)
+        public void Update(double dt)
         {
-            if (!IsActive || canvas.ActualWidth < 200 || canvas.ActualHeight < 150) return;
-
-            if (currentQuestion != null && isWaitingForAnswer)
+            spawnTimer += dt;
+            if (spawnTimer >= SpawnCooldown && balloons.Count < 10)
             {
-                double timeRemaining = 8.0 - ((DateTime.Now - DateTime.MinValue).TotalSeconds);
-                if (timeRemaining <= 0)
+                spawnTimer = 0;
+                SpawnQuestionBalloon();
+            }
+
+            DateTime now = DateTime.UtcNow;
+            if (_gameActive && now > timeoutAt)
+            {
+                OnGameEvent?.Invoke(this, new GameEventArgs 
+                { 
+                    Message = "Tiden ute! F\u00F6rs\u00F6k igen." 
+                });
+                Reset();
+            }
+
+            foreach (var balloon in balloons.ToArray())
+            {
+                balloon.Y -= balloon.Speed * dt;
+                if (balloon.Y + balloon.Radius < 0)
                 {
-                    EndTurn();
+                    Canvas.SetZIndex(balloon.Shape, 1);
                 }
             }
         }
 
-        /// <summary>
-        /// Hanterar spelarens input (att trycka på en punkt för att svara).
-        /// </summary>
-        public object HandleInput(Point point, int handId, DateTime now)
+        public void Draw(DrawingContext context)
         {
-            if (!IsActive || !isWaitingForAnswer) return null;
+            context.Clear();
 
-            // Kolla om någon balong hamnar under pekpunkten
-            var hit = balloons.FirstOrDefault(b => 
-                b.Y - b.Radius * 0.3 <= point.Y &&
-                Math.Abs(b.X - point.X) < b.Radius);
+            string instruction = _gameActive && questionQueue.Count > 0
+                ? "Mata ut svaret p\u00E5 fr\u00E5gan!"
+                : "Klicka Start f\u00F6r att spela";
 
-            if (hit != null)
+            var textBlock = new TextBlock
             {
-                MathBalloon mathBalloon = hit as MathBalloon;
-                if (mathBalloon != null && ParseAnswer(mathBalloon.AnswerText) == correctAnswerValue)
+                Text = instruction,
+                FontSize = 24,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                IsHitTestVisible = false
+            };
+
+            context.PushTransform();
+            context.TranslateTransform(0, 150);
+            TextBlockGeometry geometry = new TextBlockGeometry(textBlock);
+            context.DrawGeometry(brush: Brushes.White, geometry: geometry, pen: null);
+            context.Pop();
+        }
+
+        public void OnKinectGesture(GestureType gesture)
+        {
+            if (_gameActive && questionQueue.Count > 0)
+            {
+                MathQuestion currentQuestion = questionQueue.Peek();
+                DateTime now = DateTime.UtcNow;
+
+                if (gesture == GestureType.HandsUp || gesture == GestureType.HandsPlus)
                 {
-                    currentScore += hit.Points;
-                    Remove(hit);
-                    
-                    isWaitingForAnswer = false;
+                    timeoutAt = now + TimeSpan.FromSeconds(TimeoutSeconds);
+                    OnGameEvent?.Invoke(this, new GameEventArgs 
+                    { 
+                        Message = "V\u00E4ntar p\u00E5 svar..." 
+                    });
+                }
+
+                if (now >= timeoutAt)
+                {
+                    questionQueue.Dequeue();
                     SpawnNewQuestion();
-                    
-                    return new MathInputResult 
+                    OnGameEvent?.Invoke(this, new GameEventArgs 
                     { 
-                        Success = true, 
-                        Points = hit.Points,
-                        Message = "Rätt svar! +10" 
-                    };
-                }
-                else
-                {
-                    currentScore -= 5; // Straff för fel svar
-                    Remove(hit);
-                    
-                    isWaitingForAnswer = false;
-                    return new MathInputResult 
-                    { 
-                        Success = false, 
-                        Points = -5,
-                        Message = "Fel! Försök igen." 
-                    };
+                        Message = "Inget svar mottaget!" 
+                    });
                 }
             }
-
-            return null;
         }
 
-        /// <summary>
-        /// Startar en ny frågerunda.
-        /// </summary>
+        private void SpawnQuestionBalloon()
+        {
+            MathQuestion question = GenerateMathQuestion();
+            questionQueue.Enqueue(question);
+
+            int selectedIndex = Random.Next(2, 5);
+            var selectedColor = GetBalloonColor(selectedIndex + 1);
+
+            double radius = Random.Next(40, 70);
+            var balloon = new MathBalloon
+            {
+                Radius = radius,
+                X = Random.NextDouble() * (canvas?.ActualWidth ?? 800) - radius,
+                Y = canvas?.ActualHeight ?? 600 + radius,
+                Speed = Random.Next(40, 90),
+                AnswerText = GetOptionString(question.Options[selectedIndex]),
+                CorrectAnswer = question.Options[selectedIndex],
+                IsQuestionBalloon = true,
+                Shape = new Ellipse
+                {
+                    Width = radius * 2,
+                    Height = radius * 2.25,
+                    Fill = selectedColor,
+                    Stroke = Brushes.White,
+                    StrokeThickness = 4,
+                    Effect = new DropShadowEffect
+                    {
+                        BlurRadius = 12,
+                        ShadowDepth = 3,
+                        Opacity = 0.3,
+                        Color = Colors.Black
+                    },
+                    IsHitTestVisible = false
+                }
+            };
+
+            canvas?.Children.Insert(0, balloon.Shape);
+            Canvas.SetLeft(balloon.Shape, balloon.X - balloon.Radius);
+            Canvas.SetTop(balloon.Shape, balloon.Y - balloon.Radius);
+            balloons.Push(balloon);
+
+            if (questionQueue.Count == 1)
+            {
+                OnGameEvent?.Invoke(this, new GameEventArgs 
+                { 
+                    Message = $"Svara p\u00E5: {question.Expression} = ?" 
+                });
+            }
+        }
+
         private void SpawnNewQuestion()
         {
-            currentQuestion = GenerateMathProblem();
-            correctAnswerValue = ParseAnswer(currentQuestion);
-            isWaitingForAnswer = true;
-
-            string[] answers = GetAnswers(currentQuestion);
-            Color[] colors = 
-            {
-                Colors.Red,    // Fel 1
-                Colors.Green,  // Rätt
-                Colors.Blue,   // Fel 2
-                Colors.Yellow, // Fel 3
-                Colors.Purple  // Alternativ
-            };
-
-            for (int i = 0; i < answers.Length; i++)
-            {
-                SpawnBalloon(answers[i], colors[i % colors.Length]);
-            }
+            questionQueue.Enqueue(GenerateMathQuestion());
+            OnGameEvent?.Invoke(this, new GameEventArgs 
+            { 
+                    Message = $"Nytt fr\u00E5ga: {question.Expression} = ?" 
+            });
         }
 
-        /// <summary>
-        /// Genererar en ny matteuppgift.
-        /// </summary>
-        private string GenerateMathProblem()
+        public int PopAt(Point point, double hitRadius)
         {
-            int operation = new Random().Next(3); 
-            
-            switch (operation)
-            {
-                case 0: // Addition
-                    int n1 = new Random().Next(1, 20);
-                    int n2 = new Random().Next(1, 20);
-                    return $"{n1} + {n2}";
-                    
-                case 1: // Subtraktion
-                    int subN1 = new Random().Next(15, 30);
-                    int subN2 = new Random().Next(5, 14);
-                    return $"{subN1} - {subN2}";
-                    
-                case 2: // Multiplikation (enklare)
-                    int mulN1 = new Random().Next(1, 10);
-                    int mulN2 = new Random().Next(1, 9);
-                    return $"{mulN1} × {mulN2}";
-            }
+            if (!IsActive || questionQueue.Count == 0) return 0;
 
-            return "2 + 2";
-        }
-
-        /// <summary>
-        /// Genererar svarsalternativ för en uppgift.
-        /// </summary>
-        private string[] GetAnswers(string question)
-        {
-            string[] answers = new string[5];
-            int correctAnswer = ParseAnswer(question);
-            
-            // Rätt svar (index 1 för att visa på grönt)
-            answers[1] = correctAnswer.ToString();
-            
-            // Felaktiga svar
-            for (int i = 0; i < answers.Length && i != 1; i++)
+            MathBalloon hit = null;
+            for (int i = balloons.Count - 1; i >= 0; i--)
             {
-                int offset = new Random().Next(-5, 6);
-                answers[i] = (correctAnswer + offset).ToString();
-                
-                if (i > 0)
+                var balloon = balloons[i];
+                double distance = Distance(point.X, point.Y, balloon.X, balloon.Y);
+                if (distance <= balloon.Radius + hitRadius)
                 {
-                    while (answers.Contains(answers[1]))
-                    {
-                        offset = new Random().Next(-10, 11);
-                        answers[i] = (correctAnswer + offset).ToString();
-                    }
+                    hit = balloon;
+                    break;
                 }
             }
 
-            return answers;
-        }
+            if (hit == null) return 0;
 
-        /// <summary>
-        /// Parser rätt svar från en fråga.
-        /// </summary>
-        private int ParseAnswer(string question)
-        {
-            try
+            MathQuestion question = questionQueue.Peek();
+            string selectedAnswer = hit.AnswerText;
+            int selectedIndex = question.Options.IndexOf(selectedAnswer);
+
+            Color selectedColor = GetBalloonColor(selectedIndex + 1);
+
+            List<string> allOptions = new List<string>();
+            for (int i = 0; i < 4; i++)
             {
-                string[] parts = question.Split(new[] { '+', '-', '×' }, StringSplitOptions.RemoveEmptyEntries);
-                int n1 = int.Parse(parts[0]);
-                int n2 = int.Parse(parts[1]);
-                
-                if (question.Contains('+')) return n1 + n2;
-                if (question.Contains('-')) return n1 - n2;
-                if (question.Contains('×')) return n1 * n2;
+                int optionIndex = (i - 2) % 4;
+                if (optionIndex < 0) optionIndex += 4;
+                allOptions.Add(question.Options[optionIndex]);
             }
-            catch { }
-            
-            return 0;
-        }
 
-        /// <summary>
-        /// Spawner en balong med ett specifikt svar.
-        /// </summary>
-        private void SpawnBalloon(string answer, Color color)
-        {
-            double radius = new Random().Next(35, 60);
-            var shape = new Ellipse
+            var questionText = new TextBlock
             {
-                Width = radius * 2,
-                Height = radius * 2.25,
-                Fill = new SolidColorBrush(color),
-                Stroke = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
-                StrokeThickness = 6,
-                Effect = new DropShadowEffect
+                Text = $"{question.Expression} = ?",
+                FontSize = 24,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                Background = Brushes.Transparent
+            };
+
+            Canvas.SetZIndex(hit.Shape, 0);
+
+            for (int i = 0; i < 4; i++)
+            {
+                double offsetX = ((i % 2) - 0.5) * 60;
+                double offsetY = Math.Floor(i / 2.0) * 28 - 10;
+
+                var textBlock = new TextBlock
                 {
-                    BlurRadius = 14,
-                    ShadowDepth = 4,
-                    Opacity = 0.3
-                },
-                IsHitTestVisible = true
-            };
+                    Text = allOptions[i],
+                    FontSize = 24,
+                    FontWeight = FontWeights.Medium,
+                    Foreground = Brushes.White,
+                    Background = GetBalloonColor(i + 1),
+                    Margin = new Thickness(offsetX, offsetY, 0, 0)
+                };
 
-            var balloon = new Balloon
+                Canvas.SetLeft(textBlock, hit.X - 30);
+                Canvas.SetTop(textBlock, hit.Y - 50 + offsetY);
+
+                canvas.Children.Add(textBlock);
+            }
+
+            Canvas.SetZIndex(questionText.Shape, 1);
+            Canvas.SetLeft(questionText.Shape, questionText.X - 45);
+            Canvas.SetTop(questionText.Shape, questionText.Y - 28);
+            canvas.Children.Insert(0, questionText.Shape);
+
+            return 1; // Return 1 for any click to avoid ballong issues
+        }
+
+        private MathQuestion GenerateMathQuestion()
+        {
+            string operation = "add";
+            double a = Random.Next(2, 11);
+            double b = Random.Next(2, 11);
+            int answer;
+
+            switch (operation)
             {
-                Shape = shape,
-                Radius = radius,
-                X = radius + new Random().Next(100, Math.Max(200, canvas.ActualWidth - radius * 2)),
-                Y = canvas.ActualHeight + radius + (new Random().Next(-50, 50)),
-                Speed = random.Next(70, 140),
-                Points = radius < 50 ? 10 : 15,
-                Color = new SolidColorBrush(color)
-            };
+                case "add":
+                    answer = (int)(a + b);
+                    return new MathQuestion($"({a}+{b})")
+                    {
+                        Options = new List<string> { 
+                            $"{answer}", 
+                            $"{answer - 1}", 
+                            $"{answer + 1}", 
+                            $"{answer - 2}" 
+                        }
+                    };
 
-            balloons.Add(balloon);
-            canvas.Children.Add(shape);
+                case "sub":
+                    answer = (int)(a - b);
+                    return new MathQuestion($"({a}-{b})")
+                    {
+                        Options = new List<string> { 
+                            $"{answer}", 
+                            $"{answer + 1}", 
+                            $"{answer - 1}", 
+                            $"{answer + 2}" 
+                        }
+                    };
+
+                default:
+                    answer = (int)(a * b);
+                    return new MathQuestion($"({a}x{b})")
+                    {
+                        Options = new List<string> { 
+                            $"{answer}", 
+                            $"{answer - 1}", 
+                            $"{answer + 1}", 
+                            $"{answer - 3}" 
+                        }
+                    };
+            }
         }
 
-        private void Remove(Balloon balloon)
+        private Color GetBalloonColor(int selectedIndex)
         {
-            balloons.Remove(balloon);
-            Canvas.SetLeft(balloon.Shape, -100);
-            Canvas.SetTop(balloon.Shape, -100);
+            return new SolidColorBrush(Color.FromRgb(255, 91, 119))[(selectedIndex - 1) % 4];
         }
 
-        private void EndTurn()
+        private string GetOptionString(string option) => option;
+
+        private double Distance(double x1, double y1, double x2, double y2)
         {
-            isWaitingForAnswer = false;
-            SpawnNewQuestion();
+            return Math.Sqrt(Math.Pow(x1 - x2, 2) + Math.Pow(y1 - y2, 2));
         }
 
-        private readonly Random random = new Random();
+        private Canvas canvas => Application.Current?.FindResource("Playfield") as Canvas;
     }
 
-    /// <summary>
-    /// Resulter klass för matte-spel input.
-    /// </summary>
-    public class MathInputResult
-    {
-        public bool Success { get; set; }
-        public int Points { get; set; }
-        public string Message { get; set; }
-    }
-
-    /// <summary>
-    /// Balong med textattribut.
-    /// </summary>
-    public sealed class MathBalloon : Balloon
+    public class MathBalloon : Balloon
     {
         public string AnswerText { get; set; }
+        public List<string> Options { get; set; }
+        public bool IsQuestionBalloon { get; set; }
+
+        public MathBalloon()
+        {
+            Options = new List<string>();
+        }
+
+        protected override void OnClick(Point point)
+        {
+            OnGameEvent?.Invoke(this, new GameEventArgs 
+            { 
+                Message = $"Svar: {AnswerText}" 
+            });
+        }
+    }
+
+    public class MathQuestion
+    {
+        public string Expression { get; set; }
+        public List<string> Options { get; set; }
+        public int Answer { get; private set; }
+
+        public MathQuestion(string expression)
+        {
+            Expression = expression;
+            Options = new List<string>();
+        }
+
+        public void GenerateOptions()
+        {
+            string operation = "add";
+            string[] parts = Expression.Replace("(", "").Replace(")", "").Split('+', '-');
+            int a = int.Parse(parts[0]);
+            int b = int.Parse(parts[1]);
+            int result;
+
+            switch (operation)
+            {
+                case "add":
+                    result = a + b;
+                    break;
+                case "sub":
+                    result = a - b;
+                    break;
+                default:
+                    result = a * b;
+                    break;
+            }
+
+            Answer = result;
+
+            int[] answers = { result, result - 1, result + 1 };
+            Random random = new Random();
+            
+            for (int i = 0; i < 3; i++)
+            {
+                int wrong = random.Next(-5, 6);
+                while (answers.Contains(result + wrong) || wrong == 0)
+                {
+                    wrong = random.Next(-5, 6);
+                }
+                answers.Add(result + wrong);
+            }
+
+            Array.Sort(answers);
+
+            Options.Clear();
+            foreach (int answer in answers)
+            {
+                Options.Add(answer.ToString());
+            }
+
+            int index = Array.IndexOf(answers, Answer);
+            Options[index] = result.ToString();
+        }
     }
 }

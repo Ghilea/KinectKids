@@ -69,12 +69,18 @@
     <Compile Include="Game\ZombieAimResult.cs" />
     <Compile Include="Game\ZombieRailEngine.cs" />
     <Compile Include="Game\ZombieTarget.cs" />
+    <Compile Include="Game\IGame.cs" />
+    <Compile Include="Game\MathGame.cs" />
+    <Compile Include="Game\GameManager.cs" />
     <Compile Include="Input\IPlayerTracker.cs" />
     <Compile Include="Input\KinectPlayerTracker.cs" Condition=" '$(UseKinectStub)' != 'true' " />
     <Compile Include="Input\KinectPlayerTracker.Stub.cs" Condition=" '$(UseKinectStub)' == 'true' " />
-    <Compile Include="Input\MousePlayerTracker.cs" />
     <Compile Include="Models\BodyJoint.cs" />
     <Compile Include="Models\TrackedPlayer.cs" />
+    <Compile Include="Models\MathQuestion.cs" />
+    <Compile Include="Services\ProgressionService.cs" />
+    <Compile Include="Input\IKinectGestureHandler.cs" />
+    <Compile Include="Input\MousePlayerTracker.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

@@ -12,7 +12,6 @@ namespace KinectKids.Game
         public double Speed { get; set; }
         public int Points { get; set; }
         public Brush Color { get; set; }
-        public bool AnswerCorrect { get; set; }
     }
 
     /// <summary>
@@ -21,5 +20,6 @@ namespace KinectKids.Game
     public sealed class MathBalloon : Balloon
     {
         public string AnswerText { get; set; }
+        public bool IsQuestionBalloon { get; set; } = false;
     }
 }
