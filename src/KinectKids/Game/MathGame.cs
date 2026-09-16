@@ -149,9 +149,9 @@ namespace KinectKids.Game
             var balloon = new MathBalloon
             {
                 Radius = radius,
-                X = Random.NextDouble() * (canvas?.ActualWidth ?? 800) - radius,
-                Y = canvas?.ActualHeight ?? 600 + radius,
-                Speed = Random.Next(40, 90),
+                X = (int)(Random.NextDouble() * (canvas?.ActualWidth ?? 800) - radius),
+                Y = (int)(canvas?.ActualHeight ?? 600 + radius),
+                Speed = (int)Random.Next(40, 90),
                 AnswerText = GetOptionString(question.Options[selectedIndex]),
                 CorrectAnswer = question.Options[selectedIndex],
                 IsQuestionBalloon = true,
@@ -328,86 +328,5 @@ namespace KinectKids.Game
         }
 
         private Canvas canvas => Application.Current?.FindResource("Playfield") as Canvas;
-    }
-
-    public class MathBalloon : Balloon
-    {
-        public string AnswerText { get; set; }
-        public List<string> Options { get; set; }
-        public bool IsQuestionBalloon { get; set; }
-
-        public MathBalloon()
-        {
-            Options = new List<string>();
-        }
-
-        protected override void OnClick(Point point)
-        {
-            OnGameEvent?.Invoke(this, new GameEventArgs 
-            { 
-                Message = $"Svar: {AnswerText}" 
-            });
-        }
-    }
-
-    public class MathQuestion
-    {
-        public string Expression { get; set; }
-        public List<string> Options { get; set; }
-        public int Answer { get; private set; }
-
-        public MathQuestion(string expression)
-        {
-            Expression = expression;
-            Options = new List<string>();
-        }
-
-        public void GenerateOptions()
-        {
-            string operation = "add";
-            string[] parts = Expression.Replace("(", "").Replace(")", "").Split('+', '-');
-            int a = int.Parse(parts[0]);
-            int b = int.Parse(parts[1]);
-            int result;
-
-            switch (operation)
-            {
-                case "add":
-                    result = a + b;
-                    break;
-                case "sub":
-                    result = a - b;
-                    break;
-                default:
-                    result = a * b;
-                    break;
-            }
-
-            Answer = result;
-
-            int[] answers = { result, result - 1, result + 1 };
-            Random random = new Random();
-            
-            for (int i = 0; i < 3; i++)
-            {
-                int wrong = random.Next(-5, 6);
-                while (answers.Contains(result + wrong) || wrong == 0)
-                {
-                    wrong = random.Next(-5, 6);
-                }
-                answers.Add(result + wrong);
-            }
-
-            Array.Sort(answers);
-
-            Options.Clear();
-            foreach (int answer in answers)
-            {
-                Options.Add(answer.ToString());
-            }
-
-            int index = Array.IndexOf(answers, Answer);
-            Options[index] = result.ToString();
-        }
     }
 }

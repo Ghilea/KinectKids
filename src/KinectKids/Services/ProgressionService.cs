@@ -142,3 +142,4 @@ namespace KinectKids.Services
         public Dictionary<string, string> GetLockedGames() => DefaultLockedGames;
     }
 }
+
