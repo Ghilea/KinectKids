@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -183,7 +182,10 @@ namespace KinectKids
             }
 
             tracker?.Stop();
-            Process.Start(new ProcessStartInfo(executable) { WorkingDirectory = Path.GetDirectoryName(executable) });
+            Process.Start(new ProcessStartInfo(executable)
+            {
+                WorkingDirectory = System.IO.Path.GetDirectoryName(executable)
+            });
             Close();
         }
 
@@ -843,11 +845,11 @@ namespace KinectKids
             string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
             string[] candidates =
             {
-                Path.Combine(baseDirectory, "KinectKids3D.exe"),
-                Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..",
+                System.IO.Path.Combine(baseDirectory, "KinectKids3D.exe"),
+                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDirectory, "..", "..", "..", "..",
                     "unity", "KinectKids3D", "Build", "KinectKids3D.exe"))
             };
-            return candidates.FirstOrDefault(File.Exists);
+            return candidates.FirstOrDefault(System.IO.File.Exists);
         }
 
         private enum GameMode
