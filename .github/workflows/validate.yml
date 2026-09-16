@@ -29,3 +29,20 @@ jobs:
       - name: Compile WPF application
         shell: pwsh
         run: msbuild .\KinectKids.sln /m /p:Configuration=Release /p:Platform=x86 /p:UseKinectStub=true /verbosity:minimal
+      - name: Validate Unity 3D prototype
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-Content './unity/KinectKids3D/Packages/manifest.json' -Raw | ConvertFrom-Json | Out-Null
+          $required = @(
+            './unity/KinectKids3D/ProjectSettings/ProjectVersion.txt',
+            './unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.cs',
+            './unity/KinectKids3D/Assets/Scripts/DarkRideWorld.cs',
+            './unity/KinectKids3D/Assets/Scripts/GhostTarget.cs',
+            './unity/KinectKids3D/Assets/Scripts/KinectV1AimProvider.cs',
+            './unity/KinectKids3D/Assets/Editor/KinectKidsProjectSetup.cs'
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path -PathType Leaf)) { throw "Unity-filen saknas: $path" }
+          }
+          Write-Host 'Unity-prototypens struktur och manifest är giltiga.'

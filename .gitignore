@@ -10,3 +10,16 @@ artifacts/
 *.log
 Thumbs.db
 Desktop.ini
+
+# Unity 3D-prototyp
+unity/KinectKids3D/[Ll]ibrary/
+unity/KinectKids3D/[Tt]emp/
+unity/KinectKids3D/[Oo]bj/
+unity/KinectKids3D/[Bb]uild/
+unity/KinectKids3D/[Bb]uilds/
+unity/KinectKids3D/[Ll]ogs/
+unity/KinectKids3D/[Uu]ser[Ss]ettings/
+unity/KinectKids3D/MemoryCaptures/
+unity/KinectKids3D/Recordings/
+unity/KinectKids3D/*.csproj
+unity/KinectKids3D/*.sln
