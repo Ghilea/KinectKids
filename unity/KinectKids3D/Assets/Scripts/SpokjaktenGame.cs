@@ -65,6 +65,7 @@ namespace KinectKids3D
         private AudioClip batRushSound;
         private AudioClip phantomSound;
         private AudioSource ghostVoice;
+        private AudioSource environmentVoice;
         private AudioClip[] ghostSounds;
         private float nextGhostSoundAt;
         private RideHazard currentHazard;
@@ -176,6 +177,10 @@ namespace KinectKids3D
                 CreateEvilLaugh("Elakt skratt", 1.65f, 9917),
                 CreateEvilLaugh("Kort häxskratt", 1.18f, 4471)
             };
+
+            environmentVoice = gameObject.AddComponent<AudioSource>();
+            environmentVoice.playOnAwake = false;
+            environmentVoice.spatialBlend = 0f;
         }
 
         private void ResetRide()
@@ -504,9 +509,11 @@ namespace KinectKids3D
             AudioClip sound = kind == HauntedEncounterKind.BatBurst
                 ? batRushSound
                 : kind == HauntedEncounterKind.SwingingChain ? chainRattleSound : phantomSound;
-            effects.panStereo = encounterSide * 0.58f;
-            effects.PlayOneShot(sound, 0.74f);
-            effects.panStereo = 0f;
+            environmentVoice.clip = sound;
+            environmentVoice.panStereo = encounterSide * 0.58f;
+            environmentVoice.volume = 0.74f;
+            environmentVoice.pitch = UnityEngine.Random.Range(0.92f, 1.06f);
+            environmentVoice.Play();
         }
 
         private void UpdateGhostAudio()

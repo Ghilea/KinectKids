@@ -383,7 +383,7 @@ namespace KinectKids3D
             light.color = new Color(1f, 0.30f, 0.055f);
             light.intensity = 2.45f;
             light.range = 5.6f;
-            light.shadows = LightShadows.Soft;
+            light.shadows = LightShadows.None;
             HauntedProp.Attach(lightObject, HauntedMotion.Flicker, 0f, Random.Range(7f, 11f));
         }
 
