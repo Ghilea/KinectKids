@@ -36,6 +36,7 @@ namespace KinectKids3D
         private Texture2D playerTwoRing;
         private Texture2D whiteTexture;
         private Texture2D goldTexture;
+        private Texture2D movementArrow;
         private GUIStyle titleStyle;
         private GUIStyle hudStyle;
         private GUIStyle smallStyle;
@@ -47,8 +48,13 @@ namespace KinectKids3D
         private AudioClip movementSuccessSound;
         private AudioClip collisionSound;
         private AudioClip scareSound;
+        private AudioSource ghostVoice;
+        private AudioClip[] ghostSounds;
+        private float nextGhostSoundAt;
         private RideHazard currentHazard;
         private float cameraShakeUntil;
+        private float cameraDuck;
+        private float cameraLean;
         private int nextScareIndex;
         private string actionMessage;
         private float actionMessageUntil;
@@ -121,12 +127,23 @@ namespace KinectKids3D
             ambience.Play();
 
             AudioSource music = gameObject.AddComponent<AudioSource>();
-            AudioClip licensedMusic = Resources.Load<AudioClip>("Audio/RideMusic");
+            AudioClip licensedMusic = Resources.Load<AudioClip>("Audio/CustomRideMusic");
+            if (licensedMusic == null) licensedMusic = Resources.Load<AudioClip>("Audio/RideMusic");
             music.clip = licensedMusic != null ? licensedMusic : CreateRideMusic();
             music.loop = true;
             music.volume = licensedMusic != null ? 0.42f : 0.32f;
             music.spatialBlend = 0;
             music.Play();
+
+            ghostVoice = gameObject.AddComponent<AudioSource>();
+            ghostVoice.playOnAwake = false;
+            ghostVoice.spatialBlend = 0f;
+            ghostSounds = new[]
+            {
+                CreateGhostVoice("Avlägset spöke", 1.42f, 154f, 6201),
+                CreateGhostVoice("Viskning i muren", 1.08f, 212f, 7712),
+                CreateGhostVoice("Klagande vålnad", 1.78f, 118f, 8839)
+            };
         }
 
         private void ResetRide()
@@ -152,7 +169,10 @@ namespace KinectKids3D
             paused = false;
             currentHazard = null;
             cameraShakeUntil = 0;
+            cameraDuck = 0f;
+            cameraLean = 0f;
             nextScareIndex = 0;
+            nextGhostSoundAt = Time.time + UnityEngine.Random.Range(4.5f, 7.5f);
             actionMessage = string.Empty;
             actionMessageUntil = 0;
             if (bossProjectile != null) Destroy(bossProjectile.gameObject);
@@ -197,7 +217,8 @@ namespace KinectKids3D
             PositionCamera(rideDistance);
             UpdateTargets(rideTime, rideDistance);
             UpdateHazards(rideDistance);
-            UpdateEnvironmentEvents(rideTime);
+            UpdateEnvironmentEvents();
+            UpdateGhostAudio();
             UpdateAim();
             UpdateBossBattle();
             if (bossDefeated && rideDistance >= DarkRideWorld.TrackLength - 3f)
@@ -211,17 +232,31 @@ namespace KinectKids3D
         {
             float x = DarkRideWorld.TrackCenter(z);
             float bounce = Mathf.Sin(Time.time * 4.4f) * 0.018f;
+            float targetDuck = 0f;
+            float targetLean = 0f;
+            foreach (PoseState pose in currentPoses.Values)
+            {
+                targetDuck = Mathf.Max(targetDuck, Mathf.Clamp01(pose.DuckAmount / 0.34f));
+                float lean = Mathf.Clamp(pose.LeanAmount / 0.34f, -1f, 1f);
+                if (Mathf.Abs(lean) > Mathf.Abs(targetLean)) targetLean = lean;
+            }
+            cameraDuck = Mathf.Lerp(cameraDuck, targetDuck, 1f - Mathf.Exp(-9f * Time.deltaTime));
+            cameraLean = Mathf.Lerp(cameraLean, targetLean, 1f - Mathf.Exp(-8f * Time.deltaTime));
+            x += cameraLean * 0.92f;
             if (Time.time < cameraShakeUntil)
             {
                 x += UnityEngine.Random.Range(-0.12f, 0.12f);
                 bounce += UnityEngine.Random.Range(-0.09f, 0.09f);
             }
-            Vector3 position = new Vector3(x, 1.72f + bounce, z);
-            Vector3 look = new Vector3(DarkRideWorld.TrackCenter(z + 7f), 1.62f, z + 7f);
+            Vector3 position = new Vector3(x, 1.72f - cameraDuck * 0.68f + bounce, z);
+            Vector3 look = new Vector3(DarkRideWorld.TrackCenter(z + 7f) + cameraLean * 0.38f,
+                1.62f - cameraDuck * 0.32f, z + 7f);
+            Quaternion bodyMotion = Quaternion.LookRotation(look - position, Vector3.up)
+                * Quaternion.Euler(cameraDuck * 3f, 0f, -cameraLean * 7.5f);
             rideCamera.transform.position = position;
             rideCamera.transform.rotation = Quaternion.Slerp(
                 rideCamera.transform.rotation,
-                Quaternion.LookRotation(look - position, Vector3.up),
+                bodyMotion,
                 1f - Mathf.Exp(-7f * Time.deltaTime));
         }
 
@@ -339,13 +374,34 @@ namespace KinectKids3D
             }
         }
 
-        private void UpdateEnvironmentEvents(float rideTime)
+        private void UpdateEnvironmentEvents()
         {
-            float[] scareTimes = { 11.5f, 27.5f, 44f, 62f };
-            if (nextScareIndex >= scareTimes.Length || rideTime < scareTimes[nextScareIndex]) return;
+            float[] scareDistances = { 26f, 57f, 91f, 124f, 144f };
+            if (nextScareIndex >= scareDistances.Length || rideDistance < scareDistances[nextScareIndex]) return;
+            int side = UnityEngine.Random.value < 0.5f ? -1 : 1;
             nextScareIndex++;
+            SideScare.Create(rideCamera.transform, side);
             effects.PlayOneShot(scareSound);
-            cameraShakeUntil = Mathf.Max(cameraShakeUntil, Time.time + 0.16f);
+            PlayGhostSound(side, 0.82f);
+            cameraShakeUntil = Mathf.Max(cameraShakeUntil, Time.time + 0.22f);
+        }
+
+        private void UpdateGhostAudio()
+        {
+            if (Time.time < nextGhostSoundAt || ghostVoice == null || ghostVoice.isPlaying) return;
+            PlayGhostSound(UnityEngine.Random.value < 0.5f ? -1 : 1,
+                UnityEngine.Random.Range(0.28f, 0.48f));
+            nextGhostSoundAt = Time.time + UnityEngine.Random.Range(5.5f, 11.5f);
+        }
+
+        private void PlayGhostSound(int side, float volume)
+        {
+            if (ghostVoice == null || ghostSounds == null || ghostSounds.Length == 0) return;
+            ghostVoice.clip = ghostSounds[UnityEngine.Random.Range(0, ghostSounds.Length)];
+            ghostVoice.panStereo = side < 0 ? -0.72f : 0.72f;
+            ghostVoice.pitch = UnityEngine.Random.Range(0.86f, 1.08f);
+            ghostVoice.volume = volume;
+            ghostVoice.Play();
         }
 
         private void UpdateAim()
@@ -599,20 +655,12 @@ namespace KinectKids3D
             if (currentHazard != null)
             {
                 float gap = currentHazard.TrackZ - rideDistance;
-                float pulse = 1f + Mathf.Sin(Time.time * 9f) * 0.06f;
-                float width = 470f * pulse;
-                GUI.Box(new Rect(Screen.width * 0.5f - width * 0.5f, 104, width, 76), string.Empty);
-                GUI.Label(new Rect(Screen.width * 0.5f - 220, 114, 440, 52),
-                    currentHazard.Instruction + "\n" + (gap > 5.2f ? "GÖR DIG REDO" : "NU!"), centerStyle);
+                DrawMovementCue(currentHazard.Kind, Mathf.InverseLerp(11f, 0f, gap));
             }
 
             if (bossProjectile != null && bossProjectile.Progress >= 0.42f)
             {
-                float pulse = 1f + Mathf.Sin(Time.time * 11f) * 0.07f;
-                float width = 500f * pulse;
-                GUI.Box(new Rect(Screen.width * 0.5f - width * 0.5f, 102, width, 82), string.Empty);
-                GUI.Label(new Rect(Screen.width * 0.5f - 235, 112, 470, 58),
-                    bossProjectile.Instruction + "\nBOSSEN KASTAR – NU!", centerStyle);
+                DrawMovementCue(bossProjectile.Kind, bossProjectile.Progress);
             }
 
             if (Time.time < actionMessageUntil)
@@ -685,6 +733,52 @@ namespace KinectKids3D
             playerTwoRing = CreateRing(new Color(1f, 0.35f, 0.62f));
             whiteTexture = SolidTexture(new Color(1, 1, 1, 0.88f));
             goldTexture = SolidTexture(new Color(1f, 0.72f, 0.08f));
+            movementArrow = CreateArrowTexture();
+        }
+
+        private void DrawMovementCue(HazardKind kind, float urgency)
+        {
+            if (movementArrow == null) return;
+            float rotation = kind == HazardKind.Duck ? 90f : kind == HazardKind.DodgeLeft ? 180f : 0f;
+            Vector2 direction = kind == HazardKind.Duck ? Vector2.down
+                : kind == HazardKind.DodgeLeft ? Vector2.left : Vector2.right;
+            float wave = Mathf.Repeat(Time.time * 2.8f, 1f);
+            Color oldColor = GUI.color;
+            Matrix4x4 oldMatrix = GUI.matrix;
+            for (int i = 0; i < 3; i++)
+            {
+                float phase = Mathf.Repeat(wave + i * 0.24f, 1f);
+                float size = Mathf.Lerp(76f, 112f, urgency) * (0.90f + phase * 0.10f);
+                Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.25f)
+                    + direction * (phase * 66f - 25f);
+                GUI.color = new Color(1f, Mathf.Lerp(0.82f, 0.28f, urgency), 0.08f,
+                    Mathf.Sin(phase * Mathf.PI) * 0.82f + 0.12f);
+                GUIUtility.RotateAroundPivot(rotation, center);
+                GUI.DrawTexture(new Rect(center.x - size * 0.5f, center.y - size * 0.35f,
+                    size, size * 0.70f), movementArrow);
+                GUI.matrix = oldMatrix;
+            }
+            GUI.color = oldColor;
+            GUI.matrix = oldMatrix;
+        }
+
+        private static Texture2D CreateArrowTexture()
+        {
+            const int width = 96;
+            const int height = 64;
+            Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            texture.wrapMode = TextureWrapMode.Clamp;
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                bool shaft = x >= 8 && x <= 57 && y >= 23 && y <= 40;
+                int arrowX = x - 50;
+                bool head = arrowX >= 0 && arrowX <= 40
+                    && Mathf.Abs(y - 31) <= (40 - arrowX) * 0.72f;
+                texture.SetPixel(x, y, shaft || head ? Color.white : Color.clear);
+            }
+            texture.Apply();
+            return texture;
         }
 
         private static Texture2D CreateRing(Color color)
@@ -773,6 +867,33 @@ namespace KinectKids3D
                 samples[i] = Mathf.Clamp(arpeggio + bell + lowDrone + beat + swell, -0.35f, 0.35f);
             }
             AudioClip clip = AudioClip.Create("Spökjaktens musik", samples.Length, 1, sampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateGhostVoice(string clipName, float duration, float baseFrequency, int seed)
+        {
+            const int sampleRate = 22050;
+            int length = Mathf.CeilToInt(sampleRate * duration);
+            float[] samples = new float[length];
+            var random = new System.Random(seed);
+            float breath = 0f;
+            float phase = 0f;
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)sampleRate;
+                float normalized = i / (float)length;
+                float envelope = Mathf.Sin(normalized * Mathf.PI);
+                float wobble = Mathf.Sin(t * 3.1f + seed) * 18f + Mathf.Sin(t * 7.7f) * 6f;
+                phase += (baseFrequency + wobble) / sampleRate * Mathf.PI * 2f;
+                float noise = (float)random.NextDouble() * 2f - 1f;
+                breath = Mathf.Lerp(breath, noise, 0.035f);
+                float voice = Mathf.Sin(phase) * 0.55f
+                    + Mathf.Sin(phase * 0.503f) * 0.24f
+                    + breath * 0.34f;
+                samples[i] = voice * envelope * (0.11f + Mathf.Sin(t * 5.2f) * 0.025f);
+            }
+            AudioClip clip = AudioClip.Create(clipName, length, 1, sampleRate, false);
             clip.SetData(samples, 0);
             return clip;
         }

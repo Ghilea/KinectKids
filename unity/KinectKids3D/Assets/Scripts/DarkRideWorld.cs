@@ -44,13 +44,13 @@ namespace KinectKids3D
         public void Build(Camera rideCamera)
         {
             RenderSettings.fog = true;
-            RenderSettings.fogColor = new Color(0.002f, 0.003f, 0.006f);
+            RenderSettings.fogColor = new Color(0.0005f, 0.0007f, 0.0015f);
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.041f;
+            RenderSettings.fogDensity = 0.052f;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.006f, 0.008f, 0.014f);
-            RenderSettings.ambientEquatorColor = new Color(0.004f, 0.005f, 0.009f);
-            RenderSettings.ambientGroundColor = new Color(0.0015f, 0.002f, 0.003f);
+            RenderSettings.ambientSkyColor = new Color(0.0018f, 0.0022f, 0.004f);
+            RenderSettings.ambientEquatorColor = new Color(0.0012f, 0.0015f, 0.0025f);
+            RenderSettings.ambientGroundColor = new Color(0.0004f, 0.0005f, 0.0008f);
 
             BuildTrack();
             BuildEntranceHall();
@@ -269,8 +269,8 @@ namespace KinectKids3D
             Light light = lightObject.AddComponent<Light>();
             light.type = LightType.Point;
             light.color = new Color(1f, 0.30f, 0.055f);
-            light.intensity = 2.8f;
-            light.range = 6.6f;
+            light.intensity = 2.15f;
+            light.range = 5.25f;
             light.shadows = LightShadows.None;
             HauntedProp.Attach(lightObject, HauntedMotion.Flicker, 0f, Random.Range(7f, 11f));
         }
@@ -411,6 +411,17 @@ namespace KinectKids3D
             CreateChildCube(car.transform, "Vagnkant", new Vector3(0, -0.85f, 1.35f), new Vector3(3.1f, 0.42f, 0.55f), wood);
             CreateChildCube(car.transform, "Vänster lykta", new Vector3(-1.2f, -0.58f, 1.08f), new Vector3(0.22f, 0.22f, 0.22f), amberGlow);
             CreateChildCube(car.transform, "Höger lykta", new Vector3(1.2f, -0.58f, 1.08f), new Vector3(0.22f, 0.22f, 0.22f), amberGlow);
+            GameObject lanternLight = new GameObject("Vagnens svaga lyktljus");
+            lanternLight.transform.SetParent(cameraTransform, false);
+            lanternLight.transform.localPosition = new Vector3(0f, -0.48f, 1.1f);
+            Light light = lanternLight.AddComponent<Light>();
+            light.type = LightType.Spot;
+            light.color = new Color(1f, 0.24f, 0.035f);
+            light.intensity = 0.82f;
+            light.range = 8.5f;
+            light.spotAngle = 58f;
+            light.shadows = LightShadows.None;
+            HauntedProp.Attach(lanternLight, HauntedMotion.Flicker, 0f, 8.2f);
         }
 
         private GameObject CreateCube(string name, Vector3 position, Vector3 scale, Material material, Quaternion? rotation = null)

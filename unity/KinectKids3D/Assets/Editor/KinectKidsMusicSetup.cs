@@ -11,6 +11,7 @@ namespace KinectKids3D.Editor
     {
         private const long ExpectedBytes = 1945137;
         private const string AssetPath = "Assets/Resources/Audio/RideMusic.ogg";
+        private static readonly string[] SupportedExtensions = { ".ogg", ".mp3", ".wav", ".aiff", ".aif" };
 
         static KinectKidsMusicSetup()
         {
@@ -19,6 +20,7 @@ namespace KinectKids3D.Editor
 
         internal static void EnsureMusicAsset()
         {
+            if (InstallUserMusic()) return;
             string target = Path.Combine(Application.dataPath, "Resources", "Audio", "RideMusic.ogg");
             if (File.Exists(target) && new FileInfo(target).Length == ExpectedBytes) return;
 
@@ -46,6 +48,38 @@ namespace KinectKids3D.Editor
             catch (Exception exception)
             {
                 Debug.LogError("Musiken kunde inte installeras: " + exception.Message);
+            }
+        }
+
+        private static bool InstallUserMusic()
+        {
+            string source = Directory.GetFiles(Application.dataPath, "*", SearchOption.TopDirectoryOnly)
+                .Where(path => SupportedExtensions.Contains(Path.GetExtension(path).ToLowerInvariant()))
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault();
+            if (string.IsNullOrEmpty(source)) return false;
+
+            try
+            {
+                string audioFolder = Path.Combine(Application.dataPath, "Resources", "Audio");
+                Directory.CreateDirectory(audioFolder);
+                string extension = Path.GetExtension(source).ToLowerInvariant();
+                string target = Path.Combine(audioFolder, "CustomRideMusic" + extension);
+                foreach (string existing in Directory.GetFiles(audioFolder, "CustomRideMusic.*"))
+                    if (!string.Equals(existing, target, StringComparison.OrdinalIgnoreCase)) File.Delete(existing);
+
+                bool needsCopy = !File.Exists(target)
+                    || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(target));
+                if (needsCopy) File.Copy(source, target, true);
+                string assetPath = "Assets/Resources/Audio/CustomRideMusic" + extension;
+                AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
+                Debug.Log("Egen musik används i Spökjakten: " + Path.GetFileName(source));
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("Den egna musikfilen kunde inte installeras: " + exception.Message);
+                return false;
             }
         }
     }

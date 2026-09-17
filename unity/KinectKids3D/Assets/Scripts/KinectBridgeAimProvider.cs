@@ -72,7 +72,7 @@ namespace KinectKids3D
                     {
                         string error = bridgeProcess.StandardError.ReadToEnd();
                         status = "Kinect-bryggan stängdes (kod " + bridgeProcess.ExitCode + ")";
-                        if (!string.IsNullOrWhiteSpace(error)) status += ": " + Compact(error);
+                        if (!string.IsNullOrWhiteSpace(error)) status += ": " + FriendlyStatus(Compact(error));
                         Dispose();
                         return false;
                     }
@@ -142,7 +142,7 @@ namespace KinectKids3D
                 string[] statusParts = lines[0].Split(new[] { '|' }, 3);
                 if (statusParts.Length >= 3)
                 {
-                    status = statusParts[2];
+                    status = FriendlyStatus(statusParts[2]);
                     if (statusParts[1] == "READY")
                     {
                         IsAvailable = true;
@@ -232,7 +232,11 @@ namespace KinectKids3D
                 return null;
             }
             string executable = Path.Combine(root, "src", "KinectBridge", "bin", "Release", "KinectBridge.exe");
-            if (File.Exists(executable)) return executable;
+            string bridgeSource = Path.Combine(root, "src", "KinectBridge", "Program.cs");
+            if (File.Exists(executable)
+                && (!File.Exists(bridgeSource)
+                    || File.GetLastWriteTimeUtc(executable) >= File.GetLastWriteTimeUtc(bridgeSource)))
+                return executable;
 
             string script = Path.Combine(root, "scripts", "Build-KinectBridge.ps1");
             if (!File.Exists(script))
@@ -286,7 +290,21 @@ namespace KinectKids3D
         private static string DeepestMessage(Exception exception)
         {
             while (exception.InnerException != null) exception = exception.InnerException;
-            return exception.Message;
+            string message = exception.Message;
+            if (message.IndexOf("HRESULT", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("E_FAIL", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Kinect kunde inte öppnas – sensorn används redan eller USB-anslutningen behöver startas om";
+            return message;
+        }
+
+        private static string FriendlyStatus(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return message;
+            if (message.IndexOf("HRESULT", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("E_FAIL", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("COM-komponent", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Kinect kunde inte öppnas – sensorn används redan eller USB-anslutningen behöver startas om";
+            return message;
         }
 
         private static string Compact(string value)

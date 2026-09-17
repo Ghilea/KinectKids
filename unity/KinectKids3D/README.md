@@ -14,6 +14,9 @@ Det här är den nya 3D-grunden för KinectKids. Den ligger bredvid den tidigare
 - vagnen stannar vid slutbossen, som kastar projektiler tills han är besegrad
 - en stor slotts­spindel som firas ner från taket och kräver att spelaren duckar
 - gargoyler som bryter ut ur väggarna och kräver att spelaren väjer åt vänster/höger
+- animerade pilar visar rörelsen utan att barnet behöver läsa instruktionstext
+- kameran sänks och lutar med spelarens duckning eller sidoförflyttning
+- sidovålnader kastar sig fram nära vagnen och slumpmässiga spökläten hörs från vänster/höger
 - ståhöjd och kroppens mitt kalibreras automatiskt per spelare
 - en eller två spelare kan samla egna poäng
 - musreserv om Kinect inte kan öppnas
@@ -52,6 +55,10 @@ på erkännande. Unity återskapar `Assets\Resources\Audio\RideMusic.ogg` automa
 offline från de mindre källdelarna i `MusicSource`; procedurmusiken finns kvar som reserv.
 Licensnoteringen finns i projektets `THIRD_PARTY_NOTICES.md`.
 
+En egen musikfil kan läggas direkt i `Assets` som `.ogg`, `.mp3`, `.wav`, `.aiff` eller
+`.aif`. Unity kopierar den automatiskt till `Resources/Audio/CustomRideMusic` och använder
+den före den medföljande musiken. Den följer även med när skolversionen byggs.
+
 ## Kontroller
 
 | Kontroll | Funktion |
@@ -59,8 +66,8 @@ Licensnoteringen finns i projektets `THIRD_PARTY_NOTICES.md`.
 | Rör den hand du vill använda | Spelet väljer den som enda sikte |
 | Håll siktet på målet kort | Kasta spökmagi automatiskt |
 | Lätt knuff framåt | Kasta spökmagi direkt |
-| Ducka | Undvik den stora spindeln som firas ner från slottstaket |
-| Luta kroppen åt visad sida | Väj för gargoylens arm som slår ut ur väggen |
+| Följ de animerade pilarna nedåt | Ducka och låt kameran följa med under spindeln |
+| Följ pilarna åt sidan | Väj för gargoylens arm; kameran lutar med kroppen |
 | Musen + vänsterklick | Reservsikte och kast utan Kinect |
 | `S`/`↓`, `A`/`←`, `D`/`→` | Testa ducka/väj i musläge |
 | `Mellanslag` eller `P` | Paus |

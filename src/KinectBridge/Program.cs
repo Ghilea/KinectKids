@@ -7,6 +7,7 @@ using System.IO.Pipes;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Runtime.InteropServices;
 using Microsoft.Kinect;
 
 namespace KinectKids.Bridge
@@ -62,7 +63,16 @@ namespace KinectKids.Bridge
             sensor.DepthStream.Enable(DepthImageFormat.Resolution320x240Fps30);
             sensor.SkeletonStream.Enable();
             sensor.SkeletonFrameReady += OnSkeletonFrameReady;
-            sensor.Start();
+            try
+            {
+                sensor.Start();
+            }
+            catch (COMException)
+            {
+                throw new InvalidOperationException(
+                    "Kinect kunde inte starta. Stäng Kinect Explorer, Kinect Studio och andra Kinect-program, "
+                    + "kontrollera USB-anslutningen och starta sedan spelet igen.");
+            }
             SendStatus("READY", "Kinect 360 ansluten via 32-bitarsbryggan");
 
             while (!stopping)
