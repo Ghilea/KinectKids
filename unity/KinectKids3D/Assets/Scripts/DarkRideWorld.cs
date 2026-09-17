@@ -48,14 +48,14 @@ namespace KinectKids3D
         public void Build(Camera rideCamera)
         {
             RenderSettings.fog = true;
-            RenderSettings.fogColor = new Color(0.0005f, 0.0007f, 0.0015f);
+            RenderSettings.fogColor = new Color(0.0025f, 0.0035f, 0.007f);
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.064f;
+            RenderSettings.fogDensity = 0.056f;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.00035f, 0.00042f, 0.0007f);
-            RenderSettings.ambientEquatorColor = new Color(0.00022f, 0.00028f, 0.00042f);
-            RenderSettings.ambientGroundColor = new Color(0.00008f, 0.00009f, 0.00014f);
-            RenderSettings.ambientIntensity = 0.08f;
+            RenderSettings.ambientSkyColor = new Color(0.0035f, 0.0042f, 0.007f);
+            RenderSettings.ambientEquatorColor = new Color(0.0022f, 0.0028f, 0.0042f);
+            RenderSettings.ambientGroundColor = new Color(0.0008f, 0.0009f, 0.0014f);
+            RenderSettings.ambientIntensity = 0.18f;
             RenderSettings.reflectionIntensity = 0f;
 
             BuildTrack();
@@ -304,7 +304,9 @@ namespace KinectKids3D
             }
             CreateArmor(342f, -1);
             CreateArmor(342f, 1);
-            float endZ = TrackLength - 4f;
+            // Slutporten ligger tillräckligt långt före stoppunkten för att vagnen
+            // tydligt ska hinna se den öppnas och sedan köra helt igenom den.
+            float endZ = TrackLength - 14f;
             float endX = TrackCenter(endZ);
             RouteDoor.Create(endZ, 0, wood, rail, amberGlow, true).transform.SetParent(root, true);
             CreateCobweb(352f, 1);
@@ -398,8 +400,8 @@ namespace KinectKids3D
             Light light = lightObject.AddComponent<Light>();
             light.type = LightType.Point;
             light.color = new Color(1f, 0.30f, 0.055f);
-            light.intensity = 4.15f;
-            light.range = 8.2f;
+            light.intensity = 5.3f;
+            light.range = 9.4f;
             light.shadows = LightShadows.None;
             HauntedProp.Attach(lightObject, HauntedMotion.Flicker, 0f, Random.Range(7f, 11f));
         }
@@ -458,8 +460,8 @@ namespace KinectKids3D
             Light light = lamp.AddComponent<Light>();
             light.type = LightType.Point;
             light.color = color;
-            light.intensity = 2.6f;
-            light.range = 9f;
+            light.intensity = 3.2f;
+            light.range = 10f;
             light.shadows = LightShadows.None;
             HauntedProp.Attach(lamp, HauntedMotion.Flicker, 0f, Random.Range(6.5f, 10.5f));
         }
@@ -673,8 +675,8 @@ namespace KinectKids3D
             Light light = lanternLight.AddComponent<Light>();
             light.type = LightType.Spot;
             light.color = new Color(1f, 0.24f, 0.035f);
-            light.intensity = 0.42f;
-            light.range = 5.2f;
+            light.intensity = 0.65f;
+            light.range = 6.5f;
             light.spotAngle = 58f;
             light.shadows = LightShadows.None;
             HauntedProp.Attach(lanternLight, HauntedMotion.Flicker, 0f, 8.2f);

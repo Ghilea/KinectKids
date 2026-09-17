@@ -109,7 +109,7 @@ namespace KinectKids3D
                 cameraObject.AddComponent<AudioListener>();
             }
             rideCamera.clearFlags = CameraClearFlags.SolidColor;
-            rideCamera.backgroundColor = new Color(0.0015f, 0.0025f, 0.006f);
+            rideCamera.backgroundColor = new Color(0.003f, 0.0045f, 0.009f);
             rideCamera.fieldOfView = 63f;
             rideCamera.nearClipPlane = 0.06f;
             rideCamera.farClipPlane = 95f;
@@ -257,7 +257,7 @@ namespace KinectKids3D
             routeCandidate = 0;
             routeCandidateSince = 0f;
             routeHazardsAdded = false;
-            RouteDoor.OpenRoute(0);
+            RouteDoor.ResetAll();
             hazards.Add(RideHazard.Create(HazardKind.Duck, 43f));
             hazards.Add(RideHazard.Create(HazardKind.DodgeLeft, 78f));
             hazards.Add(RideHazard.Create(HazardKind.DodgeRight, 111f));
@@ -719,10 +719,10 @@ namespace KinectKids3D
                 flashlight.color = player == 1
                     ? new Color(1f, 0.62f, 0.74f)
                     : new Color(0.70f, 0.86f, 1f);
-                flashlight.intensity = 4.1f;
-                flashlight.range = 26f;
-                flashlight.spotAngle = 34f;
-                flashlight.innerSpotAngle = 19f;
+                flashlight.intensity = 5.25f;
+                flashlight.range = 30f;
+                flashlight.spotAngle = 38f;
+                flashlight.innerSpotAngle = 22f;
                 flashlight.shadows = LightShadows.None;
                 reticleLights[player] = flashlight;
             }
@@ -867,6 +867,7 @@ namespace KinectKids3D
             GUI.Label(new Rect(Screen.width - 298, 57, 280, 26), bossBattle
                 ? "SLUTBOSS – VAGNEN STÅR STILL"
                 : "FÄRD   " + Mathf.RoundToInt(rideDistance / DarkRideWorld.TrackLength * 100f) + " %", smallStyle);
+            GUI.Label(new Rect(Screen.width - 145, Screen.height - 30, 130, 22), "F11  HELSKÄRM", smallStyle);
             if (reticles.Values.Any(item => item.PlayerIndex == 1))
                 GUI.Label(new Rect(Screen.width - 298, 83, 280, 26), "SPELARE 2   " + scores[1], smallStyle);
 

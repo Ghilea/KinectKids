@@ -12,6 +12,7 @@ namespace KinectKids3D
         private float openAmount;
         private bool opening;
         private bool automatic;
+        private bool routeSelected;
         private float trackZ;
         private AudioSource doorAudio;
         private AudioClip[] doorSounds;
@@ -35,13 +36,19 @@ namespace KinectKids3D
         public static void OpenRoute(int selectedRoute)
         {
             foreach (RouteDoor door in Object.FindObjectsByType<RouteDoor>(FindObjectsSortMode.None))
-                if (!door.automatic && door.Route == selectedRoute) door.BeginOpening();
+                if (!door.automatic) door.routeSelected = door.Route == selectedRoute;
+        }
+
+        public static void ResetAll()
+        {
+            foreach (RouteDoor door in Object.FindObjectsByType<RouteDoor>(FindObjectsSortMode.None))
+                door.ResetDoor();
         }
 
         private void Update()
         {
-            if (automatic && !opening && Camera.main != null
-                && trackZ - Camera.main.transform.position.z <= 11f)
+            if (!opening && Camera.main != null && (automatic || routeSelected)
+                && trackZ - Camera.main.transform.position.z <= 12f)
                 BeginOpening();
             float target = opening ? 1f : 0f;
             openAmount = Mathf.MoveTowards(openAmount, target, Time.deltaTime * 0.62f);
@@ -94,9 +101,14 @@ namespace KinectKids3D
             {
                 if (importedLeft != null) Destroy(importedLeft);
                 if (importedRight != null) Destroy(importedRight);
-                AddPart(leftLeaf, "Massiv vänsterdörr", new Vector3(2.02f, 2.55f, 0f), new Vector3(4.0f, 4.82f, 0.34f), wood);
-                AddPart(rightLeaf, "Massiv högerdörr", new Vector3(-2.02f, 2.55f, 0f), new Vector3(4.0f, 4.82f, 0.34f), wood);
             }
+
+            // Tydliga träytor gör att porten inte kan misstas för tunnelväggen,
+            // oavsett hur den importerade kryptdörrens material ser ut.
+            AddPart(leftLeaf, "Tydligt vänster dörrblad av trä", new Vector3(2.02f, 2.55f, -0.20f),
+                new Vector3(4.0f, 4.82f, 0.24f), wood);
+            AddPart(rightLeaf, "Tydligt höger dörrblad av trä", new Vector3(-2.02f, 2.55f, -0.20f),
+                new Vector3(4.0f, 4.82f, 0.24f), wood);
             for (int side = -1; side <= 1; side += 2)
             {
                 Transform leaf = side < 0 ? leftLeaf : rightLeaf;
@@ -113,6 +125,15 @@ namespace KinectKids3D
             if (doorAudio == null || doorSounds == null || doorSounds.Length == 0) return;
             doorAudio.pitch = Random.Range(0.92f, 1.04f);
             doorAudio.PlayOneShot(doorSounds[Random.Range(0, doorSounds.Length)], 0.88f);
+        }
+
+        private void ResetDoor()
+        {
+            routeSelected = false;
+            opening = false;
+            openAmount = 0f;
+            if (leftLeaf != null) leftLeaf.localRotation = leftClosed;
+            if (rightLeaf != null) rightLeaf.localRotation = rightClosed;
         }
 
         private static void AddPart(Transform parent, string name, Vector3 position, Vector3 scale,
