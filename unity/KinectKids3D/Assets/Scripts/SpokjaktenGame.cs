@@ -89,6 +89,13 @@ namespace KinectKids3D
         private AudioClip[] phantomSounds;
         private AudioSource ghostVoice;
         private AudioSource environmentVoice;
+        private AudioSource announcerVoice;
+        private AudioClip duckSuccessVoice;
+        private AudioClip dodgeSuccessVoice;
+        private AudioClip bossSuccessVoice;
+        private AudioClip playerHitVoice;
+        private AudioClip wagonHitVoice;
+        private float nextAnnouncementAt;
         private AudioClip[] ghostSounds;
         private float nextGhostSoundAt;
         private RideHazard currentHazard;
@@ -234,6 +241,18 @@ namespace KinectKids3D
             environmentVoice = gameObject.AddComponent<AudioSource>();
             environmentVoice.playOnAwake = false;
             environmentVoice.spatialBlend = 0f;
+
+            announcerVoice = gameObject.AddComponent<AudioSource>();
+            announcerVoice.playOnAwake = false;
+            announcerVoice.spatialBlend = 0f;
+            announcerVoice.volume = 1f;
+            announcerVoice.priority = 8;
+            announcerVoice.bypassReverbZones = true;
+            duckSuccessVoice = Resources.Load<AudioClip>("Audio/SFX/Voice/duck_success");
+            dodgeSuccessVoice = Resources.Load<AudioClip>("Audio/SFX/Voice/dodge_success");
+            bossSuccessVoice = Resources.Load<AudioClip>("Audio/SFX/Voice/boss_success");
+            playerHitVoice = Resources.Load<AudioClip>("Audio/SFX/Voice/player_hit");
+            wagonHitVoice = Resources.Load<AudioClip>("Audio/SFX/Voice/wagon_hit");
         }
 
         private IEnumerator StartMusicWhenReady(bool importedMusic)
@@ -397,7 +416,9 @@ namespace KinectKids3D
             float targetPitch = bossBattle ? 1f + bossPhase * 0.025f
                 : Mathf.Max(combos[0], combos[1]) >= 10 ? 1.035f : 1f;
             musicSource.pitch = Mathf.Lerp(musicSource.pitch, targetPitch, Time.unscaledDeltaTime * 2f);
-            float targetVolume = musicMuted ? 0f : musicVolume * (bossBattle ? 1.08f : 0.92f);
+            float voiceDuck = announcerVoice != null && announcerVoice.isPlaying ? 0.48f : 1f;
+            float targetVolume = musicMuted ? 0f
+                : musicVolume * (bossBattle ? 1.08f : 0.92f) * voiceDuck;
             musicSource.volume = Mathf.Lerp(musicSource.volume, targetVolume, Time.unscaledDeltaTime * 4f);
         }
 
@@ -584,7 +605,11 @@ namespace KinectKids3D
         {
             player = Mathf.Clamp(player, 0, 1);
             combos[player] = 0;
-            if (lives[player] > 0) lives[player] = Mathf.Max(0, lives[player] - amount);
+            if (lives[player] > 0)
+            {
+                lives[player] = Mathf.Max(0, lives[player] - amount);
+                PlayAnnouncement(playerHitVoice, true);
+            }
             else DamageWagon(amount, "VAGNEN TOG SKADA!");
         }
 
@@ -636,6 +661,7 @@ namespace KinectKids3D
             actionMessage = message + "  VAGN " + wagonHealth;
             actionMessageUntil = Time.time + 1.35f;
             PlayRandom(effects, collisionSounds, 0.85f);
+            PlayAnnouncement(wagonHitVoice, true);
             if (wagonHealth > 0) return;
             gameOver = true;
             finished = true;
@@ -770,8 +796,9 @@ namespace KinectKids3D
                         int player = Mathf.Clamp(pair.Key, 0, 1);
                         scores[player] += 40;
                         PlayRandom(effects, movementSuccessSounds);
-                        actionMessage = "SNYGGT, SPELARE " + (player + 1) + "!  +40";
-                        actionMessageUntil = Time.time + 1.25f;
+                        if (hazard.TryClaimPraise())
+                            PlayAnnouncement(hazard.Kind == HazardKind.Duck
+                                ? duckSuccessVoice : dodgeSuccessVoice);
                     }
                 }
 
@@ -792,8 +819,6 @@ namespace KinectKids3D
                         if (!hazard.HasSucceeded(player)) DamagePlayer(Mathf.Clamp(player, 0, 1), 1);
                     if (currentPoses.Count == 0) DamageWagon(1, "INGEN UNDVIKNING – VAGNEN SKADAS!");
                     cameraShakeUntil = Time.time + 0.55f;
-                    actionMessage = "OJ!  -25";
-                    actionMessageUntil = Time.time + 1.1f;
                 }
             }
         }
@@ -1211,15 +1236,24 @@ namespace KinectKids3D
                 if (currentPoses.Count == 0) DamageWagon(1, "BOSSEN TRÄFFADE VAGNEN!");
                 PlayRandom(effects, collisionSounds);
                 cameraShakeUntil = Time.time + 0.55f;
-                actionMessage = "BOSSEN TRÄFFADE!  -30";
             }
             else
             {
-                actionMessage = "SNYGGT UNDAN!  +35";
+                PlayAnnouncement(bossSuccessVoice);
             }
-            actionMessageUntil = Time.time + 1.2f;
             Destroy(bossProjectile.gameObject);
             bossProjectile = null;
+        }
+
+        private void PlayAnnouncement(AudioClip clip, bool interrupt = false)
+        {
+            if (announcerVoice == null || clip == null) return;
+            if (!interrupt && (announcerVoice.isPlaying || Time.time < nextAnnouncementAt)) return;
+            if (interrupt) announcerVoice.Stop();
+            announcerVoice.clip = clip;
+            announcerVoice.pitch = 1f;
+            announcerVoice.Play();
+            nextAnnouncementAt = Time.time + 0.30f;
         }
 
         private void OnGUI()

@@ -18,6 +18,7 @@ namespace KinectKids3D
         private float phase;
         private int wallSide;
         private bool revealed;
+        private bool praisePlayed;
 
         public HazardKind Kind { get; private set; }
         public float TrackZ { get; private set; }
@@ -55,6 +56,13 @@ namespace KinectKids3D
         public bool MarkSuccess(int playerIndex)
         {
             return successfulPlayers.Add(playerIndex);
+        }
+
+        public bool TryClaimPraise()
+        {
+            if (praisePlayed) return false;
+            praisePlayed = true;
+            return true;
         }
 
         public void ResolveVisual(bool success)
