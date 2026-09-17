@@ -13,6 +13,7 @@ namespace KinectKids3D
         private int side;
         private Vector3 start;
         private Vector3 lunge;
+        private GhostTarget shootable;
 
         public static SideScare Create(Transform cameraTransform, int side)
         {
@@ -26,7 +27,8 @@ namespace KinectKids3D
             scare.lunge = new Vector3(scare.side * 1.48f, -0.12f, 3.15f);
             scare.startedAt = Time.time;
             scare.BuildModel();
-            GhostTarget.AttachExisting(root, 2, new Vector3(0f, 1.15f, -0.20f), 2.85f, 0.92f);
+            scare.shootable = GhostTarget.AttachExisting(root, 2,
+                new Vector3(0f, 1.15f, -0.20f), 2.85f, 0.92f);
             return scare;
         }
 
@@ -48,7 +50,11 @@ namespace KinectKids3D
                 -side * (12f + amount * 18f),
                 -side * (7f + Mathf.Sin(age * 15f) * 4f));
             transform.localScale = Vector3.one * Mathf.Lerp(0.66f, 1.08f, amount);
-            if (age >= 2.08f) Destroy(gameObject);
+            if (age >= 2.08f)
+            {
+                if (shootable != null && shootable.Health > 0) SpokjaktenGame.ReportMonsterEscape();
+                Destroy(gameObject);
+            }
         }
 
         private void BuildModel()

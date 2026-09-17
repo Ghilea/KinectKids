@@ -14,6 +14,7 @@ namespace KinectKids3D
         private HauntedEncounterKind kind;
         private float startedAt;
         private int side;
+        private GhostTarget shootable;
 
         public static void Create(Transform cameraTransform, HauntedEncounterKind kind, int side)
         {
@@ -25,10 +26,11 @@ namespace KinectKids3D
             encounter.startedAt = Time.time;
             encounter.Build();
             if (kind == HauntedEncounterKind.BatBurst)
-                GhostTarget.AttachExisting(root, 2, new Vector3(0.62f, 0.28f, 0.52f), 1.65f, 1.15f);
+                encounter.shootable = GhostTarget.AttachExisting(root, 2,
+                    new Vector3(0.62f, 0.28f, 0.52f), 1.65f, 1.15f);
             else if (kind == HauntedEncounterKind.PhantomFace)
-                GhostTarget.AttachExisting(root, 1, new Vector3(0f, 1.62f, 0f), 2.25f, 0.82f,
-                    TargetKind.Ghost);
+                encounter.shootable = GhostTarget.AttachExisting(root, 1,
+                    new Vector3(0f, 1.62f, 0f), 2.25f, 0.82f, TargetKind.Ghost);
         }
 
         private void Update()
@@ -50,7 +52,11 @@ namespace KinectKids3D
                 transform.localPosition = new Vector3(side * 2.3f, 0.15f, Mathf.Lerp(6.2f, 3.2f, Mathf.Clamp01(age)));
                 transform.localScale = Vector3.one * Mathf.Max(0.02f, appear);
             }
-            if (age > (kind == HauntedEncounterKind.SwingingChain ? 2.2f : 2.45f)) Destroy(gameObject);
+            if (age > (kind == HauntedEncounterKind.SwingingChain ? 2.2f : 2.45f))
+            {
+                if (shootable != null && shootable.Health > 0) SpokjaktenGame.ReportMonsterEscape();
+                Destroy(gameObject);
+            }
         }
 
         private void Build()

@@ -247,6 +247,7 @@ namespace KinectKids3D
             WallDoorScare.Create(38f, -1, 0, wood, darkStone, rail);
             CreateBatSwarm(25f, -2.6f, 3.35f);
             CreateBatSwarm(44f, 2.4f, 2.75f);
+            CreateCeilingSpider(33f, 1, 0);
             CreateCobweb(20f, -1);
             CreateWatchingPortrait(36f, 1);
         }
@@ -265,6 +266,7 @@ namespace KinectKids3D
                 }
             }
             CreateBatSwarm(63f, 2.2f, 3.2f);
+            CreateGrabbingHands(86f, -2.7f, 0);
             CreateCobweb(59f, 1);
             CreateCobweb(89f, -1);
             CreateWatchingPortrait(77f, -1);
@@ -290,6 +292,7 @@ namespace KinectKids3D
             CreateArmor(137f, -1);
             WallDoorScare.Create(126f, -1, 0, wood, darkStone, rail);
             CreateBatSwarm(128f, -2.3f, 3.65f);
+            CreateCeilingSpider(141f, -1, 0);
             CreateHangingChain(119f, -3.7f);
             CreateHangingChain(138f, 3.8f);
         }
@@ -346,6 +349,8 @@ namespace KinectKids3D
                     244f, route < 0 ? 1 : -1, route, 1.25f, route * 12f);
                 CreateMist(222f, route);
                 CreateMist(274f, route);
+                CreateCeilingSpider(route < 0 ? 262f : 246f, route < 0 ? 1 : -1, route);
+                CreateGrabbingHands(route < 0 ? 291f : 268f, route < 0 ? -2.5f : 2.5f, route);
             }
         }
 
@@ -365,6 +370,7 @@ namespace KinectKids3D
             CreateGraveyardProp("Models/KenneyGraveyard/shovel-dirt", 330f, -1, 0, 1.75f, 12f);
             CreateMist(315f, 0);
             CreateMist(328f, 0);
+            CreateCeilingSpider(324f, -1, 0);
         }
 
         private void BuildFinalHall()
@@ -571,6 +577,55 @@ namespace KinectKids3D
                 HauntedProp.Attach(bat, HauntedMotion.Flutter, 0.35f + i * 0.025f, 2.7f + i * 0.3f);
             }
             HauntedProp.Attach(swarm, HauntedMotion.Flutter, 1.15f, 0.75f);
+            GhostTarget target = GhostTarget.AttachExisting(swarm, 2,
+                new Vector3(0f, 0.25f, 0.55f), 1.9f, 1.55f);
+            swarm.AddComponent<TrackScareTarget>().Configure(z, target);
+        }
+
+        private void CreateCeilingSpider(float z, int side, int route)
+        {
+            GameObject spider = new GameObject("Takspindel som kan skjutas");
+            spider.transform.SetParent(root, false);
+            spider.transform.position = new Vector3(TrackCenter(z, route) + side * 2.8f, 4.45f, z);
+            GameObject imported = ImportedModelFactory.Create(
+                "Models/Quaternius/Spider", spider.transform, "Animerad jättespindel",
+                Vector3.zero, 1.75f, Quaternion.Euler(180f, 0f, 0f), "walk", "attack", "idle");
+            if (imported == null)
+            {
+                Material body = MaterialOf(new Color(0.055f, 0.025f, 0.065f), 0.25f);
+                CreateChildPrimitive(spider.transform, PrimitiveType.Sphere, "Spindelkropp", Vector3.zero,
+                    new Vector3(0.72f, 0.38f, 0.92f), body);
+                for (int leg = -1; leg <= 1; leg += 2)
+                for (int row = 0; row < 4; row++)
+                    CreateChildPrimitive(spider.transform, PrimitiveType.Capsule, "Spindelben",
+                        new Vector3(leg * 0.62f, 0f, -0.48f + row * 0.32f),
+                        new Vector3(0.10f, 0.65f, 0.10f), body,
+                        Quaternion.Euler(0f, 0f, leg * 68f));
+            }
+            HauntedProp.Attach(spider, HauntedMotion.Flutter, 0.12f, 2.2f);
+            GhostTarget target = GhostTarget.AttachExisting(spider, 2, Vector3.zero, 1.8f, 0.95f);
+            spider.AddComponent<TrackScareTarget>().Configure(z, target);
+        }
+
+        private void CreateGrabbingHands(float z, float localX, int route)
+        {
+            GameObject hands = new GameObject("Händer ur golvet som kan skjutas");
+            hands.transform.SetParent(root, false);
+            hands.transform.position = new Vector3(TrackCenter(z, route) + localX, 0.05f, z);
+            Material skin = TexturedMaterial(new Color(0.34f, 0.42f, 0.31f),
+                HauntedTextureFactory.RottenSkin(1700 + Mathf.RoundToInt(z)), 0f);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                CreateChildPrimitive(hands.transform, PrimitiveType.Capsule, "Arm ur golvet",
+                    new Vector3(side * 0.34f, 0.65f, 0f), new Vector3(0.18f, 0.72f, 0.18f), skin,
+                    Quaternion.Euler(0f, 0f, side * 13f));
+                CreateChildPrimitive(hands.transform, PrimitiveType.Sphere, "Gripande hand",
+                    new Vector3(side * 0.48f, 1.28f, -0.08f), new Vector3(0.34f, 0.25f, 0.22f), skin);
+            }
+            HauntedProp.Attach(hands, HauntedMotion.Bob, 0.12f, 2.6f);
+            GhostTarget target = GhostTarget.AttachExisting(hands, 1,
+                new Vector3(0f, 0.72f, 0f), 1.75f, 0.72f);
+            hands.AddComponent<TrackScareTarget>().Configure(z, target);
         }
 
         private void CreateCobweb(float z, int side, int route = 0)

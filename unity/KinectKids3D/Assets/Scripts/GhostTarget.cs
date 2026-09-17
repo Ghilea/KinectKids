@@ -100,6 +100,7 @@ namespace KinectKids3D
         {
             if (defeated) return 0;
             Health--;
+            MagicBolt.CreateImpact(transform.position + Vector3.up * (IsBoss ? 1.7f : 1.05f), IsBoss);
             StopAllCoroutines();
             StartCoroutine(HitFlash());
             int points = IsBoss ? 25 : 15;

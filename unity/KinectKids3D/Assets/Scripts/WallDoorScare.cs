@@ -19,6 +19,7 @@ namespace KinectKids3D
         private float trackZ;
         private float phase;
         private bool revealed;
+        private bool escaped;
         private AudioSource scareAudio;
         private AudioClip[] revealSounds;
         private AudioClip[] creatureSounds;
@@ -150,6 +151,11 @@ namespace KinectKids3D
 
             if (revealed && gap < -3.2f)
             {
+                if (!escaped && shootable != null && shootable.Health > 0)
+                {
+                    escaped = true;
+                    SpokjaktenGame.ReportMonsterEscape();
+                }
                 SetCreatureVisible(false);
                 enabled = false;
             }

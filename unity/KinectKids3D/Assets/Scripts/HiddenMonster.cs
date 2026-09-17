@@ -21,6 +21,7 @@ namespace KinectKids3D
         private float trackZ;
         private float phase;
         private bool woke;
+        private bool escaped;
         private GhostTarget shootable;
 
         public static HiddenMonster Create(float z, int side, int route, HiddenMonsterKind kind)
@@ -56,7 +57,15 @@ namespace KinectKids3D
                 Mathf.Sin(Time.time * 5f + phase) * 4f * reveal,
                 180f,
                 Mathf.Sin(Time.time * 9f + phase) * 7f * reveal);
-            if (woke && gap < -4f) enabled = false;
+            if (woke && gap < -4f)
+            {
+                if (!escaped && shootable != null && shootable.Health > 0)
+                {
+                    escaped = true;
+                    SpokjaktenGame.ReportMonsterEscape();
+                }
+                enabled = false;
+            }
         }
 
         private void Build(int side, HiddenMonsterKind kind)
