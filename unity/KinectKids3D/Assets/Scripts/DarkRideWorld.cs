@@ -250,6 +250,7 @@ namespace KinectKids3D
             CreateCeilingSpider(33f, 1, 0);
             CreateCobweb(20f, -1);
             CreateWatchingPortrait(36f, 1);
+            BreakableProp.Create(29f, 3.8f, 0, BreakablePropKind.Crate);
         }
 
         private void BuildCrypt()
@@ -270,10 +271,13 @@ namespace KinectKids3D
             CreateCobweb(59f, 1);
             CreateCobweb(89f, -1);
             CreateWatchingPortrait(77f, -1);
+            StalkingMonster.Create(74f, -1, 0, 0);
             CreateArmor(84f, 1);
             WallDoorScare.Create(94f, 1, 0, wood, darkStone, rail);
             CreateGraveyardProp("Models/KenneyGraveyard/coffin-old", 71f, -1, 0, 2.25f, 8f);
             CreateGraveyardProp("Models/KenneyGraveyard/altar-stone", 98f, 1, 0, 2.1f, -7f);
+            BreakableProp.Create(68f, 3.7f, 0, BreakablePropKind.Urn);
+            BreakableProp.Create(101f, -3.6f, 0, BreakablePropKind.Urn);
             CreateCastleGate(103f);
         }
 
@@ -295,6 +299,7 @@ namespace KinectKids3D
             CreateCeilingSpider(141f, -1, 0);
             CreateHangingChain(119f, -3.7f);
             CreateHangingChain(138f, 3.8f);
+            BreakableProp.Create(133f, 3.6f, 0, BreakablePropKind.Crate);
         }
 
         private void BuildHauntedGallery()
@@ -313,8 +318,11 @@ namespace KinectKids3D
             HiddenMonster.Create(196f, 1, 0, HiddenMonsterKind.Portrait);
             WallDoorScare.Create(174f, 1, 0, wood, darkStone, rail);
             CreateWatchingPortrait(190f, -1);
+            MirrorScare.Create(156f, 1, 0);
+            StalkingMonster.Create(187f, 1, 0, 1);
             CreateMist(158f, 0);
             CreateMist(188f, 0);
+            BreakableProp.Create(172f, -4.4f, 0, BreakablePropKind.Portrait);
         }
 
         private void BuildForkedPassages()
@@ -351,6 +359,9 @@ namespace KinectKids3D
                 CreateMist(274f, route);
                 CreateCeilingSpider(route < 0 ? 262f : 246f, route < 0 ? 1 : -1, route);
                 CreateGrabbingHands(route < 0 ? 291f : 268f, route < 0 ? -2.5f : 2.5f, route);
+                BreakableProp.Create(route < 0 ? 232f : 272f, route < 0 ? 3.7f : -3.7f,
+                    route, route < 0 ? BreakablePropKind.Urn : BreakablePropKind.Crate);
+                MirrorScare.Create(route < 0 ? 276f : 241f, route < 0 ? -1 : 1, route);
             }
         }
 
@@ -371,6 +382,8 @@ namespace KinectKids3D
             CreateMist(315f, 0);
             CreateMist(328f, 0);
             CreateCeilingSpider(324f, -1, 0);
+            StalkingMonster.Create(326f, -1, 0, 2);
+            BreakableProp.Create(319f, 3.7f, 0, BreakablePropKind.Crate);
         }
 
         private void BuildFinalHall()
@@ -768,12 +781,20 @@ namespace KinectKids3D
         private void CreateHangingChain(float z, float localX, int route = 0)
         {
             float x = TrackCenter(z, route) + localX;
+            GameObject chain = new GameObject("Skjutbar rostig takkedja");
+            chain.transform.SetParent(root, false);
+            chain.transform.position = new Vector3(x, 5.12f, z);
             for (int i = 0; i < 8; i++)
             {
-                GameObject link = CreateSphere("Rostig kedjelänk", new Vector3(x, 5.12f - i * 0.32f, z),
-                    new Vector3(0.13f, 0.22f, 0.08f), rail);
-                link.transform.rotation = Quaternion.Euler(i % 2 == 0 ? 0 : 90, 0, 0);
+                CreateChildPrimitive(chain.transform, PrimitiveType.Sphere, "Rostig kedjelänk",
+                    new Vector3(0f, -i * 0.32f, 0f), new Vector3(0.13f, 0.22f, 0.08f), rail,
+                    Quaternion.Euler(i % 2 == 0 ? 0 : 90, 0, 0));
             }
+            chain.AddComponent<TrapTrigger>();
+            HauntedProp.Attach(chain, HauntedMotion.Swing, 22f, 1.9f);
+            GhostTarget target = GhostTarget.AttachExisting(chain, 1,
+                new Vector3(0f, -1.05f, 0f), 2.65f, 0.42f, TargetKind.Ghost);
+            chain.AddComponent<TrackScareTarget>().Configure(z, target, false);
         }
 
         private void CreateBeam(string name, Vector3 from, Vector3 to, float width, Material material)

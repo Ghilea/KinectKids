@@ -8,11 +8,13 @@ namespace KinectKids3D
         private GhostTarget target;
         private float trackZ;
         private bool activated;
+        private bool punishIfMissed;
 
-        public void Configure(float z, GhostTarget shootable)
+        public void Configure(float z, GhostTarget shootable, bool punish = true)
         {
             trackZ = z;
             target = shootable;
+            punishIfMissed = punish;
             if (target != null) target.SetTargetable(false);
         }
 
@@ -26,7 +28,7 @@ namespace KinectKids3D
                 target.SetTargetable(true);
             }
             if (gap >= -4f) return;
-            if (target.Health > 0) SpokjaktenGame.ReportMonsterEscape();
+            if (punishIfMissed && target.Health > 0) SpokjaktenGame.ReportMonsterEscape();
             Destroy(gameObject);
         }
     }

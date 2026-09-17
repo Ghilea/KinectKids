@@ -7,6 +7,7 @@ namespace KinectKids3D
         Bob,
         Spin,
         Flutter,
+        Swing,
         Flicker
     }
 
@@ -50,6 +51,9 @@ namespace KinectKids3D
                     transform.localPosition = startPosition + new Vector3(wave * amplitude,
                         Mathf.Sin(Time.time * speed * 1.7f + phase) * amplitude * 0.55f, 0f);
                     transform.localRotation = startRotation * Quaternion.Euler(wave * 20f, Time.time * speed * 25f, wave * 35f);
+                    break;
+                case HauntedMotion.Swing:
+                    transform.localRotation = startRotation * Quaternion.Euler(0f, 0f, wave * amplitude);
                     break;
                 case HauntedMotion.Flicker:
                     if (animatedLight != null)
