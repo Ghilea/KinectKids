@@ -28,6 +28,7 @@ namespace KinectKids3D
         private readonly List<RideHazard> hazards = new List<RideHazard>();
         private readonly Dictionary<int, AimLock> aimLocks = new Dictionary<int, AimLock>();
         private readonly Dictionary<int, ReticleState> reticles = new Dictionary<int, ReticleState>();
+        private readonly Dictionary<int, Light> reticleLights = new Dictionary<int, Light>();
         private readonly Dictionary<int, ActiveHandState> activeHands = new Dictionary<int, ActiveHandState>();
         private readonly Dictionary<int, HandActivity> handActivity = new Dictionary<int, HandActivity>();
         private readonly Dictionary<long, PoseCalibration> poseCalibrations = new Dictionary<long, PoseCalibration>();
@@ -161,11 +162,14 @@ namespace KinectKids3D
             if (licensedMusic == null) licensedMusic = Resources.Load<AudioClip>("Audio/RideMusic");
             musicSource.clip = licensedMusic != null ? licensedMusic : CreateRideMusic();
             musicSource.loop = true;
-            musicSource.volume = licensedMusic != null ? 0.58f : 0.38f;
+            musicSource.volume = licensedMusic != null ? 1f : 0.62f;
             musicSource.spatialBlend = 0f;
             musicSource.priority = 0;
             musicSource.mute = false;
             musicSource.ignoreListenerPause = true;
+            musicSource.bypassEffects = true;
+            musicSource.bypassListenerEffects = true;
+            musicSource.bypassReverbZones = true;
             AudioListener.pause = false;
             AudioListener.volume = 1f;
             StartCoroutine(StartMusicWhenReady(licensedMusic != null));
@@ -567,6 +571,8 @@ namespace KinectKids3D
         {
             IReadOnlyList<AimSample> samples = aimProvider.GetAimSamples();
             reticles.Clear();
+            foreach (Light reticleLight in reticleLights.Values)
+                if (reticleLight != null) reticleLight.enabled = false;
             foreach (IGrouping<int, AimSample> group in samples.GroupBy(item => item.PlayerIndex))
             {
                 int player = Mathf.Clamp(group.Key, 0, 1);
@@ -575,6 +581,7 @@ namespace KinectKids3D
                 AimSample sample = SelectActiveHand(player, playerHands);
 
                 Ray ray = rideCamera.ViewportPointToRay(new Vector3(sample.Position.x, 1f - sample.Position.y, 0));
+                UpdateReticleLight(player, ray);
                 RaycastHit hit;
                 GhostTarget target = null;
                 if (Physics.Raycast(ray, out hit, 80f)) target = hit.collider.GetComponentInParent<GhostTarget>();
@@ -646,6 +653,31 @@ namespace KinectKids3D
                     IsRightHand = sample.HandId % 2 == 1
                 };
             }
+        }
+
+        private void UpdateReticleLight(int player, Ray ray)
+        {
+            Light flashlight;
+            if (!reticleLights.TryGetValue(player, out flashlight) || flashlight == null)
+            {
+                GameObject lightObject = new GameObject("Siktesficklampa spelare " + (player + 1));
+                lightObject.transform.SetParent(rideCamera.transform, false);
+                flashlight = lightObject.AddComponent<Light>();
+                flashlight.type = LightType.Spot;
+                flashlight.color = player == 1
+                    ? new Color(1f, 0.62f, 0.74f)
+                    : new Color(0.70f, 0.86f, 1f);
+                flashlight.intensity = 4.1f;
+                flashlight.range = 26f;
+                flashlight.spotAngle = 34f;
+                flashlight.innerSpotAngle = 19f;
+                flashlight.shadows = LightShadows.None;
+                reticleLights[player] = flashlight;
+            }
+
+            flashlight.enabled = true;
+            flashlight.transform.position = ray.origin + rideCamera.transform.forward * 0.16f;
+            flashlight.transform.rotation = Quaternion.LookRotation(ray.direction, rideCamera.transform.up);
         }
 
         private void UpdateHandActivity(AimSample sample)
@@ -1193,6 +1225,8 @@ namespace KinectKids3D
         private void OnDestroy()
         {
             if (aimProvider != null) aimProvider.Dispose();
+            foreach (Light reticleLight in reticleLights.Values)
+                if (reticleLight != null) Destroy(reticleLight.gameObject);
         }
 
         private sealed class AimLock

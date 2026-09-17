@@ -20,6 +20,9 @@ namespace KinectKids3D.Editor
 
         internal static void EnsureMusicAsset()
         {
+            // En ForceUpdate medan Play-läget startar kopplar loss det AudioClip som
+            // redan spelas. Installera därför bara musik utanför Play-läget.
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
             if (InstallUserMusic()) return;
             string target = Path.Combine(Application.dataPath, "Resources", "Audio", "RideMusic.ogg");
             if (File.Exists(target) && new FileInfo(target).Length == ExpectedBytes) return;
@@ -70,10 +73,17 @@ namespace KinectKids3D.Editor
 
                 bool needsCopy = !File.Exists(target)
                     || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(target));
-                if (needsCopy) File.Copy(source, target, true);
                 string assetPath = "Assets/Resources/Audio/CustomRideMusic" + extension;
-                AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
-                Debug.Log("Egen musik används i Spökjakten: " + Path.GetFileName(source));
+                if (needsCopy)
+                {
+                    File.Copy(source, target, true);
+                    AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
+                    Debug.Log("Ny musik installerades i Spökjakten: " + Path.GetFileName(source));
+                }
+                else if (AssetDatabase.LoadAssetAtPath<AudioClip>(assetPath) == null)
+                {
+                    AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
+                }
                 return true;
             }
             catch (Exception exception)

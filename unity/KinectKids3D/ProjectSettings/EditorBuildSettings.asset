@@ -4,6 +4,9 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Spokjakten3D.unity
+    guid: fe60846232c5c1b46a4b6206c38dbcd3
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

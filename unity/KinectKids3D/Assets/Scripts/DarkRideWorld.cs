@@ -381,8 +381,8 @@ namespace KinectKids3D
             Light light = lightObject.AddComponent<Light>();
             light.type = LightType.Point;
             light.color = new Color(1f, 0.30f, 0.055f);
-            light.intensity = 2.45f;
-            light.range = 5.6f;
+            light.intensity = 4.15f;
+            light.range = 8.2f;
             light.shadows = LightShadows.None;
             HauntedProp.Attach(lightObject, HauntedMotion.Flicker, 0f, Random.Range(7f, 11f));
         }
@@ -509,8 +509,11 @@ namespace KinectKids3D
 
             ParticleSystem.VelocityOverLifetimeModule velocity = particles.velocityOverLifetime;
             velocity.enabled = true;
-            velocity.x = new ParticleSystem.MinMaxCurve(-0.10f, 0.10f);
-            velocity.z = new ParticleSystem.MinMaxCurve(-0.08f, 0.08f);
+            // Unity validerar varje tilldelning direkt. Alla tre måste därför ligga i
+            // samma kurvläge även under konfigurationen; Noise-modulen ger variationen.
+            velocity.x = new ParticleSystem.MinMaxCurve(0.035f);
+            velocity.y = new ParticleSystem.MinMaxCurve(0.006f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.025f);
 
             ParticleSystem.NoiseModule noise = particles.noise;
             noise.enabled = true;
@@ -519,7 +522,7 @@ namespace KinectKids3D
             noise.scrollSpeed = 0.08f;
 
             ParticleSystemRenderer renderer = particles.GetComponent<ParticleSystemRenderer>();
-            Shader shader = Shader.Find("Particles/Standard Unlit");
+            Shader shader = Shader.Find("KinectKids/Soft Mist");
             if (shader == null) shader = Shader.Find("Legacy Shaders/Particles/Alpha Blended Premultiply");
             if (shader != null)
             {
@@ -530,13 +533,6 @@ namespace KinectKids3D
                 if (mistMaterial.HasProperty("_BaseMap")) mistMaterial.SetTexture("_BaseMap", texture);
                 if (mistMaterial.HasProperty("_Color"))
                     mistMaterial.SetColor("_Color", new Color(0.20f, 0.24f, 0.24f, 0.10f));
-                if (mistMaterial.HasProperty("_ZWrite")) mistMaterial.SetFloat("_ZWrite", 0f);
-                if (mistMaterial.HasProperty("_SrcBlend"))
-                    mistMaterial.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                if (mistMaterial.HasProperty("_DstBlend"))
-                    mistMaterial.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                mistMaterial.EnableKeyword("_ALPHABLEND_ON");
-                mistMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             }
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
             renderer.sortingOrder = -2;
@@ -618,8 +614,8 @@ namespace KinectKids3D
             Light light = lanternLight.AddComponent<Light>();
             light.type = LightType.Spot;
             light.color = new Color(1f, 0.24f, 0.035f);
-            light.intensity = 0.22f;
-            light.range = 3.8f;
+            light.intensity = 0.42f;
+            light.range = 5.2f;
             light.spotAngle = 58f;
             light.shadows = LightShadows.None;
             HauntedProp.Attach(lanternLight, HauntedMotion.Flicker, 0f, 8.2f);
