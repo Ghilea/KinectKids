@@ -26,6 +26,7 @@ namespace KinectKids3D
             scare.lunge = new Vector3(scare.side * 1.48f, -0.12f, 3.15f);
             scare.startedAt = Time.time;
             scare.BuildModel();
+            GhostTarget.AttachExisting(root, 2, new Vector3(0f, 1.15f, -0.20f), 2.85f, 0.92f);
             return scare;
         }
 
@@ -35,10 +36,10 @@ namespace KinectKids3D
             float amount;
             if (age < 0.34f)
                 amount = Mathf.SmoothStep(0f, 1f, age / 0.34f);
-            else if (age < 0.82f)
+            else if (age < 1.30f)
                 amount = 1f + Mathf.Sin(age * 20f) * 0.025f;
             else
-                amount = 1f - Mathf.SmoothStep(0f, 1f, (age - 0.82f) / 0.62f);
+                amount = 1f - Mathf.SmoothStep(0f, 1f, (age - 1.30f) / 0.75f);
 
             transform.localPosition = Vector3.Lerp(start, lunge, amount)
                 + Vector3.up * Mathf.Sin(age * 13f) * 0.07f;
@@ -47,7 +48,7 @@ namespace KinectKids3D
                 -side * (12f + amount * 18f),
                 -side * (7f + Mathf.Sin(age * 15f) * 4f));
             transform.localScale = Vector3.one * Mathf.Lerp(0.66f, 1.08f, amount);
-            if (age >= 1.48f) Destroy(gameObject);
+            if (age >= 2.08f) Destroy(gameObject);
         }
 
         private void BuildModel()

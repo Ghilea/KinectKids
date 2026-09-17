@@ -110,11 +110,13 @@ namespace KinectKids3D
 
             for (float z = 3; z < TrackLength; z += 7.5f)
             {
-                if (z >= BranchSplitStart && z <= BranchJoinEnd)
+                if (z >= 218f && z < 280f)
                 {
                     CreateCorridorSection(z, -1);
                     CreateCorridorSection(z, 1);
                 }
+                else if (z >= BranchSplitStart && z <= BranchJoinEnd)
+                    CreateForkHallSection(z);
                 else CreateCorridorSection(z, 0);
             }
         }
@@ -134,13 +136,80 @@ namespace KinectKids3D
             Quaternion rotation = TrackRotation(z, route);
             Material zone = z < 48f || z > 330f ? stone : darkStone;
             CreateCube("Kullerstensväg", new Vector3(center, -0.22f, z), new Vector3(12f, 0.45f, 8f), road, rotation);
-            CreateCube("Vänster murkärna", new Vector3(center - 5.8f, 2.8f, z), new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
-            CreateCube("Höger murkärna", new Vector3(center + 5.8f, 2.8f, z), new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
+            CreateSideWall(center, z, rotation, route, -1);
+            CreateSideWall(center, z, rotation, route, 1);
             CreateCube("Tak", new Vector3(center, 5.65f, z), new Vector3(12f, 0.5f, 8.1f), darkStone, rotation);
-            CreateMasonryFacing(center, z, rotation, zone);
+            CreateMasonryFacing(center, z, rotation, zone, route);
         }
 
-        private void CreateMasonryFacing(float center, float z, Quaternion rotation, Material material)
+        private void CreateForkHallSection(float z)
+        {
+            float center = TrackCenter(z);
+            float routeOffset = Mathf.Abs(TrackCenter(z, 1) - center);
+            float halfWidth = 6f + routeOffset;
+            Quaternion rotation = TrackRotation(z);
+            CreateCube("Vägskälets öppna golv", new Vector3(center, -0.22f, z),
+                new Vector3(halfWidth * 2f, 0.45f, 8f), road, rotation);
+            CreateCube("Vägskälets vänstra yttervägg", new Vector3(center - halfWidth, 2.8f, z),
+                new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
+            CreateCube("Vägskälets högra yttervägg", new Vector3(center + halfWidth, 2.8f, z),
+                new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
+            CreateCube("Vägskälets tak", new Vector3(center, 5.65f, z),
+                new Vector3(halfWidth * 2f, 0.5f, 8.1f), darkStone, rotation);
+        }
+
+        private void CreateSideWall(float center, float z, Quaternion rotation, int route, int side)
+        {
+            float openingLocalZ;
+            if (!TryGetWallOpening(z, route, side, out openingLocalZ))
+            {
+                CreateCube(side < 0 ? "Vänster murkärna" : "Höger murkärna",
+                    new Vector3(center + side * 5.8f, 2.8f, z),
+                    new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
+                return;
+            }
+
+            GameObject section = new GameObject("Mur med riktig dörröppning");
+            section.transform.SetParent(root, false);
+            section.transform.position = new Vector3(center, 0f, z);
+            section.transform.rotation = rotation;
+            const float sectionStart = -4.05f;
+            const float sectionEnd = 4.05f;
+            float openingStart = Mathf.Clamp(openingLocalZ - 1.85f, sectionStart, sectionEnd);
+            float openingEnd = Mathf.Clamp(openingLocalZ + 1.85f, sectionStart, sectionEnd);
+            AddWallSpan(section.transform, side, sectionStart, openingStart);
+            AddWallSpan(section.transform, side, openingEnd, sectionEnd);
+            CreateChildPrimitive(section.transform, PrimitiveType.Cube, "Stenvalv över dörrhålet",
+                new Vector3(side * 5.8f, 5.25f, (openingStart + openingEnd) * 0.5f),
+                new Vector3(0.6f, 1.1f, openingEnd - openingStart), darkStone, Quaternion.identity);
+        }
+
+        private void AddWallSpan(Transform section, int side, float start, float end)
+        {
+            float length = end - start;
+            if (length <= 0.05f) return;
+            CreateChildPrimitive(section, PrimitiveType.Cube, "Mur bredvid dörrhålet",
+                new Vector3(side * 5.8f, 2.8f, (start + end) * 0.5f),
+                new Vector3(0.6f, 6f, length), darkStone, Quaternion.identity);
+        }
+
+        private static bool TryGetWallOpening(float sectionZ, int route, int side, out float localZ)
+        {
+            float[] openingZ = { 38f, 94f, 126f, 174f, 250f, 279f, 327f };
+            int[] openingRoute = { 0, 0, 0, 0, -1, 1, 0 };
+            int[] openingSide = { -1, 1, -1, 1, -1, 1, 1 };
+            for (int i = 0; i < openingZ.Length; i++)
+            {
+                if (route != openingRoute[i] || side != openingSide[i]
+                    || Mathf.Abs(sectionZ - openingZ[i]) > 3.75f) continue;
+                localZ = openingZ[i] - sectionZ;
+                return true;
+            }
+            localZ = 0f;
+            return false;
+        }
+
+        private void CreateMasonryFacing(float center, float z, Quaternion rotation, Material material, int route)
         {
             GameObject section = new GameObject("Modellerad slottsmur");
             section.transform.SetParent(root, false);
@@ -154,6 +223,9 @@ namespace KinectKids3D
                 float depth = 1.82f + ((rowIndex + column) % 3) * 0.08f;
                 float y = 0.72f + rowIndex * 1.40f;
                 float localZ = -3.0f + column * 1.95f + stagger;
+                float openingLocalZ;
+                if (rowIndex < 3 && TryGetWallOpening(z, route, side, out openingLocalZ)
+                    && Mathf.Abs(localZ - openingLocalZ) < 2.35f) continue;
                 CreateChildPrimitive(section.transform, PrimitiveType.Cube, "Enskilt stenblock",
                     new Vector3(side * 5.46f, y, localZ), new Vector3(0.34f, 1.25f, depth), material,
                     Quaternion.Euler(0f, 0f, side * (((rowIndex + column) % 3) - 1) * 0.55f));
@@ -172,7 +244,7 @@ namespace KinectKids3D
             CreateSign(14f, "SPÖKJAKTEN 3D", amberGlow);
             CreateArmor(22f, -1);
             CreateArmor(31f, 1);
-            WallDoorScare.Create(38f, -1, 0);
+            WallDoorScare.Create(38f, -1, 0, wood, darkStone, rail);
             CreateBatSwarm(25f, -2.6f, 3.35f);
             CreateBatSwarm(44f, 2.4f, 2.75f);
             CreateCobweb(20f, -1);
@@ -197,7 +269,7 @@ namespace KinectKids3D
             CreateCobweb(89f, -1);
             CreateWatchingPortrait(77f, -1);
             CreateArmor(84f, 1);
-            WallDoorScare.Create(94f, 1, 0);
+            WallDoorScare.Create(94f, 1, 0, wood, darkStone, rail);
             CreateGraveyardProp("Models/KenneyGraveyard/coffin-old", 71f, -1, 0, 2.25f, 8f);
             CreateGraveyardProp("Models/KenneyGraveyard/altar-stone", 98f, 1, 0, 2.1f, -7f);
             CreateCastleGate(103f);
@@ -216,7 +288,7 @@ namespace KinectKids3D
             CreateCastleTower(132f, 1);
             CreateArmor(116f, 1);
             CreateArmor(137f, -1);
-            WallDoorScare.Create(126f, -1, 0);
+            WallDoorScare.Create(126f, -1, 0, wood, darkStone, rail);
             CreateBatSwarm(128f, -2.3f, 3.65f);
             CreateHangingChain(119f, -3.7f);
             CreateHangingChain(138f, 3.8f);
@@ -236,7 +308,7 @@ namespace KinectKids3D
             HiddenMonster.Create(161f, 1, 0, HiddenMonsterKind.Portrait);
             HiddenMonster.Create(179f, -1, 0, HiddenMonsterKind.Cabinet);
             HiddenMonster.Create(196f, 1, 0, HiddenMonsterKind.Portrait);
-            WallDoorScare.Create(174f, 1, 0);
+            WallDoorScare.Create(174f, 1, 0, wood, darkStone, rail);
             CreateWatchingPortrait(190f, -1);
             CreateMist(158f, 0);
             CreateMist(188f, 0);
@@ -251,8 +323,8 @@ namespace KinectKids3D
             CreateSphere("Höger vägvisare", new Vector3(forkX + 2.4f, 2.5f, 205f),
                 Vector3.one * 0.34f, purpleGlow);
 
-            RouteDoor.Create(218f, -1, wood, rail, greenGlow).transform.SetParent(root, true);
-            RouteDoor.Create(218f, 1, wood, rail, purpleGlow).transform.SetParent(root, true);
+            RouteDoor.Create(216f, -1, wood, rail, greenGlow).transform.SetParent(root, true);
+            RouteDoor.Create(216f, 1, wood, rail, purpleGlow).transform.SetParent(root, true);
 
             for (int route = -1; route <= 1; route += 2)
             {
@@ -268,7 +340,8 @@ namespace KinectKids3D
                 HiddenMonster.Create(235f, route < 0 ? 1 : -1, route, HiddenMonsterKind.Cabinet);
                 HiddenMonster.Create(258f, route < 0 ? -1 : 1, route, HiddenMonsterKind.Tomb);
                 HiddenMonster.Create(289f, route < 0 ? 1 : -1, route, HiddenMonsterKind.Portrait);
-                WallDoorScare.Create(route < 0 ? 250f : 279f, route < 0 ? -1 : 1, route);
+                WallDoorScare.Create(route < 0 ? 250f : 279f, route < 0 ? -1 : 1, route,
+                    wood, darkStone, rail);
                 CreateGraveyardProp(route < 0 ? "Models/KenneyGraveyard/urn-round" : "Models/KenneyGraveyard/pumpkin-carved",
                     244f, route < 0 ? 1 : -1, route, 1.25f, route * 12f);
                 CreateMist(222f, route);
@@ -287,7 +360,7 @@ namespace KinectKids3D
             CreateCobweb(318f, -1);
             CreateCobweb(329f, 1);
             HiddenMonster.Create(321f, -1, 0, HiddenMonsterKind.Tomb);
-            WallDoorScare.Create(327f, 1, 0);
+            WallDoorScare.Create(327f, 1, 0, wood, darkStone, rail);
             CreateGraveyardProp("Models/KenneyGraveyard/gravestone-broken", 317f, 1, 0, 1.65f, -9f);
             CreateGraveyardProp("Models/KenneyGraveyard/shovel-dirt", 330f, -1, 0, 1.75f, 12f);
             CreateMist(315f, 0);

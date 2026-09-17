@@ -22,8 +22,10 @@ namespace KinectKids3D
         private AudioSource scareAudio;
         private AudioClip[] revealSounds;
         private AudioClip[] creatureSounds;
+        private GhostTarget shootable;
 
-        public static WallDoorScare Create(float z, int side, int route)
+        public static WallDoorScare Create(float z, int side, int route,
+            Material wood, Material stone, Material metal)
         {
             GameObject root = new GameObject("Väggdörr med gömd varelse");
             root.transform.position = new Vector3(DarkRideWorld.TrackCenter(z, route), 0f, z);
@@ -31,11 +33,11 @@ namespace KinectKids3D
             WallDoorScare scare = root.AddComponent<WallDoorScare>();
             scare.trackZ = z;
             scare.phase = Random.value * Mathf.PI * 2f;
-            scare.Build(side < 0 ? -1 : 1);
+            scare.Build(side < 0 ? -1 : 1, wood, stone, metal);
             return scare;
         }
 
-        private void Build(int side)
+        private void Build(int side, Material wood, Material stone, Material metal)
         {
             scareAudio = gameObject.AddComponent<AudioSource>();
             scareAudio.playOnAwake = false;
@@ -54,21 +56,49 @@ namespace KinectKids3D
                 .Where(clip => clip != null && clip.name.StartsWith("ghost_moan_"))
                 .ToArray();
 
-            GameObject doorModel = ImportedModelFactory.Create(
-                "Models/KenneyGraveyard/crypt-door", transform, "Stängd kryptdörr",
-                new Vector3(side * 5.20f, 1.72f, 0f), 3.45f,
-                Quaternion.Euler(0f, side < 0 ? 90f : -90f, 0f));
-            if (doorModel != null)
-            {
-                door = doorModel.transform;
-                doorClosed = door.localRotation;
-                doorOpen = doorClosed * Quaternion.Euler(0f, side * 78f, 0f);
-            }
+            // Dörren sitter på en riktig gångjärnspunkt i öppningens bakkant.
+            // Då svänger hela bladet undan i stället för att rotera mitt i muren.
+            door = new GameObject("Gångjärn för sidodörr").transform;
+            door.SetParent(transform, false);
+            door.localPosition = new Vector3(side * 5.38f, 0f, 1.72f);
+            doorClosed = Quaternion.identity;
+            doorOpen = Quaternion.Euler(0f, -side * 96f, 0f);
+            AddPart(door, "Massivt träblad", new Vector3(0f, 1.85f, -1.72f),
+                new Vector3(0.24f, 3.70f, 3.38f), wood);
+            AddPart(door, "Övre järnband", new Vector3(-side * 0.14f, 2.85f, -1.72f),
+                new Vector3(0.10f, 0.16f, 2.85f), metal);
+            AddPart(door, "Nedre järnband", new Vector3(-side * 0.14f, 0.85f, -1.72f),
+                new Vector3(0.10f, 0.16f, 2.85f), metal);
+
+            // En liten faktisk nisch bakom hålet gör att spelaren ser in i
+            // mörkret, i stället för att mötas av den obrutna korridorväggen.
+            AddPart(transform, "Nischens bakvägg", new Vector3(side * 7.05f, 2.0f, 0f),
+                new Vector3(0.25f, 4.0f, 3.75f), stone);
+            AddPart(transform, "Nischens främre kant", new Vector3(side * 5.42f, 3.92f, 0f),
+                new Vector3(0.48f, 0.42f, 4.15f), stone);
+            AddPart(transform, "Nischens vänstra sida", new Vector3(side * 6.20f, 2.0f, -1.88f),
+                new Vector3(1.75f, 4.0f, 0.28f), stone);
+            AddPart(transform, "Nischens högra sida", new Vector3(side * 6.20f, 2.0f, 1.88f),
+                new Vector3(1.75f, 4.0f, 0.28f), stone);
+            AddPart(transform, "Dörrpost fram", new Vector3(side * 5.28f, 1.95f, -1.88f),
+                new Vector3(0.48f, 3.9f, 0.34f), metal);
+            AddPart(transform, "Dörrpost bak", new Vector3(side * 5.28f, 1.95f, 1.88f),
+                new Vector3(0.48f, 3.9f, 0.34f), metal);
+
+            GameObject recessLightObject = new GameObject("Svagt ljus inne i dörrnischen");
+            recessLightObject.transform.SetParent(transform, false);
+            recessLightObject.transform.localPosition = new Vector3(side * 6.55f, 2.15f, 0f);
+            Light recessLight = recessLightObject.AddComponent<Light>();
+            recessLight.type = LightType.Point;
+            recessLight.color = new Color(0.78f, 0.045f, 0.018f);
+            recessLight.intensity = 1.35f;
+            recessLight.range = 4.2f;
+            recessLight.shadows = LightShadows.None;
 
             GameObject holder = new GameObject("Armar och monster bakom dörren");
             holder.transform.SetParent(transform, false);
             creature = holder.transform;
-            hiddenPosition = new Vector3(side * 5.55f, 0.12f, 0.15f);
+            hiddenPosition = new Vector3(side * 6.55f, 0.12f, 0.15f);
             lungePosition = new Vector3(side * 3.55f, 0.16f, -0.48f);
             creature.localPosition = hiddenPosition;
 
@@ -85,6 +115,9 @@ namespace KinectKids3D
                 new Vector3(0f, 1.28f, 0f), 2.75f, Quaternion.Euler(0f, 180f, 0f),
                 "attack", "punch", "walk", "idle");
             creatureRenderers = creature.GetComponentsInChildren<Renderer>(true);
+            shootable = GhostTarget.AttachExisting(holder, 2, new Vector3(0f, 1.25f, 0f),
+                2.75f, 0.82f);
+            shootable.SetTargetable(false);
             SetCreatureVisible(false);
         }
 
@@ -102,6 +135,7 @@ namespace KinectKids3D
             {
                 revealed = true;
                 SetCreatureVisible(true);
+                if (shootable != null) shootable.SetTargetable(true);
                 PlayRevealSounds();
             }
 
@@ -135,6 +169,18 @@ namespace KinectKids3D
         {
             if (creatureRenderers == null) return;
             foreach (Renderer renderer in creatureRenderers) renderer.enabled = visible;
+        }
+
+        private static void AddPart(Transform parent, string partName, Vector3 position,
+            Vector3 scale, Material material)
+        {
+            GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            part.name = partName;
+            part.transform.SetParent(parent, false);
+            part.transform.localPosition = position;
+            part.transform.localScale = scale;
+            part.GetComponent<Renderer>().sharedMaterial = material;
+            Object.Destroy(part.GetComponent<Collider>());
         }
     }
 }

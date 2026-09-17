@@ -695,7 +695,8 @@ namespace KinectKids3D
             Vector2 viewportAim = new Vector2(handPosition.x, 1f - handPosition.y);
             GhostTarget best = null;
             float bestDistance = 0.085f;
-            foreach (GhostTarget candidate in targets.Where(item => item != null && item.Health > 0))
+            foreach (GhostTarget candidate in GhostTarget.ActiveTargets
+                .Where(item => item.Health > 0 && item.IsTargetable))
             {
                 Vector3 viewport = rideCamera.WorldToViewportPoint(candidate.transform.position + Vector3.up * 1.05f);
                 if (viewport.z <= 0f) continue;

@@ -24,6 +24,11 @@ namespace KinectKids3D
             encounter.side = side < 0 ? -1 : 1;
             encounter.startedAt = Time.time;
             encounter.Build();
+            if (kind == HauntedEncounterKind.BatBurst)
+                GhostTarget.AttachExisting(root, 2, new Vector3(0.62f, 0.28f, 0.52f), 1.65f, 1.15f);
+            else if (kind == HauntedEncounterKind.PhantomFace)
+                GhostTarget.AttachExisting(root, 1, new Vector3(0f, 1.62f, 0f), 2.25f, 0.82f,
+                    TargetKind.Ghost);
         }
 
         private void Update()
@@ -31,8 +36,8 @@ namespace KinectKids3D
             float age = Time.time - startedAt;
             if (kind == HauntedEncounterKind.BatBurst)
             {
-                transform.localPosition = new Vector3(Mathf.Lerp(side * 5.5f, -side * 5.5f, age / 1.65f),
-                    1.3f + Mathf.Sin(age * 11f) * 0.55f, Mathf.Lerp(7f, 2.8f, age / 1.65f));
+                transform.localPosition = new Vector3(Mathf.Lerp(side * 5.5f, -side * 5.5f, age / 2.35f),
+                    1.3f + Mathf.Sin(age * 11f) * 0.55f, Mathf.Lerp(7f, 2.8f, age / 2.35f));
             }
             else if (kind == HauntedEncounterKind.SwingingChain)
             {
@@ -41,11 +46,11 @@ namespace KinectKids3D
             }
             else
             {
-                float appear = age < 0.32f ? age / 0.32f : 1f - Mathf.Clamp01((age - 0.85f) / 0.55f);
+                float appear = age < 0.32f ? age / 0.32f : 1f - Mathf.Clamp01((age - 1.75f) / 0.55f);
                 transform.localPosition = new Vector3(side * 2.3f, 0.15f, Mathf.Lerp(6.2f, 3.2f, Mathf.Clamp01(age)));
                 transform.localScale = Vector3.one * Mathf.Max(0.02f, appear);
             }
-            if (age > (kind == HauntedEncounterKind.SwingingChain ? 2.2f : 1.7f)) Destroy(gameObject);
+            if (age > (kind == HauntedEncounterKind.SwingingChain ? 2.2f : 2.45f)) Destroy(gameObject);
         }
 
         private void Build()

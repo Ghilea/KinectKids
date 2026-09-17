@@ -11,7 +11,7 @@ namespace KinectKids3D
 
     /// <summary>
     /// Miljömonster som först ser ut som en del av dekoren och sedan tittar eller
-    /// kastar sig fram när vagnen är nära. De är inte skjutmål; de bygger stämning.
+    /// kastar sig fram när vagnen är nära. De blir skjutbara först när de visar sig.
     /// </summary>
     public sealed class HiddenMonster : MonoBehaviour
     {
@@ -21,6 +21,7 @@ namespace KinectKids3D
         private float trackZ;
         private float phase;
         private bool woke;
+        private GhostTarget shootable;
 
         public static HiddenMonster Create(float z, int side, int route, HiddenMonsterKind kind)
         {
@@ -44,7 +45,11 @@ namespace KinectKids3D
             else if (gap < 1.4f && gap >= -2.2f)
                 reveal = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(1.4f, -2.2f, gap));
 
-            if (reveal > 0.12f) woke = true;
+            if (reveal > 0.12f)
+            {
+                woke = true;
+                if (shootable != null) shootable.SetTargetable(true);
+            }
             monster.localPosition = Vector3.Lerp(hiddenPosition, revealedPosition, reveal)
                 + Vector3.up * Mathf.Sin(Time.time * 8f + phase) * 0.035f * reveal;
             monster.localRotation = Quaternion.Euler(
@@ -113,6 +118,9 @@ namespace KinectKids3D
                 LowPolyMeshFactory.CreateTaperedLimb(monster, "Lång griparm",
                     new Vector3(armSide * 0.40f, 1.26f, 0f),
                     new Vector3(armSide * 0.82f, 0.82f, -0.72f), 0.13f, 0.025f, cloth);
+            shootable = GhostTarget.AttachExisting(body, 2, new Vector3(0f, 1.05f, -0.12f),
+                2.55f, 0.78f);
+            shootable.SetTargetable(false);
         }
 
         private static GameObject AddPart(Transform parent, PrimitiveType type, string name,

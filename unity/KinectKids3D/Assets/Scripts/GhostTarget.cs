@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace KinectKids3D
@@ -13,6 +14,7 @@ namespace KinectKids3D
 
     public sealed class GhostTarget : MonoBehaviour
     {
+        private static readonly HashSet<GhostTarget> activeTargets = new HashSet<GhostTarget>();
         private readonly List<Renderer> renderers = new List<Renderer>();
         private readonly List<Color> baseColors = new List<Color>();
         private float baseY;
@@ -20,11 +22,16 @@ namespace KinectKids3D
         private bool defeated;
         private Transform leftArm;
         private Transform rightArm;
+        private bool externalMotion;
+        private Collider hitArea;
 
         public TargetKind Kind { get; private set; }
         public int Health { get; private set; }
         public int MaxHealth { get; private set; }
         public bool IsBoss => Kind == TargetKind.ConductorBoss;
+        public bool IsDefeated => defeated;
+        public bool IsTargetable => !defeated && hitArea != null && hitArea.enabled;
+        public static IEnumerable<GhostTarget> ActiveTargets => activeTargets.Where(target => target != null);
 
         public static GhostTarget Create(TargetKind kind, Vector3 position)
         {
@@ -41,11 +48,46 @@ namespace KinectKids3D
             hitArea.center = new Vector3(0, kind == TargetKind.ConductorBoss ? 1.65f : 1.05f, 0);
             hitArea.height = kind == TargetKind.ConductorBoss ? 3.8f : 2.55f;
             hitArea.radius = kind == TargetKind.ConductorBoss ? 1.15f : 0.75f;
+            target.hitArea = hitArea;
             return target;
+        }
+
+        public static GhostTarget AttachExisting(GameObject root, int health, Vector3 colliderCenter,
+            float colliderHeight, float colliderRadius, TargetKind kind = TargetKind.Zombie)
+        {
+            GhostTarget target = root.GetComponent<GhostTarget>();
+            if (target == null) target = root.AddComponent<GhostTarget>();
+            target.Kind = kind;
+            target.MaxHealth = Mathf.Max(1, health);
+            target.Health = target.MaxHealth;
+            target.externalMotion = true;
+            target.RegisterRenderers(root);
+            CapsuleCollider capsule = root.AddComponent<CapsuleCollider>();
+            capsule.center = colliderCenter;
+            capsule.height = colliderHeight;
+            capsule.radius = colliderRadius;
+            target.hitArea = capsule;
+            return target;
+        }
+
+        public void SetTargetable(bool targetable)
+        {
+            if (hitArea != null && !defeated) hitArea.enabled = targetable;
+        }
+
+        private void OnEnable()
+        {
+            activeTargets.Add(this);
+        }
+
+        private void OnDestroy()
+        {
+            activeTargets.Remove(this);
         }
 
         private void Update()
         {
+            if (externalMotion) return;
             float bob = Mathf.Sin(Time.time * (IsBoss ? 1.6f : 2.4f) + phase) * (IsBoss ? 0.11f : 0.18f);
             transform.position = new Vector3(transform.position.x, baseY + bob, transform.position.z);
             if (leftArm != null) leftArm.localRotation = Quaternion.Euler(
@@ -64,8 +106,9 @@ namespace KinectKids3D
             if (Health <= 0)
             {
                 defeated = true;
-                Collider hitArea = GetComponent<Collider>();
                 if (hitArea != null) hitArea.enabled = false;
+                foreach (MonoBehaviour behaviour in GetComponents<MonoBehaviour>())
+                    if (behaviour != this) behaviour.enabled = false;
                 points += IsBoss ? 250 : 35;
                 StartCoroutine(Defeat());
             }

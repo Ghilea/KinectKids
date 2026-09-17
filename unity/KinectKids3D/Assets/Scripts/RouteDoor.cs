@@ -91,20 +91,9 @@ namespace KinectKids3D
             leftClosed = leftLeaf.localRotation;
             rightClosed = rightLeaf.localRotation;
 
-            GameObject importedLeft = ImportedModelFactory.Create(
-                "Models/KenneyGraveyard/crypt-door", leftLeaf, "Vänster riktig kryptdörr",
-                new Vector3(2.02f, 2.55f, 0f), 4.75f, Quaternion.identity);
-            GameObject importedRight = ImportedModelFactory.Create(
-                "Models/KenneyGraveyard/crypt-door", rightLeaf, "Höger riktig kryptdörr",
-                new Vector3(-2.02f, 2.55f, 0f), 4.75f, Quaternion.Euler(0f, 180f, 0f));
-            if (importedLeft == null || importedRight == null)
-            {
-                if (importedLeft != null) Destroy(importedLeft);
-                if (importedRight != null) Destroy(importedRight);
-            }
-
-            // Tydliga träytor gör att porten inte kan misstas för tunnelväggen,
-            // oavsett hur den importerade kryptdörrens material ser ut.
+            // Dörrbladen byggs utan en importerad dörranimation. Kryptmodellen
+            // innehöll ett loopande klipp som slogs mot gångjärnsstyrningen och
+            // fick bladen att flaxa fram och tillbaka.
             AddPart(leftLeaf, "Tydligt vänster dörrblad av trä", new Vector3(2.02f, 2.55f, -0.20f),
                 new Vector3(4.0f, 4.82f, 0.24f), wood);
             AddPart(rightLeaf, "Tydligt höger dörrblad av trä", new Vector3(-2.02f, 2.55f, -0.20f),
