@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -53,6 +54,7 @@ namespace KinectKids3D
         private GUIStyle smallStyle;
         private GUIStyle centerStyle;
         private AudioSource effects;
+        private AudioSource musicSource;
         private AudioClip hitSound;
         private AudioClip bossSound;
         private AudioClip castSound;
@@ -154,17 +156,19 @@ namespace KinectKids3D
             ambience.spatialBlend = 0;
             ambience.Play();
 
-            AudioSource music = gameObject.AddComponent<AudioSource>();
+            musicSource = gameObject.AddComponent<AudioSource>();
             AudioClip licensedMusic = Resources.Load<AudioClip>("Audio/CustomRideMusic");
             if (licensedMusic == null) licensedMusic = Resources.Load<AudioClip>("Audio/RideMusic");
-            music.clip = licensedMusic != null ? licensedMusic : CreateRideMusic();
-            music.loop = true;
-            music.volume = licensedMusic != null ? 0.42f : 0.32f;
-            music.spatialBlend = 0;
-            music.Play();
-            Debug.Log(licensedMusic != null
-                ? "Spökjakten spelar musikfilen: " + licensedMusic.name
-                : "Ingen importerad musik hittades; procedurmusiken används som reserv.");
+            musicSource.clip = licensedMusic != null ? licensedMusic : CreateRideMusic();
+            musicSource.loop = true;
+            musicSource.volume = licensedMusic != null ? 0.58f : 0.38f;
+            musicSource.spatialBlend = 0f;
+            musicSource.priority = 0;
+            musicSource.mute = false;
+            musicSource.ignoreListenerPause = true;
+            AudioListener.pause = false;
+            AudioListener.volume = 1f;
+            StartCoroutine(StartMusicWhenReady(licensedMusic != null));
 
             ghostVoice = gameObject.AddComponent<AudioSource>();
             ghostVoice.playOnAwake = false;
@@ -181,6 +185,31 @@ namespace KinectKids3D
             environmentVoice = gameObject.AddComponent<AudioSource>();
             environmentVoice.playOnAwake = false;
             environmentVoice.spatialBlend = 0f;
+        }
+
+        private IEnumerator StartMusicWhenReady(bool importedMusic)
+        {
+            AudioClip clip = musicSource != null ? musicSource.clip : null;
+            if (clip == null)
+            {
+                Debug.LogError("Spökjakten kunde inte skapa eller läsa in någon musik.");
+                yield break;
+            }
+
+            if (clip.loadState == AudioDataLoadState.Unloaded) clip.LoadAudioData();
+            float timeout = Time.realtimeSinceStartup + 8f;
+            while (clip.loadState == AudioDataLoadState.Loading && Time.realtimeSinceStartup < timeout)
+                yield return null;
+
+            if (clip.loadState == AudioDataLoadState.Failed)
+            {
+                Debug.LogError("Musikfilen importerades men ljuddata kunde inte laddas: " + clip.name);
+                yield break;
+            }
+
+            musicSource.Play();
+            Debug.Log((importedMusic ? "Spökjakten spelar importerad musik: " : "Spökjakten spelar reservmusik: ")
+                + clip.name + " | loadState=" + clip.loadState + " | playing=" + musicSource.isPlaying);
         }
 
         private void ResetRide()

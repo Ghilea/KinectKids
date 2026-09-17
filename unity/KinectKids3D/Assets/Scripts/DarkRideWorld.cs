@@ -484,6 +484,7 @@ namespace KinectKids3D
         private void CreateMist(float z, int route)
         {
             GameObject mist = new GameObject("Krypande slottsdimma");
+            mist.SetActive(false);
             mist.transform.SetParent(root, false);
             mist.transform.position = new Vector3(TrackCenter(z, route), 0.18f, z);
             ParticleSystem particles = mist.AddComponent<ParticleSystem>();
@@ -539,6 +540,7 @@ namespace KinectKids3D
             }
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
             renderer.sortingOrder = -2;
+            mist.SetActive(true);
             particles.Play();
         }
 
