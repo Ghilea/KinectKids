@@ -24,6 +24,7 @@ namespace KinectKids3D
         private AudioClip[] revealSounds;
         private AudioClip[] creatureSounds;
         private GhostTarget shootable;
+        private float targetableSince = -1f;
 
         public static WallDoorScare Create(float z, int side, int route,
             Material wood, Material stone, Material metal)
@@ -127,16 +128,17 @@ namespace KinectKids3D
             if (Camera.main == null) return;
             float gap = trackZ - Camera.main.transform.position.z;
             float amount = 0f;
-            if (gap <= 8f && gap >= 1.2f)
-                amount = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(8f, 2.8f, gap));
-            else if (gap < 1.2f && gap >= -3f)
-                amount = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(1.2f, -3f, gap));
+            if (gap <= 13f && gap >= 1.2f)
+                amount = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(13f, 5f, gap));
+            else if (gap < 1.2f && gap >= -2f)
+                amount = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(1.2f, -2f, gap));
 
             if (!revealed && amount > 0.02f)
             {
                 revealed = true;
                 SetCreatureVisible(true);
                 if (shootable != null) shootable.SetTargetable(true);
+                targetableSince = Time.time;
                 PlayRevealSounds();
             }
 
@@ -149,9 +151,10 @@ namespace KinectKids3D
                     Mathf.Sin(Time.time * 7f + phase) * 7f * amount);
             }
 
-            if (revealed && gap < -3.2f)
+            if (revealed && gap < -2.2f)
             {
-                if (!escaped && shootable != null && shootable.Health > 0)
+                if (!escaped && shootable != null && shootable.Health > 0
+                    && Time.time - targetableSince >= 2.25f)
                 {
                     escaped = true;
                     SpokjaktenGame.ReportMonsterEscape();
@@ -174,7 +177,8 @@ namespace KinectKids3D
         private void SetCreatureVisible(bool visible)
         {
             if (creatureRenderers == null) return;
-            foreach (Renderer renderer in creatureRenderers) renderer.enabled = visible;
+            foreach (Renderer renderer in creatureRenderers)
+                if (renderer != null) renderer.enabled = visible;
         }
 
         private static void AddPart(Transform parent, string partName, Vector3 position,

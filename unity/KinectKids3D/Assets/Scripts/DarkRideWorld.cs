@@ -814,12 +814,15 @@ namespace KinectKids3D
         private void BuildRideCar(Transform cameraTransform)
         {
             GameObject car = new GameObject("Spökvagn");
-            car.transform.SetParent(cameraTransform, false);
+            // Vagnen har sin egen stabila världsposition. Bara spelarens huvud/
+            // kamera ska sjunka vid en duckning; annars ser det ut som om hela
+            // vagnen faller genom golvet och vagnskanten försvinner ur bild.
+            car.AddComponent<RideCarFollower>().Configure(cameraTransform);
             CreateChildCube(car.transform, "Vagnkant", new Vector3(0, -0.85f, 1.35f), new Vector3(3.1f, 0.42f, 0.55f), wood);
             CreateChildCube(car.transform, "Vänster lykta", new Vector3(-1.2f, -0.58f, 1.08f), new Vector3(0.22f, 0.22f, 0.22f), amberGlow);
             CreateChildCube(car.transform, "Höger lykta", new Vector3(1.2f, -0.58f, 1.08f), new Vector3(0.22f, 0.22f, 0.22f), amberGlow);
             GameObject lanternLight = new GameObject("Vagnens svaga lyktljus");
-            lanternLight.transform.SetParent(cameraTransform, false);
+            lanternLight.transform.SetParent(car.transform, false);
             lanternLight.transform.localPosition = new Vector3(0f, -0.48f, 1.1f);
             Light light = lanternLight.AddComponent<Light>();
             light.type = LightType.Spot;

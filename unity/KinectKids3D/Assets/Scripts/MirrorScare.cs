@@ -9,6 +9,7 @@ namespace KinectKids3D
         private Renderer[] apparitionRenderers;
         private GhostTarget target;
         private bool revealed;
+        private float targetableSince = -1f;
 
         public static void Create(float z, int side, int route)
         {
@@ -48,21 +49,24 @@ namespace KinectKids3D
         {
             if (Camera.main == null || target == null) return;
             float gap = trackZ - Camera.main.transform.position.z;
-            if (!revealed && gap <= 12f && gap >= -2f)
+            if (!revealed && gap <= 17f && gap >= -1f)
             {
                 revealed = true;
+                targetableSince = Time.time;
                 SetApparition(true);
                 target.SetTargetable(true);
             }
-            if (!revealed || gap >= -3.5f) return;
-            if (target.Health > 0) SpokjaktenGame.ReportMonsterEscape();
+            if (!revealed || gap >= -2f) return;
+            if (target.Health > 0 && Time.time - targetableSince >= 2.25f)
+                SpokjaktenGame.ReportMonsterEscape();
             Destroy(gameObject);
         }
 
         private void SetApparition(bool visible)
         {
             if (apparitionRenderers == null) return;
-            foreach (Renderer renderer in apparitionRenderers) renderer.enabled = visible;
+            foreach (Renderer renderer in apparitionRenderers)
+                if (renderer != null) renderer.enabled = visible;
         }
 
         private void Add(string partName, Vector3 position, Vector3 scale, Material material)

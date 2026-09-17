@@ -38,10 +38,10 @@ namespace KinectKids3D
             float amount;
             if (age < 0.34f)
                 amount = Mathf.SmoothStep(0f, 1f, age / 0.34f);
-            else if (age < 1.30f)
+            else if (age < 1.85f)
                 amount = 1f + Mathf.Sin(age * 20f) * 0.025f;
             else
-                amount = 1f - Mathf.SmoothStep(0f, 1f, (age - 1.30f) / 0.75f);
+                amount = 1f - Mathf.SmoothStep(0f, 1f, (age - 1.85f) / 0.75f);
 
             transform.localPosition = Vector3.Lerp(start, lunge, amount)
                 + Vector3.up * Mathf.Sin(age * 13f) * 0.07f;
@@ -50,7 +50,7 @@ namespace KinectKids3D
                 -side * (12f + amount * 18f),
                 -side * (7f + Mathf.Sin(age * 15f) * 4f));
             transform.localScale = Vector3.one * Mathf.Lerp(0.66f, 1.08f, amount);
-            if (age >= 2.08f)
+            if (age >= 2.62f)
             {
                 if (shootable != null && shootable.Health > 0) SpokjaktenGame.ReportMonsterEscape();
                 Destroy(gameObject);

@@ -87,7 +87,8 @@ namespace KinectKids3D
 
         private void SetVisualsVisible(bool visible)
         {
-            foreach (Renderer item in GetComponentsInChildren<Renderer>(true)) item.enabled = visible;
+            foreach (Renderer item in GetComponentsInChildren<Renderer>(true))
+                if (item != null) item.enabled = visible;
             if (projectileLight != null) projectileLight.enabled = visible;
         }
 

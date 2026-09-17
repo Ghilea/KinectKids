@@ -9,6 +9,7 @@ namespace KinectKids3D
         private float trackZ;
         private bool activated;
         private bool punishIfMissed;
+        private float activatedAt;
 
         public void Configure(float z, GhostTarget shootable, bool punish = true)
         {
@@ -22,13 +23,16 @@ namespace KinectKids3D
         {
             if (Camera.main == null || target == null) return;
             float gap = trackZ - Camera.main.transform.position.z;
-            if (!activated && gap <= 24f && gap >= -2f)
+            if (!activated && gap <= 28f && gap >= -1f)
             {
                 activated = true;
+                activatedAt = Time.time;
                 target.SetTargetable(true);
             }
-            if (gap >= -4f) return;
-            if (punishIfMissed && target.Health > 0) SpokjaktenGame.ReportMonsterEscape();
+            if (gap >= -2f) return;
+            if (punishIfMissed && target.Health > 0 && activated
+                && Time.time - activatedAt >= 2.25f)
+                SpokjaktenGame.ReportMonsterEscape();
             Destroy(gameObject);
         }
     }

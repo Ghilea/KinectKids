@@ -118,10 +118,16 @@ namespace KinectKids3D
 
         private IEnumerator HitFlash()
         {
-            for (int i = 0; i < renderers.Count; i++) renderers[i].material.color = Color.white;
+            // Importerade modeller kan byta eller förstöra rendererdelar när en
+            // animation startas. Unitys "fake null" måste därför kontrolleras
+            // varje gång, annars fortsätter en träff-coroutine att skriva till en
+            // MeshRenderer/SkinnedMeshRenderer som inte längre finns.
+            for (int i = 0; i < renderers.Count; i++)
+                if (renderers[i] != null) renderers[i].material.color = Color.white;
             transform.localScale = Vector3.one * 1.12f;
             yield return new WaitForSeconds(0.11f);
-            for (int i = 0; i < renderers.Count; i++) renderers[i].material.color = baseColors[i];
+            for (int i = 0; i < renderers.Count && i < baseColors.Count; i++)
+                if (renderers[i] != null) renderers[i].material.color = baseColors[i];
             transform.localScale = Vector3.one;
         }
 

@@ -9,6 +9,7 @@ namespace KinectKids3D
         private float trackZ;
         private GhostTarget target;
         private bool activated;
+        private float activatedAt;
 
         public static void ResetStalker()
         {
@@ -42,13 +43,15 @@ namespace KinectKids3D
             }
             if (Camera.main == null || target == null) return;
             float gap = trackZ - Camera.main.transform.position.z;
-            if (!activated && gap <= 22f && gap >= -2f)
+            if (!activated && gap <= 28f && gap >= -1f)
             {
                 activated = true;
+                activatedAt = Time.time;
                 target.SetTargetable(true);
             }
-            if (gap >= -4f) return;
-            if (target.Health > 0) SpokjaktenGame.ReportMonsterEscape();
+            if (gap >= -2f) return;
+            if (target.Health > 0 && Time.time - activatedAt >= 2.25f)
+                SpokjaktenGame.ReportMonsterEscape();
             Destroy(gameObject);
         }
 

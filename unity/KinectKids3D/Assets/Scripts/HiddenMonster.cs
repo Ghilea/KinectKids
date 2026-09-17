@@ -23,6 +23,7 @@ namespace KinectKids3D
         private bool woke;
         private bool escaped;
         private GhostTarget shootable;
+        private float targetableSince = -1f;
 
         public static HiddenMonster Create(float z, int side, int route, HiddenMonsterKind kind)
         {
@@ -41,14 +42,15 @@ namespace KinectKids3D
             if (monster == null || Camera.main == null) return;
             float gap = trackZ - Camera.main.transform.position.z;
             float reveal = 0f;
-            if (gap <= 8.5f && gap >= 1.4f)
-                reveal = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(8.5f, 3.2f, gap));
-            else if (gap < 1.4f && gap >= -2.2f)
-                reveal = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(1.4f, -2.2f, gap));
+            if (gap <= 13f && gap >= 1.2f)
+                reveal = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(13f, 5.2f, gap));
+            else if (gap < 1.2f && gap >= -1.8f)
+                reveal = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(1.2f, -1.8f, gap));
 
             if (reveal > 0.12f)
             {
                 woke = true;
+                if (targetableSince < 0f) targetableSince = Time.time;
                 if (shootable != null) shootable.SetTargetable(true);
             }
             monster.localPosition = Vector3.Lerp(hiddenPosition, revealedPosition, reveal)
@@ -57,9 +59,10 @@ namespace KinectKids3D
                 Mathf.Sin(Time.time * 5f + phase) * 4f * reveal,
                 180f,
                 Mathf.Sin(Time.time * 9f + phase) * 7f * reveal);
-            if (woke && gap < -4f)
+            if (woke && gap < -2.2f)
             {
-                if (!escaped && shootable != null && shootable.Health > 0)
+                if (!escaped && shootable != null && shootable.Health > 0
+                    && Time.time - targetableSince >= 2.25f)
                 {
                     escaped = true;
                     SpokjaktenGame.ReportMonsterEscape();

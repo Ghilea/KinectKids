@@ -63,6 +63,7 @@ namespace KinectKids3D
             Color color = success ? new Color(0.1f, 1f, 0.42f) : new Color(1f, 0.12f, 0.08f);
             foreach (Renderer item in renderers)
             {
+                if (item == null) continue;
                 item.material.EnableKeyword("_EMISSION");
                 item.material.SetColor("_EmissionColor", color * 0.35f);
             }
@@ -106,7 +107,8 @@ namespace KinectKids3D
 
         private void SetVisualsVisible(bool visible)
         {
-            foreach (Renderer item in GetComponentsInChildren<Renderer>(true)) item.enabled = visible;
+            foreach (Renderer item in GetComponentsInChildren<Renderer>(true))
+                if (item != null) item.enabled = visible;
         }
 
         private void Build()

@@ -865,6 +865,9 @@ namespace KinectKids3D
                 Ray ray = rideCamera.ViewportPointToRay(new Vector3(sample.Position.x, 1f - sample.Position.y, 0));
                 UpdateReticleLight(player, ray);
                 GhostTarget target = FindAimTarget(ray, sample.Position);
+                PoseState playerPose;
+                bool attackBlocked = currentPoses.TryGetValue(player, out playerPose)
+                    && playerPose.DuckAmount >= 0.15f;
 
                 AimLock aimLock;
                 if (!aimLocks.TryGetValue(player, out aimLock))
@@ -872,13 +875,21 @@ namespace KinectKids3D
                     aimLock = new AimLock();
                     aimLocks[player] = aimLock;
                 }
-                if (target != null)
+                if (target != null && !attackBlocked)
                 {
                     aimLock.RecentTarget = target;
                     aimLock.LastTargetAt = Time.time;
                 }
 
-                if (target != null && target == aimLock.ChargeTarget)
+                if (attackBlocked)
+                {
+                    // En duckning är en ren undanmanöver: ingen gammal dwell-
+                    // laddning eller mållåsning får ge ett skott på vägen upp.
+                    aimLock.RecentTarget = null;
+                    aimLock.ChargeTarget = null;
+                    aimLock.Charge = 0f;
+                }
+                else if (target != null && target == aimLock.ChargeTarget)
                     aimLock.Charge += Time.deltaTime;
                 else
                 {
@@ -889,9 +900,10 @@ namespace KinectKids3D
                 // Med två spårade händer är rollerna fasta: sikthanden flyttar
                 // siktet och den andra handen avfyrar med ett framåtkast. Dwell-
                 // skottet finns bara kvar som tillgänglighetsreserv vid en hand/mus.
-                bool chargedShot = !dualHand && target != null && aimLock.Charge >= DwellShotSeconds;
+                bool chargedShot = !attackBlocked && !dualHand && target != null
+                    && aimLock.Charge >= DwellShotSeconds;
                 bool castGesture = dualHand ? castHand.Fire : sample.Fire;
-                if ((castGesture || chargedShot) && !handState.SwitchGestureActive
+                if (!attackBlocked && (castGesture || chargedShot) && !handState.SwitchGestureActive
                     && Time.time >= aimLock.CooldownUntil)
                 {
                     GhostTarget firedTarget = target;
@@ -966,10 +978,11 @@ namespace KinectKids3D
                 {
                     PlayerIndex = player,
                     Position = sample.Position,
-                    Progress = dualHand
+                    Progress = attackBlocked ? 0f : dualHand
                         ? castHand.GestureProgress
                         : Mathf.Max(sample.GestureProgress, aimLock.Charge / DwellShotSeconds),
                     OnTarget = target != null,
+                    AttackBlocked = attackBlocked,
                     IsRightHand = sample.HandId % 2 == 1,
                     CastHandIsRight = castHand.HandId % 2 == 1,
                     DualHand = dualHand
@@ -1260,6 +1273,7 @@ namespace KinectKids3D
                 string handLabel = reticle.IsRightHand ? "SIKTE: HÖGER" : "SIKTE: VÄNSTER";
                 if (reticle.DualHand)
                     handLabel += reticle.CastHandIsRight ? "  KAST: HÖGER" : "  KAST: VÄNSTER";
+                if (reticle.AttackBlocked) handLabel = "DUCKAR – ATTACK LÅST";
                 GUI.Label(new Rect(x - 105, y + 51, 210, 22), handLabel, smallStyle);
             }
 
@@ -1310,10 +1324,10 @@ namespace KinectKids3D
 
             if (gameTime < CountdownSeconds)
             {
-                GUI.Box(new Rect(Screen.width * 0.5f - 245, Screen.height * 0.5f - 92, 490, 184), string.Empty);
-                GUI.Label(new Rect(Screen.width * 0.5f - 220, Screen.height * 0.5f - 68, 440, 60),
+                GUI.Box(new Rect(Screen.width * 0.5f - 285, Screen.height * 0.5f - 115, 570, 230), string.Empty);
+                GUI.Label(new Rect(Screen.width * 0.5f - 250, Screen.height * 0.5f - 91, 500, 58),
                     Mathf.CeilToInt(CountdownSeconds - gameTime).ToString(), centerStyle);
-                GUI.Label(new Rect(Screen.width * 0.5f - 220, Screen.height * 0.5f + 8, 440, 58),
+                GUI.Label(new Rect(Screen.width * 0.5f - 255, Screen.height * 0.5f - 20, 510, 105),
                     "STÅ RAKT – KINECT KALIBRERAR DIG\n1: BARNLÄGE   2: NORMALT LÄGE", centerStyle);
             }
             else if (rideTime < 9f)
@@ -1764,6 +1778,7 @@ namespace KinectKids3D
             public bool IsRightHand;
             public bool CastHandIsRight;
             public bool DualHand;
+            public bool AttackBlocked;
         }
     }
 }
