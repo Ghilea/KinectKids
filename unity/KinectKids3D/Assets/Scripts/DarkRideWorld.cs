@@ -818,7 +818,26 @@ namespace KinectKids3D
             // kamera ska sjunka vid en duckning; annars ser det ut som om hela
             // vagnen faller genom golvet och vagnskanten försvinner ur bild.
             car.AddComponent<RideCarFollower>().Configure(cameraTransform);
-            CreateChildCube(car.transform, "Vagnkant", new Vector3(0, -0.85f, 1.35f), new Vector3(3.1f, 0.42f, 0.55f), wood);
+
+            // En komplett vagnskorg behövs eftersom duckningen flyttar ned huvudet
+            // och då visar mer av insidan. Tidigare fanns bara den övre framkanten,
+            // vilket gjorde att vagnen såg ihålig ut under den.
+            CreateChildCube(car.transform, "Vagnens träbotten", new Vector3(0f, -1.40f, 0.20f),
+                new Vector3(3.05f, 0.18f, 3.65f), wood);
+            CreateChildCube(car.transform, "Solid vagnfront", new Vector3(0f, -1.10f, 1.48f),
+                new Vector3(3.16f, 0.82f, 0.34f), wood);
+            CreateChildCube(car.transform, "Vänster vagnsida", new Vector3(-1.48f, -1.08f, 0.18f),
+                new Vector3(0.22f, 0.84f, 3.30f), wood);
+            CreateChildCube(car.transform, "Höger vagnsida", new Vector3(1.48f, -1.08f, 0.18f),
+                new Vector3(0.22f, 0.84f, 3.30f), wood);
+            CreateChildCube(car.transform, "Vagnens övre framkant", new Vector3(0f, -0.72f, 1.39f),
+                new Vector3(3.28f, 0.24f, 0.54f), wood);
+            CreateChildCube(car.transform, "Främre järnband", new Vector3(0f, -1.12f, 1.30f),
+                new Vector3(3.20f, 0.10f, 0.08f), rail);
+            CreateChildCube(car.transform, "Vänster kantbeslag", new Vector3(-1.58f, -0.83f, 0.25f),
+                new Vector3(0.10f, 0.13f, 2.75f), rail);
+            CreateChildCube(car.transform, "Höger kantbeslag", new Vector3(1.58f, -0.83f, 0.25f),
+                new Vector3(0.10f, 0.13f, 2.75f), rail);
             CreateChildCube(car.transform, "Vänster lykta", new Vector3(-1.2f, -0.58f, 1.08f), new Vector3(0.22f, 0.22f, 0.22f), amberGlow);
             CreateChildCube(car.transform, "Höger lykta", new Vector3(1.2f, -0.58f, 1.08f), new Vector3(0.22f, 0.22f, 0.22f), amberGlow);
             GameObject lanternLight = new GameObject("Vagnens svaga lyktljus");
