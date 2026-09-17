@@ -15,8 +15,10 @@ Det här är den nya 3D-grunden för KinectKids. Den ligger bredvid den tidigare
 - ståhöjd och kroppens mitt kalibreras automatiskt per spelare
 - en eller två spelare kan samla egna poäng
 - musreserv om Kinect inte kan öppnas
-- procedurgenererad spökmusik, miljöljud, kast- och träffljud
-- fladdermöss, flimrande ljus och fler rörliga delar i miljön
+- fritt licensierad OGG-musik när `Resources/Audio/RideMusic.ogg` finns, annars procedurgenererad reservmusik
+- fuktig sten, mossa, murket trä och rostiga räls som procedurgenererade texturer
+- spindelväv, vakande porträtt, kedjor, fladdermöss och flimrande ljus
+- separat 32-bitars Kinect-brygga för stabil SDK 1.8-kompatibilitet i 64-bitars Unity
 
 All grafik i den här första versionen byggs av riktiga 3D-objekt när spelet startar. Det gör att vi kan prova kamerafärd, avstånd, tempo och Kinect-sikte innan vi lägger tid på slutliga modeller och animationer.
 
@@ -29,7 +31,22 @@ All grafik i den här första versionen byggs av riktiga 3D-objekt när spelet s
 5. Stäng Kinect Explorer, Kinect Studio och den gamla KinectKids-appen.
 6. Tryck på **Play** i Unity.
 
-Kinect SDK 1.8 hittas automatiskt från den vanliga installationsmappen. Om sensorn inte kan starta växlar prototypen till musläge och visar orsaken uppe till vänster.
+Första gången Play trycks bygger Unity automatiskt `KinectBridge.exe` som x86 och startar den i bakgrunden. Bryggan skickar bara ledpositioner över datorns lokala loopback-adress; inga bilder sparas eller lämnar datorn. Om sensorn inte kan starta växlar prototypen till musläge och visar orsaken uppe till vänster.
+
+## Skapa en version för skolan
+
+Välj **KinectKids → Bygg skolversion för Windows** i Unity. Den färdiga mappen skapas i
+`unity\KinectKids3D\Build\Spokjakten3D`. Hela mappen kan kopieras till skolans dator och
+startas med `Spokjakten3D.exe`; skolan behöver **inte** installera Unity. Kinect SDK 1.8
+och Kinectens vanliga drivrutiner måste däremot finnas på datorn.
+
+## Musik
+
+Vi har valt [Free Horror Music Pack - SVL](https://shononoki.itch.io/free-horror-music-pack)
+av Shononoki. Paketets sida tillåter kommersiella och icke-kommersiella projekt utan krav
+på erkännande. Ladda ned OGG-paketet, välj en lämplig lugn loop och spara den som
+`Assets\Resources\Audio\RideMusic.ogg`. Spelet använder automatiskt reservmusiken tills
+den slutliga loopen har provlyssnats och valts.
 
 ## Kontroller
 
@@ -49,8 +66,8 @@ Kinect SDK 1.8 hittas automatiskt från den vanliga installationsmappen. Om sens
 
 Den här versionen är en **vertical slice/greybox**, inte slutgrafiken. Nästa steg efter att färden och Kinect-siktet har testats på din dator är:
 
-1. modulära 3D-miljöer och handgjorda figurer,
+1. modulära 3D-modeller och handgjorda figurer ovanpå det nya texturpasset,
 2. animationer och överraskningssekvenser,
-3. inspelad musik, röster och rumsliga ljudeffekter som ersätter prototypens procedurljud,
+3. röster och rumsliga ljudeffekter,
 4. fler sorters interaktiva mål och kombopoäng,
 5. barnmeny och färdig Windows-build som startas utan Unity.

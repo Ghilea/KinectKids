@@ -16,6 +16,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           [xml](Get-Content './src/KinectKids/KinectKids.csproj') | Out-Null
+          [xml](Get-Content './src/KinectBridge/KinectBridge.csproj') | Out-Null
           [xml](Get-Content './src/KinectKids/App.xaml') | Out-Null
           [xml](Get-Content './src/KinectKids/MainWindow.xaml') | Out-Null
           $project = [xml](Get-Content './src/KinectKids/KinectKids.csproj')
@@ -40,11 +41,14 @@ jobs:
             './unity/KinectKids3D/Assets/Scripts/DarkRideWorld.cs',
             './unity/KinectKids3D/Assets/Scripts/GhostTarget.cs',
             './unity/KinectKids3D/Assets/Scripts/KinectV1AimProvider.cs',
+            './unity/KinectKids3D/Assets/Scripts/KinectBridgeAimProvider.cs',
+            './unity/KinectKids3D/Assets/Scripts/HauntedTextureFactory.cs',
             './unity/KinectKids3D/Assets/Scripts/PlayerPose.cs',
             './unity/KinectKids3D/Assets/Scripts/RideHazard.cs',
             './unity/KinectKids3D/Assets/Scripts/HauntedProp.cs',
             './unity/KinectKids3D/Assets/Scripts/MagicBolt.cs',
-            './unity/KinectKids3D/Assets/Editor/KinectKidsProjectSetup.cs'
+            './unity/KinectKids3D/Assets/Editor/KinectKidsProjectSetup.cs',
+            './unity/KinectKids3D/Assets/Editor/KinectKidsWindowsBuild.cs'
           )
           foreach ($path in $required) {
             if (-not (Test-Path $path -PathType Leaf)) { throw "Unity-filen saknas: $path" }

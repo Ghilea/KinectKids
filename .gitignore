@@ -23,3 +23,6 @@ unity/KinectKids3D/MemoryCaptures/
 unity/KinectKids3D/Recordings/
 unity/KinectKids3D/*.csproj
 unity/KinectKids3D/*.sln
+unity/KinectKids3D/Assets/StreamingAssets/KinectBridge/*.exe
+unity/KinectKids3D/Assets/StreamingAssets/KinectBridge/*.config
+unity/KinectKids3D/Assets/StreamingAssets/KinectBridge/*.pdb

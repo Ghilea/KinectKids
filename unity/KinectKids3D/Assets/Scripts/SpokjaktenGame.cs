@@ -79,7 +79,7 @@ namespace KinectKids3D
 
         private void CreateInput()
         {
-            var kinect = new KinectV1AimProvider();
+            var kinect = new KinectBridgeAimProvider();
             if (kinect.TryStart())
             {
                 aimProvider = kinect;
@@ -113,9 +113,10 @@ namespace KinectKids3D
             ambience.Play();
 
             AudioSource music = gameObject.AddComponent<AudioSource>();
-            music.clip = CreateRideMusic();
+            AudioClip licensedMusic = Resources.Load<AudioClip>("Audio/RideMusic");
+            music.clip = licensedMusic != null ? licensedMusic : CreateRideMusic();
             music.loop = true;
-            music.volume = 0.32f;
+            music.volume = licensedMusic != null ? 0.42f : 0.32f;
             music.spatialBlend = 0;
             music.Play();
         }
@@ -383,7 +384,7 @@ namespace KinectKids3D
 
             GUI.Box(new Rect(18, 16, 430, 82), string.Empty);
             GUI.Label(new Rect(34, 23, 400, 34), "SPÖKJAKTEN 3D", titleStyle);
-            GUI.Label(new Rect(35, 58, 400, 32), inputStatus, smallStyle);
+            GUI.Label(new Rect(35, 58, Mathf.Max(400, Screen.width - 70), 42), inputStatus, smallStyle);
 
             GUI.Box(new Rect(Screen.width - 315, 16, 297, 78), string.Empty);
             GUI.Label(new Rect(Screen.width - 298, 23, 280, 32), "SPELARE 1   " + scores[0], hudStyle);

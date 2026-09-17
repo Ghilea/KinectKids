@@ -42,7 +42,7 @@ Vi ska bygga dessa spel i ordning baserat på komplexitet och pedagogisk värde:
     *   *Logik:* En renad version av Zombietåget med "spöken" istället för zombies, mörkare tema.
     *   *Mekanik:* Sikta, dra handen bakåt och gör en snabb kaströrelse framåt för att skjuta spökmagi. Att bara hålla handen på målet ger ingen träff.
     *   *Kroppshinder:* Spelaren måste ducka under bommar och luta kroppen åt angiven sida när faror kommer mot vagnen.
-    *   *Miljö:* Procedurgenererad prototypmusik, miljöljud, rörliga fladdermöss, flimrande lampor och överraskningshändelser längs rälsen.
+    *   *Miljö:* Fritt licensierad musik med lokal reservmusik, miljöljud, fuktig sten, mossa, murket trä, rost, spindelväv, rörliga fladdermöss, flimrande lampor och överraskningshändelser längs rälsen.
     *   *Tillgänglighet:* Kroppens mitt och ståhöjd kalibreras separat för varje spårad spelare. Mus och tangentbord finns kvar som testläge.
 5.  **Simon Säger: Rörelselektron**
     *   *Logik:* "Händer upp!", "Ducka!", "Sträck ut!".
@@ -69,6 +69,8 @@ Vi ska bygga dessa spel i ordning baserat på komplexitet och pedagogisk värde:
 #### Tekniska Krav för alla framtida versioner
 *   **Säkerhet:** Inga bilder lagras. Endå `SkeletonData` skickas till UI.
 *   **USB-kompatibilitet:** Måste fungera på USB 2.0 (baksida av PC). Hantera "Bandbredd-fel" snyggt med svenska meddelanden.
+*   **Unity/Kinect-kompatibilitet:** Unity kör som x64 och tar emot leddata från `KinectBridge.exe`, som kör Kinect SDK 1.8 som x86 över endast `127.0.0.1`. Ingen sensorbild skickas eller lagras.
+*   **Skoldistribution:** Skolor får en färdig Windows-mapp med EXE, datafiler och Kinect-brygga. Unity Hub eller Unity Editor får inte krävas på skoldatorn.
 *   **Kalibrering:** En enkel vy där barnen ställer sig för att kalibrera sensorn innan varje session.
 
 ### 5. NÄSTA STEG

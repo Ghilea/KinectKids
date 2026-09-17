@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProjectGuid>{5C8C68A7-F2C1-43CE-9CB6-C0449E04F886}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>KinectKids.Bridge</RootNamespace>
+    <AssemblyName>KinectBridge</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <LangVersion>7.3</LangVersion>
+    <PlatformTarget>x86</PlatformTarget>
+    <Prefer32Bit>true</Prefer32Bit>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="Microsoft.Kinect" Condition=" '$(UseKinectStub)' != 'true' ">
+      <HintPath Condition="Exists('$(KINECTSDK10_DIR)Assemblies\Microsoft.Kinect.dll')">$(KINECTSDK10_DIR)Assemblies\Microsoft.Kinect.dll</HintPath>
+      <HintPath Condition="!Exists('$(KINECTSDK10_DIR)Assemblies\Microsoft.Kinect.dll') And Exists('$(ProgramFiles(x86))\Microsoft SDKs\Kinect\v1.8\Assemblies\Microsoft.Kinect.dll')">$(ProgramFiles(x86))\Microsoft SDKs\Kinect\v1.8\Assemblies\Microsoft.Kinect.dll</HintPath>
+      <HintPath Condition="!Exists('$(KINECTSDK10_DIR)Assemblies\Microsoft.Kinect.dll') And !Exists('$(ProgramFiles(x86))\Microsoft SDKs\Kinect\v1.8\Assemblies\Microsoft.Kinect.dll')">$(ProgramFiles)\Microsoft SDKs\Kinect\v1.8\Assemblies\Microsoft.Kinect.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="KinectApi.Stub.cs" Condition=" '$(UseKinectStub)' == 'true' " />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

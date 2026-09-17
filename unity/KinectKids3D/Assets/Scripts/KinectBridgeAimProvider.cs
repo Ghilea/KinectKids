@@ -1,0 +1,319 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using UnityEngine;
+
+namespace KinectKids3D
+{
+    /// <summary>
+    /// Tar emot enbart ledpositioner från KinectBridge.exe via datorns loopback-adress.
+    /// Bryggan är x86 så att Kinect SDK 1.8 fungerar även när Unity körs som 64-bitarsprogram.
+    /// </summary>
+    public sealed class KinectBridgeAimProvider : IAimProvider
+    {
+        private const int Port = 17385;
+        private readonly object sync = new object();
+        private readonly List<AimSample> latest = new List<AimSample>(4);
+        private readonly List<PlayerPose> latestPoses = new List<PlayerPose>(2);
+        private readonly Dictionary<int, HandGestureState> gestures = new Dictionary<int, HandGestureState>();
+        private readonly ManualResetEvent ready = new ManualResetEvent(false);
+        private UdpClient receiver;
+        private Thread receiveThread;
+        private Process bridgeProcess;
+        private volatile bool stopping;
+        private bool disposed;
+        private string status = "Startar Kinect-bryggan…";
+
+        public bool IsAvailable { get; private set; }
+        public string Status => status;
+
+        public bool TryStart()
+        {
+            if (Application.platform != RuntimePlatform.WindowsEditor
+                && Application.platform != RuntimePlatform.WindowsPlayer)
+            {
+                status = "Kinect 360 stöds bara på Windows";
+                return false;
+            }
+
+            try
+            {
+                string executable = EnsureBridgeExecutable();
+                if (string.IsNullOrEmpty(executable)) return false;
+
+                receiver = new UdpClient(AddressFamily.InterNetwork);
+                receiver.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                receiver.Client.Bind(new IPEndPoint(IPAddress.Loopback, Port));
+                receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "KinectKids Kinect bridge" };
+                receiveThread.Start();
+
+                var start = new ProcessStartInfo
+                {
+                    FileName = executable,
+                    Arguments = "--parent " + Process.GetCurrentProcess().Id,
+                    WorkingDirectory = Path.GetDirectoryName(executable),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                bridgeProcess = Process.Start(start);
+                if (bridgeProcess == null) throw new InvalidOperationException("KinectBridge.exe kunde inte startas.");
+
+                if (!ready.WaitOne(TimeSpan.FromSeconds(7)))
+                {
+                    if (bridgeProcess.HasExited)
+                        status = "Kinect-bryggan stängdes före anslutning (kod " + bridgeProcess.ExitCode + ")";
+                    else
+                        status = "Kinect-bryggan svarade inte – kontrollera USB och stäng Kinect Explorer";
+                    Dispose();
+                    return false;
+                }
+
+                if (!IsAvailable)
+                {
+                    Dispose();
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception exception)
+            {
+                status = "Kinect-bryggan kunde inte starta: " + DeepestMessage(exception);
+                Dispose();
+                return false;
+            }
+        }
+
+        public IReadOnlyList<AimSample> GetAimSamples()
+        {
+            lock (sync) return latest.ToArray();
+        }
+
+        public IReadOnlyList<PlayerPose> GetPlayerPoses()
+        {
+            lock (sync) return latestPoses.ToArray();
+        }
+
+        private void ReceiveLoop()
+        {
+            try
+            {
+                var endpoint = new IPEndPoint(IPAddress.Loopback, 0);
+                while (!stopping)
+                {
+                    byte[] bytes = receiver.Receive(ref endpoint);
+                    if (!IPAddress.IsLoopback(endpoint.Address)) continue;
+                    ParsePacket(Encoding.UTF8.GetString(bytes));
+                }
+            }
+            catch (SocketException)
+            {
+                if (!stopping) status = "Kontakten med Kinect-bryggan bröts";
+            }
+            catch (ObjectDisposedException) { }
+            catch (Exception exception)
+            {
+                if (!stopping) status = "Kinect-bryggan gav fel: " + DeepestMessage(exception);
+            }
+        }
+
+        private void ParsePacket(string packet)
+        {
+            string[] lines = packet.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length == 0) return;
+            if (lines[0].StartsWith("S|", StringComparison.Ordinal))
+            {
+                string[] statusParts = lines[0].Split(new[] { '|' }, 3);
+                if (statusParts.Length >= 3)
+                {
+                    status = statusParts[2];
+                    if (statusParts[1] == "READY")
+                    {
+                        IsAvailable = true;
+                        ready.Set();
+                    }
+                    else if (statusParts[1] == "ERROR")
+                    {
+                        IsAvailable = false;
+                        ready.Set();
+                    }
+                }
+                return;
+            }
+            if (!lines[0].StartsWith("F|", StringComparison.Ordinal)) return;
+
+            var samples = new List<AimSample>(4);
+            var poses = new List<PlayerPose>(2);
+            DateTime now = DateTime.UtcNow;
+            for (int i = 1; i < lines.Length; i++)
+            {
+                string[] values = lines[i].Split('|');
+                if (values.Length != 15 || values[0] != "P") continue;
+                int player = ParseInt(values[1]);
+                long trackingId = ParseLong(values[2]);
+                poses.Add(new PlayerPose(player, trackingId, ParseFloat(values[3]), ParseFloat(values[4])));
+                AddHand(samples, player, player * 2, ParseFloat(values[7]), ParseFloat(values[8]),
+                    ParseFloat(values[9]), ParseFloat(values[10]), ParseFloat(values[5]), ParseFloat(values[6]), now);
+                AddHand(samples, player, player * 2 + 1, ParseFloat(values[11]), ParseFloat(values[12]),
+                    ParseFloat(values[13]), ParseFloat(values[14]), ParseFloat(values[5]), ParseFloat(values[6]), now);
+            }
+
+            lock (sync)
+            {
+                latest.Clear();
+                latest.AddRange(samples);
+                latestPoses.Clear();
+                latestPoses.AddRange(poses);
+            }
+            IsAvailable = true;
+            status = "Kinect 360 ansluten via säker 32-bitarsbrygga";
+            ready.Set();
+        }
+
+        private void AddHand(List<AimSample> output, int player, int handId, float x, float y,
+            float handY, float handZ, float shoulderY, float shoulderZ, DateTime now)
+        {
+            HandGestureState gesture;
+            if (!gestures.TryGetValue(handId, out gesture))
+            {
+                gesture = new HandGestureState();
+                gestures[handId] = gesture;
+            }
+
+            bool fire = false;
+            if (gesture.Initialized)
+            {
+                float dt = Mathf.Max(0.001f, (float)(now - gesture.LastAt).TotalSeconds);
+                float forwardSpeed = (gesture.LastDepth - handZ) / dt;
+                bool handIsReady = handY > shoulderY - 0.38f && handZ > shoulderZ - 0.13f;
+                if (handIsReady) gesture.Armed = true;
+                if (gesture.Armed && now >= gesture.CooldownUntil
+                    && forwardSpeed > 0.72f && handZ < shoulderZ - 0.17f)
+                {
+                    fire = true;
+                    gesture.Armed = false;
+                    gesture.CooldownUntil = now.AddMilliseconds(430);
+                }
+            }
+
+            gesture.Initialized = true;
+            gesture.LastDepth = handZ;
+            gesture.LastAt = now;
+            float progress = gesture.Armed ? Mathf.Clamp01((shoulderZ - handZ + 0.13f) / 0.32f) : 0f;
+            output.Add(new AimSample(player, handId,
+                new Vector2(Mathf.Clamp01(x), Mathf.Clamp01(y)), fire, progress));
+        }
+
+        private string EnsureBridgeExecutable()
+        {
+            string packaged = Path.Combine(Application.streamingAssetsPath, "KinectBridge", "KinectBridge.exe");
+            if (File.Exists(packaged)) return packaged;
+
+            string root = FindProjectRoot();
+            if (root == null)
+            {
+                status = "KinectBridge.exe saknas i programmet";
+                return null;
+            }
+            string executable = Path.Combine(root, "src", "KinectBridge", "bin", "Release", "KinectBridge.exe");
+            if (File.Exists(executable)) return executable;
+
+            string script = Path.Combine(root, "scripts", "Build-KinectBridge.ps1");
+            if (!File.Exists(script))
+            {
+                status = "Byggskriptet för Kinect-bryggan saknas";
+                return null;
+            }
+            status = "Bygger Kinect-bryggan första gången…";
+            using (Process build = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -ExecutionPolicy Bypass -File \"" + script + "\"",
+                WorkingDirectory = root,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            }))
+            {
+                if (build == null || !build.WaitForExit(120000) || build.ExitCode != 0)
+                {
+                    status = "Kinect-bryggan kunde inte byggas – kör scripts\\Build-KinectBridge.ps1";
+                    return null;
+                }
+            }
+            if (!File.Exists(executable))
+            {
+                status = "KinectBridge.exe skapades inte";
+                return null;
+            }
+            return executable;
+        }
+
+        private static string FindProjectRoot()
+        {
+            DirectoryInfo directory = new DirectoryInfo(Application.dataPath);
+            for (int i = 0; i < 8 && directory != null; i++, directory = directory.Parent)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "KinectKids.sln"))) return directory.FullName;
+            }
+            return null;
+        }
+
+        private static float ParseFloat(string value)
+        {
+            return float.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture);
+        }
+
+        private static int ParseInt(string value) => int.Parse(value, CultureInfo.InvariantCulture);
+        private static long ParseLong(string value) => long.Parse(value, CultureInfo.InvariantCulture);
+
+        private static string DeepestMessage(Exception exception)
+        {
+            while (exception.InnerException != null) exception = exception.InnerException;
+            return exception.Message;
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            stopping = true;
+            IsAvailable = false;
+            if (receiver != null)
+            {
+                receiver.Close();
+                receiver = null;
+            }
+            if (receiveThread != null && receiveThread.IsAlive) receiveThread.Join(500);
+            receiveThread = null;
+            if (bridgeProcess != null)
+            {
+                try { if (!bridgeProcess.HasExited) bridgeProcess.Kill(); }
+                catch { }
+                bridgeProcess.Dispose();
+                bridgeProcess = null;
+            }
+            ready.Dispose();
+            lock (sync)
+            {
+                latest.Clear();
+                latestPoses.Clear();
+            }
+        }
+
+        private sealed class HandGestureState
+        {
+            public bool Initialized;
+            public bool Armed;
+            public float LastDepth;
+            public DateTime LastAt;
+            public DateTime CooldownUntil;
+        }
+    }
+}

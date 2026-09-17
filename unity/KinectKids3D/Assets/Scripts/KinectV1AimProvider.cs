@@ -286,7 +286,8 @@ namespace KinectKids3D
 
         private static Exception Unwrap(Exception exception)
         {
-            while (exception is TargetInvocationException && exception.InnerException != null)
+            while ((exception is TargetInvocationException || exception is TypeInitializationException)
+                   && exception.InnerException != null)
                 exception = exception.InnerException;
             return exception;
         }

@@ -13,26 +13,30 @@ namespace KinectKids3D
         private readonly Material purpleGlow;
         private readonly Material greenGlow;
         private readonly Material amberGlow;
+        private readonly Material cobweb;
 
         public DarkRideWorld(Transform parent)
         {
             root = new GameObject("3D Dark Ride World").transform;
             root.SetParent(parent, false);
-            stone = MaterialOf(new Color(0.13f, 0.15f, 0.22f));
-            darkStone = MaterialOf(new Color(0.045f, 0.055f, 0.09f));
-            wood = MaterialOf(new Color(0.20f, 0.10f, 0.055f));
-            rail = MaterialOf(new Color(0.23f, 0.28f, 0.32f), 0.82f);
+            stone = TexturedMaterial(new Color(0.18f, 0.20f, 0.22f),
+                HauntedTextureFactory.DampStone(8, new Color(0.22f, 0.24f, 0.25f), new Color(0.028f, 0.033f, 0.038f)), 0.08f);
+            darkStone = TexturedMaterial(new Color(0.075f, 0.085f, 0.11f),
+                HauntedTextureFactory.DampStone(31, new Color(0.13f, 0.15f, 0.17f), new Color(0.016f, 0.022f, 0.030f)), 0.05f);
+            wood = TexturedMaterial(new Color(0.30f, 0.18f, 0.10f), HauntedTextureFactory.OldWood(17), 0f);
+            rail = TexturedMaterial(new Color(0.42f, 0.43f, 0.42f), HauntedTextureFactory.RustedMetal(23), 0.72f);
             purpleGlow = GlowMaterial(new Color(0.52f, 0.08f, 0.95f), 2.3f);
             greenGlow = GlowMaterial(new Color(0.05f, 1f, 0.46f), 2.1f);
             amberGlow = GlowMaterial(new Color(1f, 0.34f, 0.045f), 2.2f);
+            cobweb = GlowMaterial(new Color(0.24f, 0.28f, 0.30f), 0.32f);
         }
 
         public void Build(Camera rideCamera)
         {
             RenderSettings.fog = true;
-            RenderSettings.fogColor = new Color(0.012f, 0.018f, 0.045f);
+            RenderSettings.fogColor = new Color(0.009f, 0.014f, 0.027f);
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.023f;
+            RenderSettings.fogDensity = 0.028f;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = new Color(0.055f, 0.075f, 0.16f);
             RenderSettings.ambientEquatorColor = new Color(0.035f, 0.055f, 0.09f);
@@ -93,6 +97,8 @@ namespace KinectKids3D
             CreateFloatingOrb(38f, 3.1f, 2.2f, greenGlow);
             CreateBatSwarm(25f, -2.6f, 3.35f);
             CreateBatSwarm(44f, 2.4f, 2.75f);
+            CreateCobweb(20f, -1);
+            CreateWatchingPortrait(36f, 1);
         }
 
         private void BuildCrypt()
@@ -111,6 +117,9 @@ namespace KinectKids3D
             CreateFloatingOrb(71f, -2.8f, 3.1f, purpleGlow);
             CreateFloatingOrb(92f, 2.9f, 2.4f, greenGlow);
             CreateBatSwarm(63f, 2.2f, 3.2f);
+            CreateCobweb(59f, 1);
+            CreateCobweb(89f, -1);
+            CreateWatchingPortrait(77f, -1);
         }
 
         private void BuildMonsterWorkshop()
@@ -127,6 +136,8 @@ namespace KinectKids3D
                 CreateLamp(z + 4f, z % 18 < 1 ? -4.6f : 4.6f, new Color(0.1f, 1f, 0.35f));
             }
             CreateBatSwarm(128f, -2.3f, 3.65f);
+            CreateHangingChain(119f, -3.7f);
+            CreateHangingChain(138f, 3.8f);
         }
 
         private void BuildFinalHall()
@@ -136,6 +147,7 @@ namespace KinectKids3D
             CreateCube("Bossportal", new Vector3(endX, 2.7f, 174f), new Vector3(9f, 5.4f, 0.7f), darkStone);
             CreateSphere("Portal vänster", new Vector3(endX - 3f, 2.5f, 173.5f), Vector3.one * 0.7f, amberGlow);
             CreateSphere("Portal höger", new Vector3(endX + 3f, 2.5f, 173.5f), Vector3.one * 0.7f, amberGlow);
+            CreateCobweb(158f, 1);
         }
 
         private void CreateArch(float z, Material glow)
@@ -191,6 +203,48 @@ namespace KinectKids3D
                 HauntedProp.Attach(bat, HauntedMotion.Flutter, 0.35f + i * 0.025f, 2.7f + i * 0.3f);
             }
             HauntedProp.Attach(swarm, HauntedMotion.Flutter, 1.15f, 0.75f);
+        }
+
+        private void CreateCobweb(float z, int side)
+        {
+            float x = TrackCenter(z) + side * 5.42f;
+            Vector3 corner = new Vector3(x, 4.85f, z);
+            CreateBeam("Spindelväv kant", corner, corner + new Vector3(-side * 1.75f, 0, 0), 0.018f, cobweb);
+            CreateBeam("Spindelväv kant", corner, corner + new Vector3(0, -1.70f, 0), 0.018f, cobweb);
+            for (int i = 1; i <= 4; i++)
+            {
+                float t = i / 5f;
+                CreateBeam("Spindelväv tråd", corner,
+                    corner + new Vector3(-side * 1.72f * t, -1.68f * (1f - t), -0.03f), 0.009f, cobweb);
+            }
+        }
+
+        private void CreateWatchingPortrait(float z, int side)
+        {
+            float x = TrackCenter(z) + side * 5.42f;
+            CreateCube("Gammalt porträtt", new Vector3(x, 2.65f, z), new Vector3(0.14f, 2.15f, 1.45f), wood);
+            Material eye = GlowMaterial(new Color(0.80f, 0.025f, 0.018f), 2.7f);
+            float inward = -side * 0.095f;
+            CreateSphere("Vakande öga", new Vector3(x + inward, 2.83f, z - 0.22f), Vector3.one * 0.10f, eye);
+            CreateSphere("Vakande öga", new Vector3(x + inward, 2.83f, z + 0.22f), Vector3.one * 0.10f, eye);
+        }
+
+        private void CreateHangingChain(float z, float localX)
+        {
+            float x = TrackCenter(z) + localX;
+            for (int i = 0; i < 8; i++)
+            {
+                GameObject link = CreateSphere("Rostig kedjelänk", new Vector3(x, 5.12f - i * 0.32f, z),
+                    new Vector3(0.13f, 0.22f, 0.08f), rail);
+                link.transform.rotation = Quaternion.Euler(i % 2 == 0 ? 0 : 90, 0, 0);
+            }
+        }
+
+        private void CreateBeam(string name, Vector3 from, Vector3 to, float width, Material material)
+        {
+            Vector3 delta = to - from;
+            GameObject beam = CreateCube(name, (from + to) * 0.5f, new Vector3(width, width, delta.magnitude), material);
+            beam.transform.rotation = Quaternion.LookRotation(delta.normalized, Vector3.up);
         }
 
         private void CreateSign(float z, string text, Material material)
@@ -251,6 +305,15 @@ namespace KinectKids3D
             material.color = color;
             material.SetFloat("_Metallic", metallic);
             material.SetFloat("_Glossiness", metallic > 0 ? 0.78f : 0.2f);
+            return material;
+        }
+
+        private static Material TexturedMaterial(Color tint, Texture2D texture, float metallic)
+        {
+            Material material = MaterialOf(tint, metallic);
+            material.mainTexture = texture;
+            material.mainTextureScale = new Vector2(2.4f, 2.4f);
+            material.SetFloat("_Glossiness", metallic > 0 ? 0.42f : 0.08f);
             return material;
         }
 
