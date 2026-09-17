@@ -17,6 +17,7 @@ namespace KinectKids3D
         private Transform tether;
         private float phase;
         private int wallSide;
+        private bool revealed;
 
         public HazardKind Kind { get; private set; }
         public float TrackZ { get; private set; }
@@ -37,7 +38,16 @@ namespace KinectKids3D
             hazard.TrackZ = z;
             hazard.phase = Random.value * Mathf.PI * 2f;
             hazard.Build();
+            hazard.SetVisualsVisible(false);
             return hazard;
+        }
+
+        public bool Reveal()
+        {
+            if (revealed) return false;
+            revealed = true;
+            SetVisualsVisible(true);
+            return true;
         }
 
         public bool HasSucceeded(int playerIndex) => successfulPlayers.Contains(playerIndex);
@@ -63,7 +73,9 @@ namespace KinectKids3D
             if (movingPart == null) return;
             Camera camera = Camera.main;
             float gap = camera != null ? TrackZ - camera.transform.position.z : 20f;
-            float approach = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((4.6f - gap) / 3.6f));
+            float approach = revealed
+                ? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((4.0f - gap) / 3.25f))
+                : 0f;
             if (Kind == HazardKind.Duck)
             {
                 float spiderY = Mathf.Lerp(5.05f, 1.82f, approach);
@@ -90,6 +102,11 @@ namespace KinectKids3D
                     wallSide > 0 ? -90f : 90f,
                     Mathf.Sin(Time.time * 2.7f + phase) * 7f);
             }
+        }
+
+        private void SetVisualsVisible(bool visible)
+        {
+            foreach (Renderer item in GetComponentsInChildren<Renderer>(true)) item.enabled = visible;
         }
 
         private void Build()

@@ -17,7 +17,11 @@ namespace KinectKids3D
         private const float DwellShotSeconds = 0.58f;
         private static readonly float[] ScareDistances =
         {
-            26f, 57f, 91f, 124f, 144f, 165f, 184f, 218f, 242f, 270f, 299f, 326f
+            26f, 48f, 68f, 91f, 111f, 132f, 151f, 171f, 188f, 218f, 242f, 270f, 299f, 326f, 338f
+        };
+        private static readonly float[] EncounterDistances =
+        {
+            38f, 74f, 104f, 136f, 158f, 181f, 231f, 253f, 282f, 316f, 333f
         };
         private readonly List<GhostTarget> targets = new List<GhostTarget>();
         private readonly List<RideHazard> hazards = new List<RideHazard>();
@@ -55,6 +59,11 @@ namespace KinectKids3D
         private AudioClip movementSuccessSound;
         private AudioClip collisionSound;
         private AudioClip scareSound;
+        private AudioClip hazardCueSound;
+        private AudioClip doorCreakSound;
+        private AudioClip chainRattleSound;
+        private AudioClip batRushSound;
+        private AudioClip phantomSound;
         private AudioSource ghostVoice;
         private AudioClip[] ghostSounds;
         private float nextGhostSoundAt;
@@ -63,6 +72,7 @@ namespace KinectKids3D
         private float cameraDuck;
         private float cameraLean;
         private int nextScareIndex;
+        private int nextEncounterIndex;
         private string actionMessage;
         private float actionMessageUntil;
         private BossProjectile bossProjectile;
@@ -130,6 +140,11 @@ namespace KinectKids3D
             movementSuccessSound = CreateTone("Undanmanöver", 880f, 0.22f, 0.20f);
             collisionSound = CreateNoiseBurst("Krock", 0.34f, 0.26f, 9001);
             scareSound = CreateNoiseBurst("Överraskning", 0.25f, 0.11f, 4404);
+            hazardCueSound = CreateWarningSound();
+            doorCreakSound = CreateCreakSound();
+            chainRattleSound = CreateMetalRattle();
+            batRushSound = CreateNoiseBurst("Fladdermöss", 0.72f, 0.14f, 7281);
+            phantomSound = CreateGhostVoice("Vålnad nära vagnen", 1.22f, 96f, 3108);
 
             AudioSource ambience = gameObject.AddComponent<AudioSource>();
             ambience.clip = CreateAmbience();
@@ -146,6 +161,9 @@ namespace KinectKids3D
             music.volume = licensedMusic != null ? 0.42f : 0.32f;
             music.spatialBlend = 0;
             music.Play();
+            Debug.Log(licensedMusic != null
+                ? "Spökjakten spelar musikfilen: " + licensedMusic.name
+                : "Ingen importerad musik hittades; procedurmusiken används som reserv.");
 
             ghostVoice = gameObject.AddComponent<AudioSource>();
             ghostVoice.playOnAwake = false;
@@ -186,6 +204,7 @@ namespace KinectKids3D
             cameraDuck = 0f;
             cameraLean = 0f;
             nextScareIndex = 0;
+            nextEncounterIndex = 0;
             nextGhostSoundAt = Time.time + UnityEngine.Random.Range(4.5f, 7.5f);
             actionMessage = string.Empty;
             actionMessageUntil = 0;
@@ -197,6 +216,7 @@ namespace KinectKids3D
             routeCandidate = 0;
             routeCandidateSince = 0f;
             routeHazardsAdded = false;
+            RouteDoor.OpenRoute(0);
             hazards.Add(RideHazard.Create(HazardKind.Duck, 43f));
             hazards.Add(RideHazard.Create(HazardKind.DodgeLeft, 78f));
             hazards.Add(RideHazard.Create(HazardKind.DodgeRight, 111f));
@@ -365,6 +385,8 @@ namespace KinectKids3D
             actionMessage = selectedRoute < 0 ? "VÄNSTRA HEMLIGA GÅNGEN!" : "HÖGRA HEMLIGA GÅNGEN!";
             actionMessageUntil = Time.time + 2.1f;
             effects.PlayOneShot(movementSuccessSound);
+            effects.PlayOneShot(doorCreakSound, 0.86f);
+            RouteDoor.OpenRoute(selectedRoute);
 
             if (routeHazardsAdded) return;
             routeHazardsAdded = true;
@@ -420,6 +442,9 @@ namespace KinectKids3D
                     && (currentHazard == null || gap < currentHazard.TrackZ - distance))
                     currentHazard = hazard;
 
+                if (gap <= QuickEventCueDistance && gap >= QuickEventPassedDistance && hazard.Reveal())
+                    effects.PlayOneShot(hazardCueSound, 0.78f);
+
                 if (gap <= QuickEventActionDistance && gap >= QuickEventPassedDistance)
                 {
                     foreach (KeyValuePair<int, PoseState> pair in currentPoses)
@@ -460,13 +485,28 @@ namespace KinectKids3D
 
         private void UpdateEnvironmentEvents()
         {
-            if (nextScareIndex >= ScareDistances.Length || rideDistance < ScareDistances[nextScareIndex]) return;
-            int side = UnityEngine.Random.value < 0.5f ? -1 : 1;
-            nextScareIndex++;
-            SideScare.Create(rideCamera.transform, side);
-            effects.PlayOneShot(scareSound);
-            PlayGhostSound(side, 0.82f);
-            cameraShakeUntil = Mathf.Max(cameraShakeUntil, Time.time + 0.22f);
+            if (nextScareIndex < ScareDistances.Length && rideDistance >= ScareDistances[nextScareIndex])
+            {
+                int side = UnityEngine.Random.value < 0.5f ? -1 : 1;
+                nextScareIndex++;
+                SideScare.Create(rideCamera.transform, side);
+                effects.PlayOneShot(scareSound);
+                PlayGhostSound(side, 0.82f);
+                cameraShakeUntil = Mathf.Max(cameraShakeUntil, Time.time + 0.22f);
+            }
+
+            if (nextEncounterIndex >= EncounterDistances.Length
+                || rideDistance < EncounterDistances[nextEncounterIndex]) return;
+            int encounterSide = nextEncounterIndex % 2 == 0 ? -1 : 1;
+            HauntedEncounterKind kind = (HauntedEncounterKind)(nextEncounterIndex % 3);
+            nextEncounterIndex++;
+            HauntedEncounter.Create(rideCamera.transform, kind, encounterSide);
+            AudioClip sound = kind == HauntedEncounterKind.BatBurst
+                ? batRushSound
+                : kind == HauntedEncounterKind.SwingingChain ? chainRattleSound : phantomSound;
+            effects.panStereo = encounterSide * 0.58f;
+            effects.PlayOneShot(sound, 0.74f);
+            effects.panStereo = 0f;
         }
 
         private void UpdateGhostAudio()
@@ -741,7 +781,7 @@ namespace KinectKids3D
                 DrawMovementCue(currentHazard.Kind, Mathf.InverseLerp(QuickEventCueDistance, 0f, gap));
             }
 
-            if (bossProjectile != null && bossProjectile.Progress >= 0.32f)
+            if (bossProjectile != null)
             {
                 DrawMovementCue(bossProjectile.Kind, bossProjectile.Progress);
             }
@@ -1029,6 +1069,68 @@ namespace KinectKids3D
                     + rasp * 0.025f) * envelope;
             }
             AudioClip clip = AudioClip.Create(clipName, length, 1, sampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateWarningSound()
+        {
+            const int sampleRate = 22050;
+            const float duration = 0.58f;
+            int length = Mathf.CeilToInt(sampleRate * duration);
+            float[] samples = new float[length];
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)sampleRate;
+                float envelope = Mathf.Sin(i / (float)length * Mathf.PI);
+                float pulse = 0.45f + Mathf.Max(0f, Mathf.Sin(t * 13f * Mathf.PI)) * 0.55f;
+                samples[i] = (Mathf.Sin(t * 520f * Mathf.PI * 2f) * 0.08f
+                    + Mathf.Sin(t * 780f * Mathf.PI * 2f) * 0.035f) * envelope * pulse;
+            }
+            AudioClip clip = AudioClip.Create("Varning inför rörelsehinder", length, 1, sampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateCreakSound()
+        {
+            const int sampleRate = 22050;
+            const float duration = 1.85f;
+            int length = Mathf.CeilToInt(sampleRate * duration);
+            float[] samples = new float[length];
+            var random = new System.Random(5531);
+            float rough = 0f;
+            float phase = 0f;
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)sampleRate;
+                float normalized = i / (float)length;
+                float envelope = Mathf.Sin(normalized * Mathf.PI);
+                rough = Mathf.Lerp(rough, (float)random.NextDouble() * 2f - 1f, 0.055f);
+                phase += (72f + Mathf.Sin(t * 5.2f) * 24f) / sampleRate * Mathf.PI * 2f;
+                samples[i] = (Mathf.Sin(phase) * 0.07f + rough * 0.075f) * envelope;
+            }
+            AudioClip clip = AudioClip.Create("Tung port öppnas", length, 1, sampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateMetalRattle()
+        {
+            const int sampleRate = 22050;
+            const float duration = 1.18f;
+            int length = Mathf.CeilToInt(sampleRate * duration);
+            float[] samples = new float[length];
+            var random = new System.Random(8802);
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)sampleRate;
+                float hit = Mathf.Pow(Mathf.Max(0f, Mathf.Sin(t * 19f * Mathf.PI)), 7f);
+                float metal = Mathf.Sin(t * 1360f * Mathf.PI * 2f) + Mathf.Sin(t * 1870f * Mathf.PI * 2f) * 0.55f;
+                float noise = (float)random.NextDouble() * 2f - 1f;
+                samples[i] = (metal * 0.045f + noise * 0.022f) * hit * (1f - i / (float)length);
+            }
+            AudioClip clip = AudioClip.Create("Kedjor skramlar", length, 1, sampleRate, false);
             clip.SetData(samples, 0);
             return clip;
         }

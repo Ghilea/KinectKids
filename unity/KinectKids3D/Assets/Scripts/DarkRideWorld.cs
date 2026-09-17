@@ -18,6 +18,7 @@ namespace KinectKids3D
         private readonly Material greenGlow;
         private readonly Material amberGlow;
         private readonly Material cobweb;
+        private static Texture2D softMistTexture;
 
         public DarkRideWorld(Transform parent)
         {
@@ -27,13 +28,13 @@ namespace KinectKids3D
             if (castleStone != null) castleStone.wrapMode = TextureWrapMode.Repeat;
             if (castleRoad != null) castleRoad.wrapMode = TextureWrapMode.Repeat;
             root.SetParent(parent, false);
-            stone = TexturedMaterial(new Color(0.92f, 0.94f, 0.96f),
+            stone = TexturedMaterial(new Color(0.58f, 0.60f, 0.63f),
                 castleStone != null ? castleStone : HauntedTextureFactory.DampStone(8,
                     new Color(0.22f, 0.24f, 0.25f), new Color(0.028f, 0.033f, 0.038f)), 0.08f);
-            darkStone = TexturedMaterial(new Color(0.38f, 0.41f, 0.46f),
+            darkStone = TexturedMaterial(new Color(0.19f, 0.21f, 0.24f),
                 castleStone != null ? castleStone : HauntedTextureFactory.DampStone(31,
                     new Color(0.13f, 0.15f, 0.17f), new Color(0.016f, 0.022f, 0.030f)), 0.05f);
-            road = TexturedMaterial(new Color(0.90f, 0.87f, 0.80f),
+            road = TexturedMaterial(new Color(0.46f, 0.44f, 0.40f),
                 castleRoad != null ? castleRoad : HauntedTextureFactory.DampStone(51,
                     new Color(0.26f, 0.27f, 0.25f), new Color(0.035f, 0.040f, 0.037f)), 0.03f);
             wood = TexturedMaterial(new Color(0.30f, 0.18f, 0.10f), HauntedTextureFactory.OldWood(17), 0f);
@@ -49,11 +50,13 @@ namespace KinectKids3D
             RenderSettings.fog = true;
             RenderSettings.fogColor = new Color(0.0005f, 0.0007f, 0.0015f);
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.052f;
+            RenderSettings.fogDensity = 0.064f;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.0018f, 0.0022f, 0.004f);
-            RenderSettings.ambientEquatorColor = new Color(0.0012f, 0.0015f, 0.0025f);
-            RenderSettings.ambientGroundColor = new Color(0.0004f, 0.0005f, 0.0008f);
+            RenderSettings.ambientSkyColor = new Color(0.00035f, 0.00042f, 0.0007f);
+            RenderSettings.ambientEquatorColor = new Color(0.00022f, 0.00028f, 0.00042f);
+            RenderSettings.ambientGroundColor = new Color(0.00008f, 0.00009f, 0.00014f);
+            RenderSettings.ambientIntensity = 0.08f;
+            RenderSettings.reflectionIntensity = 0f;
 
             BuildTrack();
             BuildEntranceHall();
@@ -242,6 +245,9 @@ namespace KinectKids3D
             CreateSphere("Höger vägvisare", new Vector3(forkX + 2.4f, 2.5f, 205f),
                 Vector3.one * 0.34f, purpleGlow);
 
+            RouteDoor.Create(218f, -1, wood, rail, greenGlow).transform.SetParent(root, true);
+            RouteDoor.Create(218f, 1, wood, rail, purpleGlow).transform.SetParent(root, true);
+
             for (int route = -1; route <= 1; route += 2)
             {
                 for (float z = 214f; z < 300f; z += 11f)
@@ -375,9 +381,9 @@ namespace KinectKids3D
             Light light = lightObject.AddComponent<Light>();
             light.type = LightType.Point;
             light.color = new Color(1f, 0.30f, 0.055f);
-            light.intensity = 2.15f;
-            light.range = 5.25f;
-            light.shadows = LightShadows.None;
+            light.intensity = 2.45f;
+            light.range = 5.6f;
+            light.shadows = LightShadows.Soft;
             HauntedProp.Attach(lightObject, HauntedMotion.Flicker, 0f, Random.Range(7f, 11f));
         }
 
@@ -481,22 +487,35 @@ namespace KinectKids3D
             mist.transform.SetParent(root, false);
             mist.transform.position = new Vector3(TrackCenter(z, route), 0.18f, z);
             ParticleSystem particles = mist.AddComponent<ParticleSystem>();
+            particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ParticleSystem.MainModule main = particles.main;
             main.loop = true;
             main.duration = 7f;
             main.startLifetime = new ParticleSystem.MinMaxCurve(5.5f, 9f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.05f, 0.18f);
-            main.startSize = new ParticleSystem.MinMaxCurve(1.6f, 3.8f);
+            main.startSize = new ParticleSystem.MinMaxCurve(2.2f, 5.2f);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
             main.startColor = new ParticleSystem.MinMaxGradient(
-                new Color(0.16f, 0.19f, 0.20f, 0.025f),
-                new Color(0.30f, 0.34f, 0.31f, 0.075f));
-            main.maxParticles = 55;
+                new Color(0.11f, 0.14f, 0.15f, 0.018f),
+                new Color(0.24f, 0.28f, 0.27f, 0.060f));
+            main.maxParticles = 72;
 
             ParticleSystem.EmissionModule emission = particles.emission;
-            emission.rateOverTime = 5.5f;
+            emission.rateOverTime = 7.5f;
             ParticleSystem.ShapeModule shape = particles.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
             shape.scale = new Vector3(8.5f, 0.30f, 8f);
+
+            ParticleSystem.VelocityOverLifetimeModule velocity = particles.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.x = new ParticleSystem.MinMaxCurve(-0.10f, 0.10f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.08f, 0.08f);
+
+            ParticleSystem.NoiseModule noise = particles.noise;
+            noise.enabled = true;
+            noise.strength = new ParticleSystem.MinMaxCurve(0.08f, 0.22f);
+            noise.frequency = 0.18f;
+            noise.scrollSpeed = 0.08f;
 
             ParticleSystemRenderer renderer = particles.GetComponent<ParticleSystemRenderer>();
             Shader shader = Shader.Find("Particles/Standard Unlit");
@@ -504,11 +523,49 @@ namespace KinectKids3D
             if (shader != null)
             {
                 renderer.material = new Material(shader);
-                if (renderer.material.HasProperty("_Color"))
-                    renderer.material.SetColor("_Color", new Color(0.22f, 0.26f, 0.25f, 0.055f));
+                Material mistMaterial = renderer.material;
+                Texture2D texture = GetSoftMistTexture();
+                if (mistMaterial.HasProperty("_MainTex")) mistMaterial.SetTexture("_MainTex", texture);
+                if (mistMaterial.HasProperty("_BaseMap")) mistMaterial.SetTexture("_BaseMap", texture);
+                if (mistMaterial.HasProperty("_Color"))
+                    mistMaterial.SetColor("_Color", new Color(0.20f, 0.24f, 0.24f, 0.10f));
+                if (mistMaterial.HasProperty("_ZWrite")) mistMaterial.SetFloat("_ZWrite", 0f);
+                if (mistMaterial.HasProperty("_SrcBlend"))
+                    mistMaterial.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                if (mistMaterial.HasProperty("_DstBlend"))
+                    mistMaterial.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                mistMaterial.EnableKeyword("_ALPHABLEND_ON");
+                mistMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             }
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            renderer.sortingOrder = -2;
             particles.Play();
+        }
+
+        private static Texture2D GetSoftMistTexture()
+        {
+            if (softMistTexture != null) return softMistTexture;
+            const int size = 64;
+            softMistTexture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Mjuk procedurdimma",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear
+            };
+            var random = new System.Random(1947);
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float nx = (x + 0.5f) / size * 2f - 1f;
+                float ny = (y + 0.5f) / size * 2f - 1f;
+                float distance = Mathf.Sqrt(nx * nx + ny * ny);
+                float edge = 1f - Mathf.SmoothStep(0.16f, 0.98f, distance);
+                float cloud = 0.80f + (float)random.NextDouble() * 0.20f;
+                float alpha = Mathf.Clamp01(edge * cloud);
+                softMistTexture.SetPixel(x, y, new Color(0.72f, 0.79f, 0.80f, alpha));
+            }
+            softMistTexture.Apply(false, true);
+            return softMistTexture;
         }
 
         private void CreateWatchingPortrait(float z, int side, int route = 0)
@@ -559,8 +616,8 @@ namespace KinectKids3D
             Light light = lanternLight.AddComponent<Light>();
             light.type = LightType.Spot;
             light.color = new Color(1f, 0.24f, 0.035f);
-            light.intensity = 0.82f;
-            light.range = 8.5f;
+            light.intensity = 0.22f;
+            light.range = 3.8f;
             light.spotAngle = 58f;
             light.shadows = LightShadows.None;
             HauntedProp.Attach(lanternLight, HauntedMotion.Flicker, 0f, 8.2f);

@@ -9,6 +9,8 @@ namespace KinectKids3D
         private float startedAt;
         private float duration;
         private Transform visual;
+        private Light projectileLight;
+        private bool revealed;
 
         public HazardKind Kind { get; private set; }
         public float Progress { get; private set; }
@@ -27,6 +29,7 @@ namespace KinectKids3D
             projectile.duration = 2.90f;
             projectile.startedAt = Time.time;
             projectile.Build();
+            projectile.SetVisualsVisible(false);
             return projectile;
         }
 
@@ -34,6 +37,11 @@ namespace KinectKids3D
         {
             if (Arrived) return;
             Progress = Mathf.Clamp01((Time.time - startedAt) / duration);
+            if (!revealed && Progress >= 0.14f)
+            {
+                revealed = true;
+                SetVisualsVisible(true);
+            }
             float eased = Progress * Progress * (3f - 2f * Progress);
             Vector3 arc = Vector3.up * Mathf.Sin(Progress * Mathf.PI) * 2.2f;
             transform.position = Vector3.Lerp(start, end, eased) + arc;
@@ -70,11 +78,17 @@ namespace KinectKids3D
                     Mathf.Sin(angle) * 0.48f, 0.34f), new Vector3(0.10f, 0.34f, 0.10f), glow,
                     Quaternion.Euler(0f, 0f, -angle * Mathf.Rad2Deg));
             }
-            Light light = gameObject.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = Kind == HazardKind.Duck ? new Color(1f, 0.16f, 0.02f) : new Color(0.54f, 0.05f, 1f);
-            light.range = 5.5f;
-            light.intensity = 3.1f;
+            projectileLight = gameObject.AddComponent<Light>();
+            projectileLight.type = LightType.Point;
+            projectileLight.color = Kind == HazardKind.Duck ? new Color(1f, 0.16f, 0.02f) : new Color(0.54f, 0.05f, 1f);
+            projectileLight.range = 5.5f;
+            projectileLight.intensity = 3.1f;
+        }
+
+        private void SetVisualsVisible(bool visible)
+        {
+            foreach (Renderer item in GetComponentsInChildren<Renderer>(true)) item.enabled = visible;
+            if (projectileLight != null) projectileLight.enabled = visible;
         }
 
         private void AddPart(PrimitiveType type, string partName, Vector3 position, Vector3 scale,
