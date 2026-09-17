@@ -10,16 +10,21 @@ namespace KinectKids3D
         private Quaternion rightClosed;
         private float openAmount;
         private bool opening;
+        private bool automatic;
+        private float trackZ;
 
         public int Route { get; private set; }
 
-        public static RouteDoor Create(float z, int route, Material wood, Material metal, Material glow)
+        public static RouteDoor Create(float z, int route, Material wood, Material metal, Material glow,
+            bool automatic = false)
         {
             GameObject root = new GameObject(route < 0 ? "Vänster vägport" : "Höger vägport");
             root.transform.position = new Vector3(DarkRideWorld.TrackCenter(z, route), 0f, z);
             root.transform.rotation = DarkRideWorld.TrackRotation(z, route);
             RouteDoor door = root.AddComponent<RouteDoor>();
             door.Route = route;
+            door.automatic = automatic;
+            door.trackZ = z;
             door.Build(wood, metal, glow);
             return door;
         }
@@ -27,11 +32,13 @@ namespace KinectKids3D
         public static void OpenRoute(int selectedRoute)
         {
             foreach (RouteDoor door in Object.FindObjectsByType<RouteDoor>(FindObjectsSortMode.None))
-                door.opening = door.Route == selectedRoute;
+                if (!door.automatic) door.opening = door.Route == selectedRoute;
         }
 
         private void Update()
         {
+            if (automatic && Camera.main != null)
+                opening = trackZ - Camera.main.transform.position.z <= 11f;
             float target = opening ? 1f : 0f;
             openAmount = Mathf.MoveTowards(openAmount, target, Time.deltaTime * 0.62f);
             float eased = openAmount * openAmount * (3f - 2f * openAmount);
@@ -60,8 +67,19 @@ namespace KinectKids3D
             leftClosed = leftLeaf.localRotation;
             rightClosed = rightLeaf.localRotation;
 
-            AddPart(leftLeaf, "Massiv vänsterdörr", new Vector3(2.02f, 2.55f, 0f), new Vector3(4.0f, 4.82f, 0.34f), wood);
-            AddPart(rightLeaf, "Massiv högerdörr", new Vector3(-2.02f, 2.55f, 0f), new Vector3(4.0f, 4.82f, 0.34f), wood);
+            GameObject importedLeft = ImportedModelFactory.Create(
+                "Models/KenneyGraveyard/crypt-door", leftLeaf, "Vänster riktig kryptdörr",
+                new Vector3(2.02f, 2.55f, 0f), 4.75f, Quaternion.identity);
+            GameObject importedRight = ImportedModelFactory.Create(
+                "Models/KenneyGraveyard/crypt-door", rightLeaf, "Höger riktig kryptdörr",
+                new Vector3(-2.02f, 2.55f, 0f), 4.75f, Quaternion.Euler(0f, 180f, 0f));
+            if (importedLeft == null || importedRight == null)
+            {
+                if (importedLeft != null) Destroy(importedLeft);
+                if (importedRight != null) Destroy(importedRight);
+                AddPart(leftLeaf, "Massiv vänsterdörr", new Vector3(2.02f, 2.55f, 0f), new Vector3(4.0f, 4.82f, 0.34f), wood);
+                AddPart(rightLeaf, "Massiv högerdörr", new Vector3(-2.02f, 2.55f, 0f), new Vector3(4.0f, 4.82f, 0.34f), wood);
+            }
             for (int side = -1; side <= 1; side += 2)
             {
                 Transform leaf = side < 0 ? leftLeaf : rightLeaf;

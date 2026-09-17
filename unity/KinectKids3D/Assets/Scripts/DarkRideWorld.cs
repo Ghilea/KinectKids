@@ -172,6 +172,7 @@ namespace KinectKids3D
             CreateSign(14f, "SPÖKJAKTEN 3D", amberGlow);
             CreateArmor(22f, -1);
             CreateArmor(31f, 1);
+            WallDoorScare.Create(38f, -1, 0);
             CreateBatSwarm(25f, -2.6f, 3.35f);
             CreateBatSwarm(44f, 2.4f, 2.75f);
             CreateCobweb(20f, -1);
@@ -187,8 +188,7 @@ namespace KinectKids3D
                 float center = TrackCenter(z);
                 for (int side = -1; side <= 1; side += 2)
                 {
-                    GameObject grave = CreateCube("Lysande gravsten", new Vector3(center + side * 3.5f, 0.55f, z + 2f),
-                        new Vector3(0.85f, 1.15f, 0.28f), stone, Quaternion.Euler(0, side * 12f, side * 5f));
+                    GameObject grave = CreateGravestone(z + 2f, side, 0, (int)z + side);
                     CreateSphere("Spökeld", grave.transform.position + Vector3.up * 0.95f, Vector3.one * 0.24f, greenGlow);
                 }
             }
@@ -197,6 +197,9 @@ namespace KinectKids3D
             CreateCobweb(89f, -1);
             CreateWatchingPortrait(77f, -1);
             CreateArmor(84f, 1);
+            WallDoorScare.Create(94f, 1, 0);
+            CreateGraveyardProp("Models/KenneyGraveyard/coffin-old", 71f, -1, 0, 2.25f, 8f);
+            CreateGraveyardProp("Models/KenneyGraveyard/altar-stone", 98f, 1, 0, 2.1f, -7f);
             CreateCastleGate(103f);
         }
 
@@ -213,6 +216,7 @@ namespace KinectKids3D
             CreateCastleTower(132f, 1);
             CreateArmor(116f, 1);
             CreateArmor(137f, -1);
+            WallDoorScare.Create(126f, -1, 0);
             CreateBatSwarm(128f, -2.3f, 3.65f);
             CreateHangingChain(119f, -3.7f);
             CreateHangingChain(138f, 3.8f);
@@ -232,6 +236,8 @@ namespace KinectKids3D
             HiddenMonster.Create(161f, 1, 0, HiddenMonsterKind.Portrait);
             HiddenMonster.Create(179f, -1, 0, HiddenMonsterKind.Cabinet);
             HiddenMonster.Create(196f, 1, 0, HiddenMonsterKind.Portrait);
+            WallDoorScare.Create(174f, 1, 0);
+            CreateWatchingPortrait(190f, -1);
             CreateMist(158f, 0);
             CreateMist(188f, 0);
         }
@@ -262,6 +268,9 @@ namespace KinectKids3D
                 HiddenMonster.Create(235f, route < 0 ? 1 : -1, route, HiddenMonsterKind.Cabinet);
                 HiddenMonster.Create(258f, route < 0 ? -1 : 1, route, HiddenMonsterKind.Tomb);
                 HiddenMonster.Create(289f, route < 0 ? 1 : -1, route, HiddenMonsterKind.Portrait);
+                WallDoorScare.Create(route < 0 ? 250f : 279f, route < 0 ? -1 : 1, route);
+                CreateGraveyardProp(route < 0 ? "Models/KenneyGraveyard/urn-round" : "Models/KenneyGraveyard/pumpkin-carved",
+                    244f, route < 0 ? 1 : -1, route, 1.25f, route * 12f);
                 CreateMist(222f, route);
                 CreateMist(274f, route);
             }
@@ -278,6 +287,9 @@ namespace KinectKids3D
             CreateCobweb(318f, -1);
             CreateCobweb(329f, 1);
             HiddenMonster.Create(321f, -1, 0, HiddenMonsterKind.Tomb);
+            WallDoorScare.Create(327f, 1, 0);
+            CreateGraveyardProp("Models/KenneyGraveyard/gravestone-broken", 317f, 1, 0, 1.65f, -9f);
+            CreateGraveyardProp("Models/KenneyGraveyard/shovel-dirt", 330f, -1, 0, 1.75f, 12f);
             CreateMist(315f, 0);
             CreateMist(328f, 0);
         }
@@ -294,9 +306,7 @@ namespace KinectKids3D
             CreateArmor(342f, 1);
             float endZ = TrackLength - 4f;
             float endX = TrackCenter(endZ);
-            CreateCube("Bossportal", new Vector3(endX, 2.7f, endZ), new Vector3(9f, 5.4f, 0.7f), darkStone);
-            CreateSphere("Portal vänster", new Vector3(endX - 3f, 2.5f, endZ - 0.5f), Vector3.one * 0.7f, amberGlow);
-            CreateSphere("Portal höger", new Vector3(endX + 3f, 2.5f, endZ - 0.5f), Vector3.one * 0.7f, amberGlow);
+            RouteDoor.Create(endZ, 0, wood, rail, amberGlow, true).transform.SetParent(root, true);
             CreateCobweb(352f, 1);
             CreateMist(340f, 0);
             CreateMist(365f, 0);
@@ -400,6 +410,14 @@ namespace KinectKids3D
             armor.transform.SetParent(root, false);
             armor.transform.position = new Vector3(TrackCenter(z, route) + side * 4.25f, 0.16f, z);
             armor.transform.rotation = TrackRotation(z, route) * Quaternion.Euler(0f, 180f + side * 12f, 0f);
+            GameObject importedArmor = ImportedModelFactory.Create(
+                "Models/QuaterniusKnight/KnightCharacter", armor.transform, "Animerad hemsökt riddarrustning",
+                new Vector3(0f, 1.45f, 0f), 3.05f, Quaternion.identity, "idle", "stand");
+            if (importedArmor != null)
+            {
+                HauntedProp.Attach(armor, HauntedMotion.Bob, 0.025f, 0.72f);
+                return;
+            }
             Material blackIron = MaterialOf(new Color(0.075f, 0.085f, 0.095f), 0.88f);
             Material edge = MaterialOf(new Color(0.27f, 0.24f, 0.19f), 0.74f);
             Material eye = GlowMaterial(new Color(0.82f, 0.018f, 0.008f), 3f);
@@ -551,6 +569,34 @@ namespace KinectKids3D
             renderer.sortingOrder = -2;
             mist.SetActive(true);
             particles.Play();
+        }
+
+        private GameObject CreateGravestone(float z, int side, int route, int variant)
+        {
+            string[] models =
+            {
+                "Models/KenneyGraveyard/gravestone-bevel",
+                "Models/KenneyGraveyard/gravestone-broken",
+                "Models/KenneyGraveyard/gravestone-cross-large",
+                "Models/KenneyGraveyard/gravestone-decorative",
+                "Models/KenneyGraveyard/gravestone-roof",
+                "Models/KenneyGraveyard/gravestone-round",
+                "Models/KenneyGraveyard/gravestone-wide"
+            };
+            string path = models[Mathf.Abs(variant) % models.Length];
+            GameObject grave = ImportedModelFactory.Create(path, root, "Importerad gravsten",
+                new Vector3(TrackCenter(z, route) + side * 3.55f, 0.72f, z), 1.65f,
+                TrackRotation(z, route) * Quaternion.Euler(0f, side * 12f, side * 4f));
+            return grave != null ? grave : CreateCube("Reservgravsten",
+                new Vector3(TrackCenter(z, route) + side * 3.55f, 0.55f, z),
+                new Vector3(0.85f, 1.15f, 0.28f), stone);
+        }
+
+        private void CreateGraveyardProp(string path, float z, int side, int route, float size, float yaw)
+        {
+            ImportedModelFactory.Create(path, root, "Importerad skräckdekor",
+                new Vector3(TrackCenter(z, route) + side * 4.15f, size * 0.42f, z), size,
+                TrackRotation(z, route) * Quaternion.Euler(0f, yaw + (side < 0 ? 180f : 0f), 0f));
         }
 
         private static Texture2D GetSoftMistTexture()

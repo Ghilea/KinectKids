@@ -17,6 +17,7 @@ namespace KinectKids3D
             model.name = objectName;
             model.transform.localPosition = Vector3.zero;
             model.transform.localRotation = localRotation;
+            ApplyKnownTexture(model, resourcePath);
 
             foreach (Collider collider in model.GetComponentsInChildren<Collider>(true))
                 UnityEngine.Object.Destroy(collider);
@@ -40,6 +41,26 @@ namespace KinectKids3D
             ImportedModelAnimator player = model.AddComponent<ImportedModelAnimator>();
             player.Configure(resourcePath, preferredClips);
             return model;
+        }
+
+        private static void ApplyKnownTexture(GameObject model, string resourcePath)
+        {
+            Texture2D texture = null;
+            if (resourcePath.StartsWith("Models/CuteMonsters/", StringComparison.Ordinal))
+            {
+                string modelName = resourcePath.Substring(resourcePath.LastIndexOf('/') + 1);
+                texture = Resources.Load<Texture2D>(
+                    "Models/CuteMonsters/Textures/" + modelName + "_Texture");
+            }
+            else if (resourcePath.StartsWith("Models/KenneyGraveyard/", StringComparison.Ordinal))
+            {
+                texture = Resources.Load<Texture2D>("Models/KenneyGraveyard/Textures/colormap");
+            }
+
+            if (texture == null) return;
+            foreach (Renderer renderer in model.GetComponentsInChildren<Renderer>(true))
+            foreach (Material material in renderer.materials)
+                material.mainTexture = texture;
         }
     }
 

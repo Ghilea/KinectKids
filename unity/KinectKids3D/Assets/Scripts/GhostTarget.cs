@@ -97,12 +97,33 @@ namespace KinectKids3D
 
         private void BuildModel()
         {
-            if (Kind == TargetKind.Ghost)
+            if (!IsBoss)
             {
+                string[] ghostModels =
+                {
+                    "Models/Quaternius/Ghost",
+                    "Models/CuteMonsters/Ghost",
+                    "Models/KenneyGraveyard/character-ghost"
+                };
+                string[] monsterModels =
+                {
+                    "Models/KenneyGraveyard/character-zombie",
+                    "Models/KenneyGraveyard/character-skeleton",
+                    "Models/KenneyGraveyard/character-vampire",
+                    "Models/CuteMonsters/Demon",
+                    "Models/CuteMonsters/GreenDemon",
+                    "Models/CuteMonsters/Cthulhu",
+                    "Models/CuteMonsters/Cyclops",
+                    "Models/CuteMonsters/Skull",
+                    "Models/CuteMonsters/Yeti"
+                };
+                string[] choices = Kind == TargetKind.Ghost ? ghostModels : monsterModels;
+                string resourcePath = choices[Random.Range(0, choices.Length)];
                 GameObject importedGhost = ImportedModelFactory.Create(
-                    "Models/Quaternius/Ghost", transform, "Animerat slottsspöke",
+                    resourcePath, transform, Kind == TargetKind.Ghost
+                        ? "Animerad spökvariant" : "Animerad monstervariant",
                     new Vector3(0f, 1.05f, 0f), 2.65f, Quaternion.Euler(0f, 180f, 0f),
-                    "idle", "fly", "move");
+                    "idle", "flying", "walk", "move", "attack");
                 if (importedGhost != null)
                 {
                     RegisterRenderers(importedGhost);

@@ -15,6 +15,17 @@ namespace KinectKids3D.Editor
             ValidateModel("Models/Quaternius/Spider", true, false);
             ValidateModel("Models/KayKit/torch_mounted", false, true);
             ValidateModel("Models/KayKit/wall_doorway", false, true);
+            ValidateModel("Models/QuaterniusKnight/KnightCharacter", true, false);
+            ValidateModel("Models/CuteMonsters/Cthulhu", true, true);
+            ValidateModel("Models/CuteMonsters/Demon", true, true);
+            ValidateModel("Models/CuteMonsters/Ghost", true, true);
+            ValidateModel("Models/CuteMonsters/Skull", true, true);
+            ValidateModel("Models/KenneyGraveyard/character-ghost", true, true);
+            ValidateModel("Models/KenneyGraveyard/character-skeleton", true, true);
+            ValidateModel("Models/KenneyGraveyard/character-vampire", true, true);
+            ValidateModel("Models/KenneyGraveyard/character-zombie", true, true);
+            ValidateModel("Models/KenneyGraveyard/crypt-door", false, true);
+            ValidateModel("Models/KenneyGraveyard/gravestone-broken", false, true);
             Debug.Log("Alla importerade 3D-modeller och animationer är redo.");
         }
 
@@ -42,7 +53,16 @@ namespace KinectKids3D.Editor
             Material[] materials = renderers.SelectMany(renderer => renderer.sharedMaterials).ToArray();
             if (materials.Any(material => material == null))
                 throw new InvalidOperationException("Modellen saknar material: " + resourcePath);
-            if (needsTexture && !materials.Any(material => material.mainTexture != null))
+            Texture2D externalTexture = null;
+            if (resourcePath.StartsWith("Models/CuteMonsters/", StringComparison.Ordinal))
+            {
+                string modelName = resourcePath.Substring(resourcePath.LastIndexOf('/') + 1);
+                externalTexture = Resources.Load<Texture2D>(
+                    "Models/CuteMonsters/Textures/" + modelName + "_Texture");
+            }
+            else if (resourcePath.StartsWith("Models/KenneyGraveyard/", StringComparison.Ordinal))
+                externalTexture = Resources.Load<Texture2D>("Models/KenneyGraveyard/Textures/colormap");
+            if (needsTexture && !materials.Any(material => material.mainTexture != null) && externalTexture == null)
                 throw new InvalidOperationException("Modellen saknar sin textur: " + resourcePath);
 
             AnimationClip[] clips = Resources.LoadAll<AnimationClip>(resourcePath)

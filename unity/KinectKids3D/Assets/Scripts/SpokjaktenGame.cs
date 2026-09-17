@@ -849,9 +849,12 @@ namespace KinectKids3D
                 DrawMovementCue(currentHazard.Kind, Mathf.InverseLerp(QuickEventCueDistance, 0f, gap));
             }
 
-            if (bossProjectile != null)
+            // Bossens riktningspil är en ren reaktionssignal. Visa den först
+            // under den sista delen av kastet, när spelaren faktiskt ska röra sig.
+            if (bossProjectile != null && bossProjectile.Progress >= 0.58f && !bossProjectile.Arrived)
             {
-                DrawMovementCue(bossProjectile.Kind, bossProjectile.Progress);
+                DrawMovementCue(bossProjectile.Kind,
+                    Mathf.InverseLerp(0.58f, 1f, bossProjectile.Progress));
             }
 
             if (routeChoiceActive) DrawRouteChoice();
