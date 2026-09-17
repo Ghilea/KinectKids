@@ -4,7 +4,10 @@ namespace KinectKids3D
 {
     public sealed class DarkRideWorld
     {
-        public const float TrackLength = 178f;
+        public const float TrackLength = 378f;
+        public const float BranchChoiceStart = 190f;
+        public const float BranchSplitStart = 202f;
+        public const float BranchJoinEnd = 307f;
         private readonly Transform root;
         private readonly Material stone;
         private readonly Material darkStone;
@@ -56,18 +59,37 @@ namespace KinectKids3D
             BuildEntranceHall();
             BuildCrypt();
             BuildCastleCourtyard();
+            BuildHauntedGallery();
+            BuildForkedPassages();
+            BuildForgottenDungeon();
             BuildFinalHall();
             BuildRideCar(rideCamera.transform);
         }
 
         public static float TrackCenter(float z)
         {
-            return Mathf.Sin(z * 0.045f) * 2.5f + Mathf.Sin(z * 0.105f) * 0.65f;
+            return TrackCenter(z, 0);
         }
 
         public static Quaternion TrackRotation(float z)
         {
-            float dx = TrackCenter(z + 0.5f) - TrackCenter(z - 0.5f);
+            return TrackRotation(z, 0);
+        }
+
+        public static float TrackCenter(float z, int route)
+        {
+            float center = Mathf.Sin(z * 0.034f) * 3.25f
+                + Mathf.Sin(z * 0.081f) * 1.15f
+                + Mathf.Sin(z * 0.014f) * 0.85f;
+            if (route == 0) return center;
+            float split = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(BranchSplitStart, 229f, z));
+            float join = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(280f, BranchJoinEnd, z));
+            return center + Mathf.Clamp(route, -1, 1) * 8.2f * split * join;
+        }
+
+        public static Quaternion TrackRotation(float z, int route)
+        {
+            float dx = TrackCenter(z + 0.5f, route) - TrackCenter(z - 0.5f, route);
             return Quaternion.Euler(0, Mathf.Atan2(dx, 1f) * Mathf.Rad2Deg, 0);
         }
 
@@ -75,24 +97,44 @@ namespace KinectKids3D
         {
             for (float z = 0; z <= TrackLength; z += 1.5f)
             {
-                float center = TrackCenter(z);
-                Quaternion rotation = TrackRotation(z);
-                CreateCube("Sliper", new Vector3(center, 0.04f, z), new Vector3(2.7f, 0.12f, 0.25f), wood, rotation);
-                CreateCube("Vänster räls", new Vector3(center - 0.72f, 0.18f, z), new Vector3(0.11f, 0.15f, 1.65f), rail, rotation);
-                CreateCube("Höger räls", new Vector3(center + 0.72f, 0.18f, z), new Vector3(0.11f, 0.15f, 1.65f), rail, rotation);
+                if (z >= BranchSplitStart && z <= BranchJoinEnd)
+                {
+                    CreateRails(z, -1);
+                    CreateRails(z, 1);
+                }
+                else CreateRails(z, 0);
             }
 
             for (float z = 3; z < TrackLength; z += 7.5f)
             {
-                float center = TrackCenter(z);
-                Quaternion rotation = TrackRotation(z);
-                Material zone = z < 48 ? stone : z < 105 ? darkStone : stone;
-                CreateCube("Kullerstensväg", new Vector3(center, -0.22f, z), new Vector3(12f, 0.45f, 8f), road, rotation);
-                CreateCube("Vänster murkärna", new Vector3(center - 5.8f, 2.8f, z), new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
-                CreateCube("Höger murkärna", new Vector3(center + 5.8f, 2.8f, z), new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
-                CreateCube("Tak", new Vector3(center, 5.65f, z), new Vector3(12f, 0.5f, 8.1f), darkStone, rotation);
-                CreateMasonryFacing(center, z, rotation, zone);
+                if (z >= BranchSplitStart && z <= BranchJoinEnd)
+                {
+                    CreateCorridorSection(z, -1);
+                    CreateCorridorSection(z, 1);
+                }
+                else CreateCorridorSection(z, 0);
             }
+        }
+
+        private void CreateRails(float z, int route)
+        {
+            float center = TrackCenter(z, route);
+            Quaternion rotation = TrackRotation(z, route);
+            CreateCube("Sliper", new Vector3(center, 0.04f, z), new Vector3(2.7f, 0.12f, 0.25f), wood, rotation);
+            CreateCube("Vänster räls", new Vector3(center - 0.72f, 0.18f, z), new Vector3(0.11f, 0.15f, 1.65f), rail, rotation);
+            CreateCube("Höger räls", new Vector3(center + 0.72f, 0.18f, z), new Vector3(0.11f, 0.15f, 1.65f), rail, rotation);
+        }
+
+        private void CreateCorridorSection(float z, int route)
+        {
+            float center = TrackCenter(z, route);
+            Quaternion rotation = TrackRotation(z, route);
+            Material zone = z < 48f || z > 330f ? stone : darkStone;
+            CreateCube("Kullerstensväg", new Vector3(center, -0.22f, z), new Vector3(12f, 0.45f, 8f), road, rotation);
+            CreateCube("Vänster murkärna", new Vector3(center - 5.8f, 2.8f, z), new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
+            CreateCube("Höger murkärna", new Vector3(center + 5.8f, 2.8f, z), new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
+            CreateCube("Tak", new Vector3(center, 5.65f, z), new Vector3(12f, 0.5f, 8.1f), darkStone, rotation);
+            CreateMasonryFacing(center, z, rotation, zone);
         }
 
         private void CreateMasonryFacing(float center, float z, Quaternion rotation, Material material)
@@ -173,27 +215,91 @@ namespace KinectKids3D
             CreateHangingChain(138f, 3.8f);
         }
 
+        private void BuildHauntedGallery()
+        {
+            CreateCastleGate(149f);
+            for (float z = 154f; z < 199f; z += 10f)
+            {
+                CreateArch(z, purpleGlow);
+                if (((int)z / 10) % 2 == 0) CreateTorch(z + 2.4f, -1);
+                CreateWatchingPortrait(z + 4.2f, ((int)z / 10) % 2 == 0 ? 1 : -1);
+            }
+            CreateArmor(166f, -1);
+            CreateArmor(183f, 1);
+            HiddenMonster.Create(161f, 1, 0, HiddenMonsterKind.Portrait);
+            HiddenMonster.Create(179f, -1, 0, HiddenMonsterKind.Cabinet);
+            HiddenMonster.Create(196f, 1, 0, HiddenMonsterKind.Portrait);
+            CreateMist(158f, 0);
+            CreateMist(188f, 0);
+        }
+
+        private void BuildForkedPassages()
+        {
+            CreateCastleGate(201f);
+            float forkX = TrackCenter(205f);
+            CreateSphere("Vänster vägvisare", new Vector3(forkX - 2.4f, 2.5f, 205f),
+                Vector3.one * 0.34f, greenGlow);
+            CreateSphere("Höger vägvisare", new Vector3(forkX + 2.4f, 2.5f, 205f),
+                Vector3.one * 0.34f, purpleGlow);
+
+            for (int route = -1; route <= 1; route += 2)
+            {
+                for (float z = 214f; z < 300f; z += 11f)
+                {
+                    CreateArch(z, route < 0 ? greenGlow : purpleGlow, route);
+                    if (((int)z / 11) % 2 == 0) CreateTorch(z + 2.3f, route < 0 ? -1 : 1, route);
+                }
+                CreateArmor(228f, route < 0 ? -1 : 1, route);
+                CreateCobweb(246f, route < 0 ? 1 : -1, route);
+                CreateHangingChain(266f, route < 0 ? -3.6f : 3.6f, route);
+                CreateWatchingPortrait(284f, route < 0 ? -1 : 1, route);
+                HiddenMonster.Create(235f, route < 0 ? 1 : -1, route, HiddenMonsterKind.Cabinet);
+                HiddenMonster.Create(258f, route < 0 ? -1 : 1, route, HiddenMonsterKind.Tomb);
+                HiddenMonster.Create(289f, route < 0 ? 1 : -1, route, HiddenMonsterKind.Portrait);
+                CreateMist(222f, route);
+                CreateMist(274f, route);
+            }
+        }
+
+        private void BuildForgottenDungeon()
+        {
+            CreateCastleGate(310f);
+            for (float z = 313f; z < 333f; z += 7f)
+            {
+                CreateArch(z, greenGlow);
+                CreateHangingChain(z + 2.5f, ((int)z % 2 == 0 ? -3.7f : 3.7f));
+            }
+            CreateCobweb(318f, -1);
+            CreateCobweb(329f, 1);
+            HiddenMonster.Create(321f, -1, 0, HiddenMonsterKind.Tomb);
+            CreateMist(315f, 0);
+            CreateMist(328f, 0);
+        }
+
         private void BuildFinalHall()
         {
-            CreateCastleGate(148f);
-            for (float z = 151; z < TrackLength; z += 6f)
+            CreateCastleGate(334f);
+            for (float z = 337f; z < TrackLength; z += 6f)
             {
                 CreateArch(z, amberGlow);
                 CreateTorch(z + 2.2f, z % 12f < 1f ? -1 : 1);
             }
-            CreateArmor(156f, -1);
-            CreateArmor(156f, 1);
-            float endX = TrackCenter(173f);
-            CreateCube("Bossportal", new Vector3(endX, 2.7f, 174f), new Vector3(9f, 5.4f, 0.7f), darkStone);
-            CreateSphere("Portal vänster", new Vector3(endX - 3f, 2.5f, 173.5f), Vector3.one * 0.7f, amberGlow);
-            CreateSphere("Portal höger", new Vector3(endX + 3f, 2.5f, 173.5f), Vector3.one * 0.7f, amberGlow);
-            CreateCobweb(158f, 1);
+            CreateArmor(342f, -1);
+            CreateArmor(342f, 1);
+            float endZ = TrackLength - 4f;
+            float endX = TrackCenter(endZ);
+            CreateCube("Bossportal", new Vector3(endX, 2.7f, endZ), new Vector3(9f, 5.4f, 0.7f), darkStone);
+            CreateSphere("Portal vänster", new Vector3(endX - 3f, 2.5f, endZ - 0.5f), Vector3.one * 0.7f, amberGlow);
+            CreateSphere("Portal höger", new Vector3(endX + 3f, 2.5f, endZ - 0.5f), Vector3.one * 0.7f, amberGlow);
+            CreateCobweb(352f, 1);
+            CreateMist(340f, 0);
+            CreateMist(365f, 0);
         }
 
-        private void CreateArch(float z, Material glow)
+        private void CreateArch(float z, Material glow, int route = 0)
         {
-            float center = TrackCenter(z);
-            Quaternion rotation = TrackRotation(z);
+            float center = TrackCenter(z, route);
+            Quaternion rotation = TrackRotation(z, route);
             CreateCube("Valv vänster", new Vector3(center - 4.4f, 2.3f, z), new Vector3(0.75f, 4.8f, 0.8f), stone, rotation);
             CreateCube("Valv höger", new Vector3(center + 4.4f, 2.3f, z), new Vector3(0.75f, 4.8f, 0.8f), stone, rotation);
             CreateCube("Valv över", new Vector3(center, 4.65f, z), new Vector3(9.4f, 0.6f, 0.8f), stone, rotation);
@@ -203,10 +309,10 @@ namespace KinectKids3D
                 new Vector3(0.18f, 0.18f, 0.24f), rail);
         }
 
-        private void CreateCastleGate(float z)
+        private void CreateCastleGate(float z, int route = 0)
         {
-            float center = TrackCenter(z);
-            Quaternion rotation = TrackRotation(z);
+            float center = TrackCenter(z, route);
+            Quaternion rotation = TrackRotation(z, route);
             CreateCube("Slottsport vänster", new Vector3(center - 4.55f, 2.55f, z),
                 new Vector3(1.35f, 5.3f, 1.25f), stone, rotation);
             CreateCube("Slottsport höger", new Vector3(center + 4.55f, 2.55f, z),
@@ -217,8 +323,8 @@ namespace KinectKids3D
             for (int i = 0; i < 3; i++)
                 CreateCube("Tinn", new Vector3(center + side * (3.65f + i * 0.52f), 5.75f, z),
                     new Vector3(0.38f, 0.72f, 1.10f), darkStone, rotation);
-            CreateTorch(z - 0.7f, -1);
-            CreateTorch(z - 0.7f, 1);
+            CreateTorch(z - 0.7f, -1, route);
+            CreateTorch(z - 0.7f, 1, route);
         }
 
         private void CreateBattlements(float z)
@@ -249,9 +355,9 @@ namespace KinectKids3D
             }
         }
 
-        private void CreateTorch(float z, int side)
+        private void CreateTorch(float z, int side, int route = 0)
         {
-            float x = TrackCenter(z) + side * 5.15f;
+            float x = TrackCenter(z, route) + side * 5.15f;
             Vector3 position = new Vector3(x, 2.75f, z);
             CreateCube("Fackelhållare", position + new Vector3(-side * 0.18f, -0.28f, 0),
                 new Vector3(0.12f, 0.75f, 0.12f), rail,
@@ -275,12 +381,12 @@ namespace KinectKids3D
             HauntedProp.Attach(lightObject, HauntedMotion.Flicker, 0f, Random.Range(7f, 11f));
         }
 
-        private void CreateArmor(float z, int side)
+        private void CreateArmor(float z, int side, int route = 0)
         {
             GameObject armor = new GameObject("Kuslig riddarrustning");
             armor.transform.SetParent(root, false);
-            armor.transform.position = new Vector3(TrackCenter(z) + side * 4.25f, 0.16f, z);
-            armor.transform.rotation = Quaternion.Euler(0f, 180f + side * 12f, 0f);
+            armor.transform.position = new Vector3(TrackCenter(z, route) + side * 4.25f, 0.16f, z);
+            armor.transform.rotation = TrackRotation(z, route) * Quaternion.Euler(0f, 180f + side * 12f, 0f);
             Material blackIron = MaterialOf(new Color(0.075f, 0.085f, 0.095f), 0.88f);
             Material edge = MaterialOf(new Color(0.27f, 0.24f, 0.19f), 0.74f);
             Material eye = GlowMaterial(new Color(0.82f, 0.018f, 0.008f), 3f);
@@ -355,9 +461,9 @@ namespace KinectKids3D
             HauntedProp.Attach(swarm, HauntedMotion.Flutter, 1.15f, 0.75f);
         }
 
-        private void CreateCobweb(float z, int side)
+        private void CreateCobweb(float z, int side, int route = 0)
         {
-            float x = TrackCenter(z) + side * 5.42f;
+            float x = TrackCenter(z, route) + side * 5.42f;
             Vector3 corner = new Vector3(x, 4.85f, z);
             CreateBeam("Spindelväv kant", corner, corner + new Vector3(-side * 1.75f, 0, 0), 0.018f, cobweb);
             CreateBeam("Spindelväv kant", corner, corner + new Vector3(0, -1.70f, 0), 0.018f, cobweb);
@@ -369,9 +475,45 @@ namespace KinectKids3D
             }
         }
 
-        private void CreateWatchingPortrait(float z, int side)
+        private void CreateMist(float z, int route)
         {
-            float x = TrackCenter(z) + side * 5.42f;
+            GameObject mist = new GameObject("Krypande slottsdimma");
+            mist.transform.SetParent(root, false);
+            mist.transform.position = new Vector3(TrackCenter(z, route), 0.18f, z);
+            ParticleSystem particles = mist.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule main = particles.main;
+            main.loop = true;
+            main.duration = 7f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(5.5f, 9f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.05f, 0.18f);
+            main.startSize = new ParticleSystem.MinMaxCurve(1.6f, 3.8f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(0.16f, 0.19f, 0.20f, 0.025f),
+                new Color(0.30f, 0.34f, 0.31f, 0.075f));
+            main.maxParticles = 55;
+
+            ParticleSystem.EmissionModule emission = particles.emission;
+            emission.rateOverTime = 5.5f;
+            ParticleSystem.ShapeModule shape = particles.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(8.5f, 0.30f, 8f);
+
+            ParticleSystemRenderer renderer = particles.GetComponent<ParticleSystemRenderer>();
+            Shader shader = Shader.Find("Particles/Standard Unlit");
+            if (shader == null) shader = Shader.Find("Legacy Shaders/Particles/Alpha Blended Premultiply");
+            if (shader != null)
+            {
+                renderer.material = new Material(shader);
+                if (renderer.material.HasProperty("_Color"))
+                    renderer.material.SetColor("_Color", new Color(0.22f, 0.26f, 0.25f, 0.055f));
+            }
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            particles.Play();
+        }
+
+        private void CreateWatchingPortrait(float z, int side, int route = 0)
+        {
+            float x = TrackCenter(z, route) + side * 5.42f;
             CreateCube("Gammalt porträtt", new Vector3(x, 2.65f, z), new Vector3(0.14f, 2.15f, 1.45f), wood);
             Material eye = GlowMaterial(new Color(0.80f, 0.025f, 0.018f), 2.7f);
             float inward = -side * 0.095f;
@@ -379,9 +521,9 @@ namespace KinectKids3D
             CreateSphere("Vakande öga", new Vector3(x + inward, 2.83f, z + 0.22f), Vector3.one * 0.10f, eye);
         }
 
-        private void CreateHangingChain(float z, float localX)
+        private void CreateHangingChain(float z, float localX, int route = 0)
         {
-            float x = TrackCenter(z) + localX;
+            float x = TrackCenter(z, route) + localX;
             for (int i = 0; i < 8; i++)
             {
                 GameObject link = CreateSphere("Rostig kedjelänk", new Vector3(x, 5.12f - i * 0.32f, z),

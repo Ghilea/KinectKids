@@ -8,10 +8,17 @@ namespace KinectKids3D
     public sealed class SpokjaktenGame : MonoBehaviour
     {
         private const float CountdownSeconds = 3f;
-        private const float RideSpeed = 2.32f;
-        private const float BossStopDistance = 149f;
+        private const float RideSpeed = 2.18f;
+        private const float BossStopDistance = 344f;
+        private const float QuickEventCueDistance = 4.0f;
+        private const float QuickEventActionDistance = 3.55f;
+        private const float QuickEventPassedDistance = -0.30f;
         private const float TargetGraceSeconds = 0.48f;
         private const float DwellShotSeconds = 0.58f;
+        private static readonly float[] ScareDistances =
+        {
+            26f, 57f, 91f, 124f, 144f, 165f, 184f, 218f, 242f, 270f, 299f, 326f
+        };
         private readonly List<GhostTarget> targets = new List<GhostTarget>();
         private readonly List<RideHazard> hazards = new List<RideHazard>();
         private readonly Dictionary<int, AimLock> aimLocks = new Dictionary<int, AimLock>();
@@ -60,6 +67,11 @@ namespace KinectKids3D
         private float actionMessageUntil;
         private BossProjectile bossProjectile;
         private float nextBossAttackAt;
+        private int selectedRoute;
+        private bool routeChoiceActive;
+        private int routeCandidate;
+        private float routeCandidateSince;
+        private bool routeHazardsAdded;
 
         private void Start()
         {
@@ -142,7 +154,9 @@ namespace KinectKids3D
             {
                 CreateGhostVoice("Avlägset spöke", 1.42f, 154f, 6201),
                 CreateGhostVoice("Viskning i muren", 1.08f, 212f, 7712),
-                CreateGhostVoice("Klagande vålnad", 1.78f, 118f, 8839)
+                CreateGhostVoice("Klagande vålnad", 1.78f, 118f, 8839),
+                CreateEvilLaugh("Elakt skratt", 1.65f, 9917),
+                CreateEvilLaugh("Kort häxskratt", 1.18f, 4471)
             };
         }
 
@@ -178,6 +192,11 @@ namespace KinectKids3D
             if (bossProjectile != null) Destroy(bossProjectile.gameObject);
             bossProjectile = null;
             nextBossAttackAt = 0;
+            selectedRoute = 0;
+            routeChoiceActive = false;
+            routeCandidate = 0;
+            routeCandidateSince = 0f;
+            routeHazardsAdded = false;
             hazards.Add(RideHazard.Create(HazardKind.Duck, 43f));
             hazards.Add(RideHazard.Create(HazardKind.DodgeLeft, 78f));
             hazards.Add(RideHazard.Create(HazardKind.DodgeRight, 111f));
@@ -208,6 +227,7 @@ namespace KinectKids3D
 
             if (!bossBattle)
                 rideDistance = Mathf.Min(DarkRideWorld.TrackLength - 3f, rideDistance + RideSpeed * Time.deltaTime);
+            UpdateRouteChoice();
             if (!bossDefeated && rideDistance >= BossStopDistance)
             {
                 rideDistance = BossStopDistance;
@@ -230,7 +250,7 @@ namespace KinectKids3D
 
         private void PositionCamera(float z)
         {
-            float x = DarkRideWorld.TrackCenter(z);
+            float x = DarkRideWorld.TrackCenter(z, selectedRoute);
             float bounce = Mathf.Sin(Time.time * 4.4f) * 0.018f;
             float targetDuck = 0f;
             float targetLean = 0f;
@@ -249,7 +269,7 @@ namespace KinectKids3D
                 bounce += UnityEngine.Random.Range(-0.09f, 0.09f);
             }
             Vector3 position = new Vector3(x, 1.72f - cameraDuck * 0.68f + bounce, z);
-            Vector3 look = new Vector3(DarkRideWorld.TrackCenter(z + 7f) + cameraLean * 0.38f,
+            Vector3 look = new Vector3(DarkRideWorld.TrackCenter(z + 7f, selectedRoute) + cameraLean * 0.38f,
                 1.62f - cameraDuck * 0.32f, z + 7f);
             Quaternion bodyMotion = Quaternion.LookRotation(look - position, Vector3.up)
                 * Quaternion.Euler(cameraDuck * 3f, 0f, -cameraLean * 7.5f);
@@ -269,7 +289,7 @@ namespace KinectKids3D
                 Destroy(target.gameObject);
             }
 
-            if (rideTime >= nextSpawnAt && distance < BossStopDistance - 13f)
+            if (rideTime >= nextSpawnAt && distance < BossStopDistance - 13f && !routeChoiceActive)
             {
                 SpawnRegular(distance, rideTime);
                 nextSpawnAt = rideTime + UnityEngine.Random.Range(2.4f, 3.5f);
@@ -280,7 +300,7 @@ namespace KinectKids3D
                 bossSpawned = true;
                 float z = BossStopDistance + 16f;
                 targets.Add(GhostTarget.Create(TargetKind.ConductorBoss,
-                    new Vector3(DarkRideWorld.TrackCenter(z), 0.35f, z)));
+                    new Vector3(DarkRideWorld.TrackCenter(z, selectedRoute), 0.35f, z)));
                 nextBossAttackAt = Time.time + 2.2f;
                 actionMessage = "VAGNEN STANNAR – BESEGRA KONDUKTÖREN!";
                 actionMessageUntil = Time.time + 2.4f;
@@ -296,7 +316,70 @@ namespace KinectKids3D
             TargetKind kind = rideTime < 23f || UnityEngine.Random.value < 0.42f ? TargetKind.Ghost : TargetKind.Zombie;
             float y = kind == TargetKind.Ghost ? UnityEngine.Random.Range(0.65f, 1.5f) : 0.28f;
             targets.Add(GhostTarget.Create(kind,
-                new Vector3(DarkRideWorld.TrackCenter(z) + lane, y, z)));
+                new Vector3(DarkRideWorld.TrackCenter(z, selectedRoute) + lane, y, z)));
+        }
+
+        private void UpdateRouteChoice()
+        {
+            if (selectedRoute != 0 || rideDistance < DarkRideWorld.BranchChoiceStart) return;
+            routeChoiceActive = true;
+
+            int candidate = 0;
+            PoseState playerOne;
+            if (currentPoses.TryGetValue(0, out playerOne))
+            {
+                if (playerOne.LeanAmount <= -0.13f) candidate = -1;
+                else if (playerOne.LeanAmount >= 0.13f) candidate = 1;
+            }
+            if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) candidate = -1;
+            if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) candidate = 1;
+            if (Input.GetMouseButtonDown(0))
+            {
+                SelectRoute(Input.mousePosition.x < Screen.width * 0.5f ? -1 : 1);
+                return;
+            }
+
+            if (candidate != routeCandidate)
+            {
+                routeCandidate = candidate;
+                routeCandidateSince = Time.time;
+            }
+            else if (candidate != 0 && Time.time - routeCandidateSince >= 0.32f)
+            {
+                SelectRoute(candidate);
+                return;
+            }
+
+            if (rideDistance < DarkRideWorld.BranchSplitStart - 1.2f) return;
+            ReticleState reticle;
+            int automaticRoute = reticles.TryGetValue(0, out reticle)
+                ? (reticle.Position.x < 0.5f ? -1 : 1)
+                : (UnityEngine.Random.value < 0.5f ? -1 : 1);
+            SelectRoute(automaticRoute);
+        }
+
+        private void SelectRoute(int route)
+        {
+            selectedRoute = route < 0 ? -1 : 1;
+            routeChoiceActive = false;
+            actionMessage = selectedRoute < 0 ? "VÄNSTRA HEMLIGA GÅNGEN!" : "HÖGRA HEMLIGA GÅNGEN!";
+            actionMessageUntil = Time.time + 2.1f;
+            effects.PlayOneShot(movementSuccessSound);
+
+            if (routeHazardsAdded) return;
+            routeHazardsAdded = true;
+            if (selectedRoute < 0)
+            {
+                hazards.Add(RideHazard.Create(HazardKind.DodgeRight, 238f, selectedRoute));
+                hazards.Add(RideHazard.Create(HazardKind.Duck, 272f, selectedRoute));
+                hazards.Add(RideHazard.Create(HazardKind.DodgeLeft, 299f, selectedRoute));
+            }
+            else
+            {
+                hazards.Add(RideHazard.Create(HazardKind.Duck, 235f, selectedRoute));
+                hazards.Add(RideHazard.Create(HazardKind.DodgeLeft, 266f, selectedRoute));
+                hazards.Add(RideHazard.Create(HazardKind.DodgeRight, 296f, selectedRoute));
+            }
         }
 
         private void UpdatePlayerPoses()
@@ -333,10 +416,11 @@ namespace KinectKids3D
             foreach (RideHazard hazard in hazards.Where(item => item != null && !item.Resolved))
             {
                 float gap = hazard.TrackZ - distance;
-                if (gap <= 11f && gap >= -1.25f && (currentHazard == null || gap < currentHazard.TrackZ - distance))
+                if (gap <= QuickEventCueDistance && gap >= QuickEventPassedDistance
+                    && (currentHazard == null || gap < currentHazard.TrackZ - distance))
                     currentHazard = hazard;
 
-                if (gap <= 5.2f && gap >= -0.45f)
+                if (gap <= QuickEventActionDistance && gap >= QuickEventPassedDistance)
                 {
                     foreach (KeyValuePair<int, PoseState> pair in currentPoses)
                     {
@@ -354,7 +438,7 @@ namespace KinectKids3D
                     }
                 }
 
-                if (gap >= -1.25f) continue;
+                if (gap >= QuickEventPassedDistance) continue;
                 bool everyoneSucceeded = true;
                 foreach (int player in currentPoses.Keys.ToArray())
                 {
@@ -376,8 +460,7 @@ namespace KinectKids3D
 
         private void UpdateEnvironmentEvents()
         {
-            float[] scareDistances = { 26f, 57f, 91f, 124f, 144f };
-            if (nextScareIndex >= scareDistances.Length || rideDistance < scareDistances[nextScareIndex]) return;
+            if (nextScareIndex >= ScareDistances.Length || rideDistance < ScareDistances[nextScareIndex]) return;
             int side = UnityEngine.Random.value < 0.5f ? -1 : 1;
             nextScareIndex++;
             SideScare.Create(rideCamera.transform, side);
@@ -588,10 +671,10 @@ namespace KinectKids3D
             foreach (KeyValuePair<int, PoseState> pair in currentPoses)
             {
                 bool succeeds = bossProjectile.Kind == HazardKind.Duck
-                    ? pair.Value.DuckAmount >= 0.18f
+                    ? pair.Value.DuckAmount >= 0.13f
                     : bossProjectile.Kind == HazardKind.DodgeLeft
-                        ? pair.Value.LeanAmount <= -0.15f
-                        : pair.Value.LeanAmount >= 0.15f;
+                        ? pair.Value.LeanAmount <= -0.12f
+                        : pair.Value.LeanAmount >= 0.12f;
                 int player = Mathf.Clamp(pair.Key, 0, 1);
                 if (succeeds)
                 {
@@ -655,13 +738,15 @@ namespace KinectKids3D
             if (currentHazard != null)
             {
                 float gap = currentHazard.TrackZ - rideDistance;
-                DrawMovementCue(currentHazard.Kind, Mathf.InverseLerp(11f, 0f, gap));
+                DrawMovementCue(currentHazard.Kind, Mathf.InverseLerp(QuickEventCueDistance, 0f, gap));
             }
 
-            if (bossProjectile != null && bossProjectile.Progress >= 0.42f)
+            if (bossProjectile != null && bossProjectile.Progress >= 0.32f)
             {
                 DrawMovementCue(bossProjectile.Kind, bossProjectile.Progress);
             }
+
+            if (routeChoiceActive) DrawRouteChoice();
 
             if (Time.time < actionMessageUntil)
             {
@@ -760,6 +845,30 @@ namespace KinectKids3D
             }
             GUI.color = oldColor;
             GUI.matrix = oldMatrix;
+        }
+
+        private void DrawRouteChoice()
+        {
+            float pulse = 0.65f + Mathf.Sin(Time.time * 5f) * 0.12f;
+            GUI.Box(new Rect(Screen.width * 0.5f - 150f, Screen.height * 0.14f, 300f, 50f), string.Empty);
+            GUI.Label(new Rect(Screen.width * 0.5f - 140f, Screen.height * 0.145f, 280f, 40f),
+                "VÄLJ VÄG", centerStyle);
+            DrawRouteArrow(new Vector2(Screen.width * 0.27f, Screen.height * 0.35f), 180f, pulse,
+                new Color(0.18f, 1f, 0.52f));
+            DrawRouteArrow(new Vector2(Screen.width * 0.73f, Screen.height * 0.35f), 0f, pulse,
+                new Color(0.74f, 0.22f, 1f));
+        }
+
+        private void DrawRouteArrow(Vector2 center, float rotation, float pulse, Color color)
+        {
+            Matrix4x4 oldMatrix = GUI.matrix;
+            Color oldColor = GUI.color;
+            GUI.color = color;
+            GUIUtility.RotateAroundPivot(rotation, center);
+            float width = 150f * pulse;
+            GUI.DrawTexture(new Rect(center.x - width * 0.5f, center.y - 44f, width, 88f), movementArrow);
+            GUI.matrix = oldMatrix;
+            GUI.color = oldColor;
         }
 
         private static Texture2D CreateArrowTexture()
@@ -892,6 +1001,32 @@ namespace KinectKids3D
                     + Mathf.Sin(phase * 0.503f) * 0.24f
                     + breath * 0.34f;
                 samples[i] = voice * envelope * (0.11f + Mathf.Sin(t * 5.2f) * 0.025f);
+            }
+            AudioClip clip = AudioClip.Create(clipName, length, 1, sampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateEvilLaugh(string clipName, float duration, int seed)
+        {
+            const int sampleRate = 22050;
+            int length = Mathf.CeilToInt(sampleRate * duration);
+            float[] samples = new float[length];
+            var random = new System.Random(seed);
+            float phase = 0f;
+            float rasp = 0f;
+            for (int i = 0; i < length; i++)
+            {
+                float t = i / (float)sampleRate;
+                float normalized = i / (float)length;
+                float syllable = Mathf.Pow(Mathf.Max(0f, Mathf.Sin(t * 5.4f * Mathf.PI)), 1.7f);
+                float envelope = Mathf.Sin(normalized * Mathf.PI) * (0.22f + syllable * 0.78f);
+                float pitch = 132f + Mathf.Sin(t * 4.6f) * 31f + syllable * 42f;
+                phase += pitch / sampleRate * Mathf.PI * 2f;
+                float noise = (float)random.NextDouble() * 2f - 1f;
+                rasp = Mathf.Lerp(rasp, noise, 0.08f);
+                samples[i] = (Mathf.Sin(phase) * 0.12f + Mathf.Sin(phase * 0.51f) * 0.06f
+                    + rasp * 0.025f) * envelope;
             }
             AudioClip clip = AudioClip.Create(clipName, length, 1, sampleRate, false);
             clip.SetData(samples, 0);

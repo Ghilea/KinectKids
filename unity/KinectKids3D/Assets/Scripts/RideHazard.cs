@@ -27,11 +27,11 @@ namespace KinectKids3D
                 ? "VÄJ VÄNSTER – KLO UR VÄGGEN!"
                 : "VÄJ HÖGER – KLO UR VÄGGEN!";
 
-        public static RideHazard Create(HazardKind kind, float z)
+        public static RideHazard Create(HazardKind kind, float z, int route = 0)
         {
             GameObject root = new GameObject("Kroppshinder - " + kind);
-            root.transform.position = new Vector3(DarkRideWorld.TrackCenter(z), 0f, z);
-            root.transform.rotation = DarkRideWorld.TrackRotation(z);
+            root.transform.position = new Vector3(DarkRideWorld.TrackCenter(z, route), 0f, z);
+            root.transform.rotation = DarkRideWorld.TrackRotation(z, route);
             RideHazard hazard = root.AddComponent<RideHazard>();
             hazard.Kind = kind;
             hazard.TrackZ = z;
@@ -63,7 +63,7 @@ namespace KinectKids3D
             if (movingPart == null) return;
             Camera camera = Camera.main;
             float gap = camera != null ? TrackZ - camera.transform.position.z : 20f;
-            float approach = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((11f - gap) / 5.8f));
+            float approach = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((4.6f - gap) / 3.6f));
             if (Kind == HazardKind.Duck)
             {
                 float spiderY = Mathf.Lerp(5.05f, 1.82f, approach);

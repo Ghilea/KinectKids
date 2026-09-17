@@ -25,6 +25,8 @@ Det här är den nya 3D-grunden för KinectKids. Den ligger bredvid den tidigare
 - formade lågpolygonmodeller med trasigt tyg och smutsig hud i stället för lysande kapselkroppar
 - spindelväv, vakande porträtt, kedjor, fladdermöss och flimrande ljus
 - separat 32-bitars Kinect-brygga för stabil SDK 1.8-kompatibilitet i 64-bitars Unity
+- cirka tre minuters kurvig slottsåktur med ett kroppsstyrt vägval
+- korta quick events, gömda miljömonster, markdimma och en boss som stannar vagnen
 
 All grafik i den här första versionen byggs av riktiga 3D-objekt när spelet startar. Det gör att vi kan prova kamerafärd, avstånd, tempo och Kinect-sikte innan vi lägger tid på slutliga modeller och animationer.
 

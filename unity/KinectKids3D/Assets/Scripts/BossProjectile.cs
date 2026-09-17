@@ -24,7 +24,7 @@ namespace KinectKids3D
             projectile.Kind = kind;
             projectile.start = start;
             projectile.end = end;
-            projectile.duration = 2.25f;
+            projectile.duration = 2.90f;
             projectile.startedAt = Time.time;
             projectile.Build();
             return projectile;

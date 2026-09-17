@@ -1,5 +1,5 @@
 # Projekt: KinectKids - "Kanon i Realitet" (Skolversion)
-## Status: Version 1.3 -> Pedagogisk grund implementerad, integrationstest pågår
+## Status: Spökjakten 3D är aktiv huvudprototyp; pedagogisk grund och äldre WPF-spel bevaras
 ## Språk: C# (.NET 6/8), WPF, Microsoft Kinect SDK v1.8
 
 ### 1. VISION & MÅL
@@ -41,9 +41,10 @@ Vi ska bygga dessa spel i ordning baserat på komplexitet och pedagogisk värde:
 4.  **Spökjakt: Slottet** (Ny utveckling från "Zombietåg")
     *   *Logik:* En renad version av Zombietåget med "spöken" istället för zombies, mörkare tema.
     *   *Mekanik:* Varje spelare har exakt ett sikte. Spelet väljer automatiskt den mest aktiva handen och fungerar därför för både vänster- och högerhänta. En träff avfyras efter en kort mållåsning eller en lätt framåtknuff.
-    *   *Kroppshinder:* En stor spindel firas ner från slottstaket och kräver duckning. Gargoyler och stenklor slår ut ur väggarna och kräver att spelaren lutar sig åt angiven sida. Animerade riktningspilar ersätter läsinstruktioner, och kameran följer kroppens duckning och sidoförflyttning. Slutbossen kastar dessutom projektiler som kräver samma rörelser.
+    *   *Åktur:* Cirka tre minuter inklusive bossfas. Rälsen svänger genom flera slottsrum och delar sig i två spelbara gångar. Spelare 1 väljer väg genom att luta åt vänster eller höger.
+    *   *Kroppshinder:* Quick events har ungefär 1–2 sekunders reaktionstid. En stor spindel firas ner från slottstaket och kräver duckning. Gargoyler och stenklor slår ut ur väggarna och kräver att spelaren lutar sig åt angiven sida. Animerade riktningspilar ersätter läsinstruktioner, och kameran följer kroppens duckning och sidoförflyttning. Slutbossens långsammare projektiler kräver samma rörelser.
     *   *Bossfas:* Vagnen stannar i finalhallen och kör inte vidare förrän bossens livsmätare är tom.
-    *   *Miljö:* Egen eller fritt licensierad musik med lokal reservmusik, ett mycket mörkt slott där facklor och vagnens svaga lykta lokalt avslöjar modellerade murblock, sten- och kullerstenstexturer, rustningar, krypta, spindelväv, rörliga fladdermöss och överraskningshändelser längs rälsen. Tredimensionella vålnader kan kasta sig in från båda sidor och slumpmässiga spökläten panoreras i ljudbilden.
+    *   *Miljö:* Egen eller fritt licensierad musik med lokal reservmusik, ett mycket mörkt slott där facklor och vagnens svaga lykta lokalt avslöjar modellerade murblock, sten- och kullerstenstexturer, rustningar, krypta, spindelväv, rörliga fladdermöss, markdimma och överraskningshändelser längs rälsen. Monster gömmer sig bakom porträtt, skåp och sarkofager. Tredimensionella vålnader kan kasta sig in från båda sidor och slumpmässiga viskningar, klaganden och elaka skratt panoreras i ljudbilden.
     *   *Figurer:* Sammanhängande lågpolygonmodeller med trasiga silhuetter och egna smuts-, tyg- och hudmaterial används i prototypen. Enbart ögon och små magiska detaljer får självlysning.
     *   *Tillgänglighet:* Kroppens mitt och ståhöjd kalibreras separat för varje spårad spelare. Mus och tangentbord finns kvar som testläge.
 5.  **Simon Säger: Rörelselektron**

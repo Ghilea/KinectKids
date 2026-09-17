@@ -47,6 +47,7 @@ jobs:
             './unity/KinectKids3D/Assets/Scripts/PlayerPose.cs',
             './unity/KinectKids3D/Assets/Scripts/RideHazard.cs',
             './unity/KinectKids3D/Assets/Scripts/SideScare.cs',
+            './unity/KinectKids3D/Assets/Scripts/HiddenMonster.cs',
             './unity/KinectKids3D/Assets/Scripts/BossProjectile.cs',
             './unity/KinectKids3D/Assets/Scripts/HauntedProp.cs',
             './unity/KinectKids3D/Assets/Scripts/MagicBolt.cs',
