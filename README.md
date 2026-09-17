@@ -13,7 +13,7 @@ En svensk, barnvänlig plattform för **Xbox 360 Kinect (Kinect v1)** på Window
 
 ## Ny 3D-version under utveckling
 
-En separat Unity-baserad version av Spökjakten finns i [`unity/KinectKids3D`](unity/KinectKids3D). Den har riktig 3D-räls, spökvagn, texturerade miljözoner, tredimensionella mål, Kinect-handsikte och en zombie-konduktör som boss. Kinect SDK 1.8 körs i en separat x86-brygga så att 64-bitars Unity inte behöver ladda den gamla SDK:n direkt. En fristående skolversion byggs från Unity-menyn **KinectKids → Bygg skolversion för Windows** och kräver inte Unity på måldatorn.
+En separat Unity-baserad version av Spökjakten finns i [`unity/KinectKids3D`](unity/KinectKids3D). Den har riktig 3D-räls, spökvagn, mörkt texturerat slott, ett automatiskt vänster-/högerhandssikte och en stillastående slutbossfas med kastattacker. Kinect SDK 1.8 körs i en separat x86-brygga så att 64-bitars Unity inte behöver ladda den gamla SDK:n direkt. En fristående skolversion byggs från Unity-menyn **KinectKids → Bygg skolversion för Windows** och kräver inte Unity på måldatorn.
 
 3D-åkturen använder den fritt tillåtna 80-sekundersloopen **Playground** av Shononoki/SVL. Se [tredjepartsnoteringarna](THIRD_PARTY_NOTICES.md) för källa och användningsvillkor.
 

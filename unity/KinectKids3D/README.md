@@ -6,17 +6,18 @@ Det här är den nya 3D-grunden för KinectKids. Den ligger bredvid den tidigare
 
 - en riktig perspektivkamera i en spökvagn
 - kurvande 3D-räls genom fyra sammanhängande miljözoner
-- station, blacklight-valv, krypta, monsterverkstad och finalhall
-- tredimensionella spöken, zombies och en zombie-konduktör som boss
+- slottsport, krypta, kullerstensgård, rustningar, facklor och finalhall
+- mer detaljrika tredimensionella spöken, zombies och en zombie-konduktör som boss
 - mål blir naturligt större när vagnen närmar sig
-- båda Kinect-händerna fungerar som separata sikten
-- sikta, dra handen tillbaka mot kroppen och kasta den snabbt framåt för att skjuta spökmagi
+- exakt ett sikte per spelare; den mest aktiva handen väljs automatiskt
+- håll siktet på målet en kort stund eller gör en lätt knuff framåt för att skjuta spökmagi
+- vagnen stannar vid slutbossen, som kastar projektiler tills han är besegrad
 - kroppshinder där spelaren måste ducka eller väja åt vänster/höger
 - ståhöjd och kroppens mitt kalibreras automatiskt per spelare
 - en eller två spelare kan samla egna poäng
 - musreserv om Kinect inte kan öppnas
 - fritt licensierad OGG-musik när `Resources/Audio/RideMusic.ogg` finns, annars procedurgenererad reservmusik
-- fuktig sten, mossa, murket trä och rostiga räls som procedurgenererade texturer
+- handgjorda slotts- och kullerstenstexturer samt procedurgenererat murket trä och rost
 - spindelväv, vakande porträtt, kedjor, fladdermöss och flimrande ljus
 - separat 32-bitars Kinect-brygga för stabil SDK 1.8-kompatibilitet i 64-bitars Unity
 
@@ -53,13 +54,15 @@ Licensnoteringen finns i projektets `THIRD_PARTY_NOTICES.md`.
 
 | Kontroll | Funktion |
 |---|---|
-| Vänster eller höger Kinect-hand | Sikta på ett spöke |
-| Dra tillbaka och kasta handen framåt | Kasta spökmagi |
+| Rör den hand du vill använda | Spelet väljer den som enda sikte |
+| Håll siktet på målet kort | Kasta spökmagi automatiskt |
+| Lätt knuff framåt | Kasta spökmagi direkt |
 | Ducka | Undvik den svängande spökbommen |
 | Luta kroppen åt visad sida | Väj för anflygande spöken |
 | Musen + vänsterklick | Reservsikte och kast utan Kinect |
 | `S`/`↓`, `A`/`←`, `D`/`→` | Testa ducka/väj i musläge |
 | `Mellanslag` eller `P` | Paus |
+| `B` | Hoppa direkt till bossen vid utvecklingstest |
 | `F11` | Helskärm |
 | `R` efter målgång | Ny åktur |
 
@@ -67,7 +70,7 @@ Licensnoteringen finns i projektets `THIRD_PARTY_NOTICES.md`.
 
 Den här versionen är en **vertical slice/greybox**, inte slutgrafiken. Nästa steg efter att färden och Kinect-siktet har testats på din dator är:
 
-1. modulära 3D-modeller och handgjorda figurer ovanpå det nya texturpasset,
+1. importerade, riggade 3D-modeller och handgjorda figurer ovanpå det nya slotts-/texturpasset,
 2. animationer och överraskningssekvenser,
 3. röster och rumsliga ljudeffekter,
 4. fler sorters interaktiva mål och kombopoäng,

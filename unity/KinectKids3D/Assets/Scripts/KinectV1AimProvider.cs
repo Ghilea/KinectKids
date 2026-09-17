@@ -207,14 +207,14 @@ namespace KinectKids3D
             {
                 float dt = Mathf.Max(0.001f, (float)(now - gesture.LastAt).TotalSeconds);
                 float forwardSpeed = (gesture.LastDepth - handZ) / dt;
-                bool handIsReady = handY > shoulderY - 0.38f && handZ > shoulderZ - 0.13f;
+                bool handIsReady = handY > shoulderY - 0.42f && handZ > shoulderZ - 0.16f;
                 if (handIsReady) gesture.Armed = true;
                 if (gesture.Armed && now >= gesture.CooldownUntil
-                    && forwardSpeed > 0.72f && handZ < shoulderZ - 0.17f)
+                    && forwardSpeed > 0.42f && handZ < shoulderZ - 0.10f)
                 {
                     fire = true;
                     gesture.Armed = false;
-                    gesture.CooldownUntil = now.AddMilliseconds(430);
+                    gesture.CooldownUntil = now.AddMilliseconds(360);
                 }
             }
 
@@ -222,7 +222,7 @@ namespace KinectKids3D
             gesture.LastDepth = handZ;
             gesture.LastAt = now;
             float progress = gesture.Armed
-                ? Mathf.Clamp01((shoulderZ - handZ + 0.13f) / 0.32f)
+                ? Mathf.Clamp01((shoulderZ - handZ + 0.16f) / 0.28f)
                 : 0f;
             output.Add(new AimSample(player, handId,
                 new Vector2(Mathf.Clamp01(x), Mathf.Clamp01(y)), fire, progress));

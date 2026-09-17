@@ -8,21 +8,27 @@ namespace KinectKids3D
     public sealed class SpokjaktenGame : MonoBehaviour
     {
         private const float CountdownSeconds = 3f;
-        private const float RideSeconds = 75f;
         private const float RideSpeed = 2.32f;
+        private const float BossStopDistance = 149f;
         private const float TargetGraceSeconds = 0.48f;
+        private const float DwellShotSeconds = 0.58f;
         private readonly List<GhostTarget> targets = new List<GhostTarget>();
         private readonly List<RideHazard> hazards = new List<RideHazard>();
         private readonly Dictionary<int, AimLock> aimLocks = new Dictionary<int, AimLock>();
         private readonly Dictionary<int, ReticleState> reticles = new Dictionary<int, ReticleState>();
+        private readonly Dictionary<int, ActiveHandState> activeHands = new Dictionary<int, ActiveHandState>();
+        private readonly Dictionary<int, HandActivity> handActivity = new Dictionary<int, HandActivity>();
         private readonly Dictionary<long, PoseCalibration> poseCalibrations = new Dictionary<long, PoseCalibration>();
         private readonly Dictionary<int, PoseState> currentPoses = new Dictionary<int, PoseState>();
         private readonly int[] scores = new int[2];
         private Camera rideCamera;
         private IAimProvider aimProvider;
         private float gameTime;
+        private float rideDistance;
         private float nextSpawnAt;
         private bool bossSpawned;
+        private bool bossBattle;
+        private bool bossDefeated;
         private bool finished;
         private bool paused;
         private string inputStatus;
@@ -46,6 +52,8 @@ namespace KinectKids3D
         private int nextScareIndex;
         private string actionMessage;
         private float actionMessageUntil;
+        private BossProjectile bossProjectile;
+        private float nextBossAttackAt;
 
         private void Start()
         {
@@ -83,7 +91,7 @@ namespace KinectKids3D
             if (kinect.TryStart())
             {
                 aimProvider = kinect;
-                inputStatus = kinect.Status + " – sikta, dra tillbaka och kasta";
+                inputStatus = kinect.Status + " – ett sikte, valfri hand";
             }
             else
             {
@@ -129,12 +137,17 @@ namespace KinectKids3D
             hazards.Clear();
             aimLocks.Clear();
             reticles.Clear();
+            activeHands.Clear();
+            handActivity.Clear();
             poseCalibrations.Clear();
             currentPoses.Clear();
             scores[0] = scores[1] = 0;
             gameTime = 0;
+            rideDistance = 0;
             nextSpawnAt = 4.3f;
             bossSpawned = false;
+            bossBattle = false;
+            bossDefeated = false;
             finished = false;
             paused = false;
             currentHazard = null;
@@ -142,6 +155,9 @@ namespace KinectKids3D
             nextScareIndex = 0;
             actionMessage = string.Empty;
             actionMessageUntil = 0;
+            if (bossProjectile != null) Destroy(bossProjectile.gameObject);
+            bossProjectile = null;
+            nextBossAttackAt = 0;
             hazards.Add(RideHazard.Create(HazardKind.Duck, 43f));
             hazards.Add(RideHazard.Create(HazardKind.DodgeLeft, 78f));
             hazards.Add(RideHazard.Create(HazardKind.DodgeRight, 111f));
@@ -154,20 +170,37 @@ namespace KinectKids3D
             if (Input.GetKeyDown(KeyCode.F11)) Screen.fullScreen = !Screen.fullScreen;
             if (Input.GetKeyDown(KeyCode.P) || Input.GetKeyDown(KeyCode.Space)) paused = !paused;
             if (finished && Input.GetKeyDown(KeyCode.R)) ResetRide();
+            if (Input.GetKeyDown(KeyCode.B) && !bossDefeated)
+            {
+                rideDistance = BossStopDistance;
+                bossBattle = true;
+            }
             if (paused || finished) return;
 
             gameTime += Time.deltaTime;
             float rideTime = Mathf.Max(0, gameTime - CountdownSeconds);
-            float distance = Mathf.Min(DarkRideWorld.TrackLength - 3f, rideTime * RideSpeed);
             UpdatePlayerPoses();
-            PositionCamera(distance);
-            if (gameTime < CountdownSeconds) return;
+            if (gameTime < CountdownSeconds)
+            {
+                PositionCamera(0);
+                return;
+            }
 
-            UpdateTargets(rideTime, distance);
-            UpdateHazards(distance);
+            if (!bossBattle)
+                rideDistance = Mathf.Min(DarkRideWorld.TrackLength - 3f, rideDistance + RideSpeed * Time.deltaTime);
+            if (!bossDefeated && rideDistance >= BossStopDistance)
+            {
+                rideDistance = BossStopDistance;
+                bossBattle = true;
+            }
+
+            PositionCamera(rideDistance);
+            UpdateTargets(rideTime, rideDistance);
+            UpdateHazards(rideDistance);
             UpdateEnvironmentEvents(rideTime);
             UpdateAim();
-            if (rideTime >= RideSeconds)
+            UpdateBossBattle();
+            if (bossDefeated && rideDistance >= DarkRideWorld.TrackLength - 3f)
             {
                 finished = true;
                 reticles.Clear();
@@ -201,18 +234,21 @@ namespace KinectKids3D
                 Destroy(target.gameObject);
             }
 
-            if (rideTime >= nextSpawnAt && rideTime < 56f)
+            if (rideTime >= nextSpawnAt && distance < BossStopDistance - 13f)
             {
                 SpawnRegular(distance, rideTime);
                 nextSpawnAt = rideTime + UnityEngine.Random.Range(2.4f, 3.5f);
             }
 
-            if (!bossSpawned && rideTime >= 56f)
+            if (!bossSpawned && distance >= BossStopDistance)
             {
                 bossSpawned = true;
-                float z = Mathf.Max(151f, distance + 24f);
+                float z = BossStopDistance + 16f;
                 targets.Add(GhostTarget.Create(TargetKind.ConductorBoss,
                     new Vector3(DarkRideWorld.TrackCenter(z), 0.35f, z)));
+                nextBossAttackAt = Time.time + 2.2f;
+                actionMessage = "VAGNEN STANNAR – BESEGRA KONDUKTÖREN!";
+                actionMessageUntil = Time.time + 2.4f;
             }
         }
 
@@ -316,20 +352,23 @@ namespace KinectKids3D
         {
             IReadOnlyList<AimSample> samples = aimProvider.GetAimSamples();
             reticles.Clear();
-            var seenHands = new HashSet<int>();
-            foreach (AimSample sample in samples)
+            foreach (IGrouping<int, AimSample> group in samples.GroupBy(item => item.PlayerIndex))
             {
-                seenHands.Add(sample.HandId);
+                int player = Mathf.Clamp(group.Key, 0, 1);
+                List<AimSample> playerHands = group.ToList();
+                foreach (AimSample hand in playerHands) UpdateHandActivity(hand);
+                AimSample sample = SelectActiveHand(player, playerHands);
+
                 Ray ray = rideCamera.ViewportPointToRay(new Vector3(sample.Position.x, 1f - sample.Position.y, 0));
                 RaycastHit hit;
                 GhostTarget target = null;
                 if (Physics.Raycast(ray, out hit, 80f)) target = hit.collider.GetComponentInParent<GhostTarget>();
 
                 AimLock aimLock;
-                if (!aimLocks.TryGetValue(sample.HandId, out aimLock))
+                if (!aimLocks.TryGetValue(player, out aimLock))
                 {
                     aimLock = new AimLock();
-                    aimLocks[sample.HandId] = aimLock;
+                    aimLocks[player] = aimLock;
                 }
                 if (target != null)
                 {
@@ -337,13 +376,21 @@ namespace KinectKids3D
                     aimLock.LastTargetAt = Time.time;
                 }
 
-                if (sample.Fire && Time.time >= aimLock.CooldownUntil)
+                if (target != null && target == aimLock.ChargeTarget)
+                    aimLock.Charge += Time.deltaTime;
+                else
+                {
+                    aimLock.ChargeTarget = target;
+                    aimLock.Charge = 0f;
+                }
+
+                bool chargedShot = target != null && aimLock.Charge >= DwellShotSeconds;
+                if ((sample.Fire || chargedShot) && Time.time >= aimLock.CooldownUntil)
                 {
                     GhostTarget firedTarget = target;
                     if (firedTarget == null && Time.time - aimLock.LastTargetAt <= TargetGraceSeconds)
                         firedTarget = aimLock.RecentTarget;
 
-                    int player = Mathf.Clamp(sample.PlayerIndex, 0, 1);
                     Color boltColor = player == 1 ? new Color(1f, 0.28f, 0.62f) : new Color(0.22f, 0.75f, 1f);
                     Vector3 boltStart = rideCamera.transform.position + rideCamera.transform.forward * 0.65f;
                     Vector3 boltEnd = firedTarget != null
@@ -353,34 +400,174 @@ namespace KinectKids3D
                     effects.PlayOneShot(castSound);
                     if (firedTarget != null)
                     {
+                        bool wasBoss = firedTarget.IsBoss;
                         int points = firedTarget.Hit();
                         scores[player] += points;
-                        effects.PlayOneShot(firedTarget.IsBoss ? bossSound : hitSound);
+                        effects.PlayOneShot(wasBoss ? bossSound : hitSound);
                         actionMessage = "+" + points;
                         actionMessageUntil = Time.time + 0.7f;
+                        if (wasBoss && firedTarget.Health <= 0)
+                        {
+                            bossDefeated = true;
+                            bossBattle = false;
+                            if (bossProjectile != null) Destroy(bossProjectile.gameObject);
+                            bossProjectile = null;
+                            actionMessage = "KONDUKTÖREN ÄR BESEGRAD – VAGNEN KÖR VIDARE!";
+                            actionMessageUntil = Time.time + 2.8f;
+                        }
                     }
                     aimLock.RecentTarget = null;
-                    aimLock.CooldownUntil = Time.time + 0.28f;
+                    aimLock.ChargeTarget = null;
+                    aimLock.Charge = 0f;
+                    aimLock.CooldownUntil = Time.time + 0.32f;
                 }
 
-                reticles[sample.HandId] = new ReticleState
+                reticles[player] = new ReticleState
                 {
-                    PlayerIndex = sample.PlayerIndex,
+                    PlayerIndex = player,
                     Position = sample.Position,
-                    Progress = sample.GestureProgress,
-                    OnTarget = target != null
+                    Progress = Mathf.Max(sample.GestureProgress, aimLock.Charge / DwellShotSeconds),
+                    OnTarget = target != null,
+                    IsRightHand = sample.HandId % 2 == 1
                 };
             }
+        }
 
-            foreach (int handId in aimLocks.Keys.Where(id => !seenHands.Contains(id)).ToArray())
-                aimLocks[handId].RecentTarget = null;
+        private void UpdateHandActivity(AimSample sample)
+        {
+            HandActivity activity;
+            if (!handActivity.TryGetValue(sample.HandId, out activity))
+            {
+                activity = new HandActivity { LastPosition = sample.Position, LastAt = Time.time };
+                handActivity[sample.HandId] = activity;
+                return;
+            }
+
+            float dt = Mathf.Max(0.016f, Time.time - activity.LastAt);
+            float movement = Vector2.Distance(sample.Position, activity.LastPosition) / dt;
+            activity.Score = Mathf.Lerp(activity.Score, Mathf.Clamp01(movement * 0.65f), 0.24f);
+            activity.LastPosition = sample.Position;
+            activity.LastAt = Time.time;
+        }
+
+        private AimSample SelectActiveHand(int player, List<AimSample> hands)
+        {
+            ActiveHandState state;
+            if (!activeHands.TryGetValue(player, out state))
+            {
+                AimSample preferred = hands.FirstOrDefault(item => item.HandId % 2 == 1);
+                if (!hands.Any(item => item.HandId == preferred.HandId)) preferred = hands[0];
+                state = new ActiveHandState { ActiveHandId = preferred.HandId };
+                activeHands[player] = state;
+            }
+
+            AimSample active = hands.FirstOrDefault(item => item.HandId == state.ActiveHandId);
+            if (!hands.Any(item => item.HandId == state.ActiveHandId))
+            {
+                active = hands[0];
+                state.ActiveHandId = active.HandId;
+            }
+
+            AimSample challenger = hands
+                .Where(item => item.HandId != active.HandId)
+                .OrderByDescending(item => ActivityScore(item))
+                .FirstOrDefault();
+            bool hasChallenger = hands.Any(item => item.HandId == challenger.HandId && item.HandId != active.HandId);
+            bool wantsSwitch = hasChallenger
+                && (ActivityScore(challenger) > ActivityScore(active) + 0.14f
+                    || challenger.GestureProgress > active.GestureProgress + 0.16f);
+            if (wantsSwitch)
+            {
+                if (state.CandidateHandId != challenger.HandId)
+                {
+                    state.CandidateHandId = challenger.HandId;
+                    state.CandidateSince = Time.time;
+                }
+                else if (Time.time - state.CandidateSince >= 0.55f)
+                {
+                    state.ActiveHandId = challenger.HandId;
+                    state.CandidateHandId = -1;
+                    active = challenger;
+                }
+            }
+            else
+            {
+                state.CandidateHandId = -1;
+            }
+
+            return active;
+        }
+
+        private float ActivityScore(AimSample sample)
+        {
+            HandActivity activity;
+            float movement = handActivity.TryGetValue(sample.HandId, out activity) ? activity.Score : 0f;
+            return movement + sample.GestureProgress * 0.72f + (sample.Fire ? 1f : 0f);
+        }
+
+        private void UpdateBossBattle()
+        {
+            if (!bossBattle || bossDefeated) return;
+            GhostTarget boss = targets.FirstOrDefault(item => item != null && item.IsBoss && item.Health > 0);
+            if (boss == null) return;
+
+            if (bossProjectile != null)
+            {
+                if (bossProjectile.Arrived) ResolveBossAttack();
+                return;
+            }
+
+            if (Time.time < nextBossAttackAt) return;
+            HazardKind kind = (HazardKind)UnityEngine.Random.Range(0, 3);
+            Vector3 start = boss.transform.position + new Vector3(0f, 2.15f, -0.6f);
+            Vector3 end = rideCamera.transform.position + rideCamera.transform.forward * 1.15f;
+            bossProjectile = BossProjectile.Create(kind, start, end);
+            nextBossAttackAt = Time.time + UnityEngine.Random.Range(3.0f, 4.0f);
+            effects.PlayOneShot(scareSound);
+        }
+
+        private void ResolveBossAttack()
+        {
+            bool anyoneFailed = false;
+            foreach (KeyValuePair<int, PoseState> pair in currentPoses)
+            {
+                bool succeeds = bossProjectile.Kind == HazardKind.Duck
+                    ? pair.Value.DuckAmount >= 0.18f
+                    : bossProjectile.Kind == HazardKind.DodgeLeft
+                        ? pair.Value.LeanAmount <= -0.15f
+                        : pair.Value.LeanAmount >= 0.15f;
+                int player = Mathf.Clamp(pair.Key, 0, 1);
+                if (succeeds)
+                {
+                    scores[player] += 35;
+                    effects.PlayOneShot(movementSuccessSound);
+                }
+                else
+                {
+                    anyoneFailed = true;
+                    scores[player] = Mathf.Max(0, scores[player] - 30);
+                }
+            }
+
+            if (anyoneFailed || currentPoses.Count == 0)
+            {
+                effects.PlayOneShot(collisionSound);
+                cameraShakeUntil = Time.time + 0.55f;
+                actionMessage = "BOSSEN TRÄFFADE!  -30";
+            }
+            else
+            {
+                actionMessage = "SNYGGT UNDAN!  +35";
+            }
+            actionMessageUntil = Time.time + 1.2f;
+            Destroy(bossProjectile.gameObject);
+            bossProjectile = null;
         }
 
         private void OnGUI()
         {
             EnsureStyles();
             float rideTime = Mathf.Max(0, gameTime - CountdownSeconds);
-            float remaining = Mathf.Max(0, RideSeconds - rideTime);
 
             GUI.Box(new Rect(18, 16, 430, 82), string.Empty);
             GUI.Label(new Rect(34, 23, 400, 34), "SPÖKJAKTEN 3D", titleStyle);
@@ -388,7 +575,9 @@ namespace KinectKids3D
 
             GUI.Box(new Rect(Screen.width - 315, 16, 297, 78), string.Empty);
             GUI.Label(new Rect(Screen.width - 298, 23, 280, 32), "SPELARE 1   " + scores[0], hudStyle);
-            GUI.Label(new Rect(Screen.width - 298, 57, 280, 26), "TID   " + Mathf.CeilToInt(remaining), smallStyle);
+            GUI.Label(new Rect(Screen.width - 298, 57, 280, 26), bossBattle
+                ? "SLUTBOSS – VAGNEN STÅR STILL"
+                : "FÄRD   " + Mathf.RoundToInt(rideDistance / DarkRideWorld.TrackLength * 100f) + " %", smallStyle);
             if (reticles.Values.Any(item => item.PlayerIndex == 1))
                 GUI.Label(new Rect(Screen.width - 298, 83, 280, 26), "SPELARE 2   " + scores[1], smallStyle);
 
@@ -403,16 +592,27 @@ namespace KinectKids3D
                 GUI.color = previous;
                 GUI.DrawTexture(new Rect(x - 34, y + 39, 68, 9), whiteTexture);
                 GUI.DrawTexture(new Rect(x - 32, y + 41, 64 * reticle.Progress, 5), goldTexture);
+                GUI.Label(new Rect(x - 65, y + 51, 130, 22),
+                    reticle.IsRightHand ? "HÖGER HAND" : "VÄNSTER HAND", smallStyle);
             }
 
             if (currentHazard != null)
             {
-                float gap = currentHazard.TrackZ - Mathf.Min(DarkRideWorld.TrackLength - 3f, rideTime * RideSpeed);
+                float gap = currentHazard.TrackZ - rideDistance;
                 float pulse = 1f + Mathf.Sin(Time.time * 9f) * 0.06f;
                 float width = 470f * pulse;
                 GUI.Box(new Rect(Screen.width * 0.5f - width * 0.5f, 104, width, 76), string.Empty);
                 GUI.Label(new Rect(Screen.width * 0.5f - 220, 114, 440, 52),
                     currentHazard.Instruction + "\n" + (gap > 5.2f ? "GÖR DIG REDO" : "NU!"), centerStyle);
+            }
+
+            if (bossProjectile != null && bossProjectile.Progress >= 0.42f)
+            {
+                float pulse = 1f + Mathf.Sin(Time.time * 11f) * 0.07f;
+                float width = 500f * pulse;
+                GUI.Box(new Rect(Screen.width * 0.5f - width * 0.5f, 102, width, 82), string.Empty);
+                GUI.Label(new Rect(Screen.width * 0.5f - 235, 112, 470, 58),
+                    bossProjectile.Instruction + "\nBOSSEN KASTAR – NU!", centerStyle);
             }
 
             if (Time.time < actionMessageUntil)
@@ -438,13 +638,13 @@ namespace KinectKids3D
                 GUI.Label(new Rect(Screen.width * 0.5f - 220, Screen.height * 0.5f - 68, 440, 60),
                     Mathf.CeilToInt(CountdownSeconds - gameTime).ToString(), centerStyle);
                 GUI.Label(new Rect(Screen.width * 0.5f - 220, Screen.height * 0.5f + 8, 440, 58),
-                    "SIKTA PÅ ETT SPÖKE\nDra handen bakåt och kasta den framåt!", centerStyle);
+                    "ETT SIKTE FÖLJER DIN AKTIVA HAND\nHåll på spöket eller knuffa handen lätt framåt!", centerStyle);
             }
             else if (rideTime < 9f)
             {
                 GUI.Box(new Rect(Screen.width * 0.5f - 330, 112, 660, 68), string.Empty);
                 GUI.Label(new Rect(Screen.width * 0.5f - 315, 118, 630, 54),
-                    "Kasta magi på spökena – ducka och väj när något kommer mot vagnen!", centerStyle);
+                    "Håll siktet kort på spökena – ducka och väj när något kommer!", centerStyle);
             }
 
             if (paused)
@@ -604,8 +804,24 @@ namespace KinectKids3D
         private sealed class AimLock
         {
             public GhostTarget RecentTarget;
+            public GhostTarget ChargeTarget;
             public float LastTargetAt;
             public float CooldownUntil;
+            public float Charge;
+        }
+
+        private sealed class ActiveHandState
+        {
+            public int ActiveHandId;
+            public int CandidateHandId = -1;
+            public float CandidateSince;
+        }
+
+        private sealed class HandActivity
+        {
+            public Vector2 LastPosition;
+            public float LastAt;
+            public float Score;
         }
 
         private sealed class PoseCalibration
@@ -626,6 +842,7 @@ namespace KinectKids3D
             public Vector2 Position;
             public float Progress;
             public bool OnTarget;
+            public bool IsRightHand;
         }
     }
 }
