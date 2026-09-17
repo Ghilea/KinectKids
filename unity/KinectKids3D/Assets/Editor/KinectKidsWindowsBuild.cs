@@ -15,6 +15,7 @@ namespace KinectKids3D.Editor
         {
             string root = FindProjectRoot();
             if (root == null) throw new InvalidOperationException("KinectKids.sln hittades inte ovanför Unity-projektet.");
+            KinectKidsMusicSetup.EnsureMusicAsset();
             BuildBridge(root);
             CopyBridgeIntoProject(root);
 

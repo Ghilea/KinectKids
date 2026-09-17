@@ -26,3 +26,5 @@ unity/KinectKids3D/*.sln
 unity/KinectKids3D/Assets/StreamingAssets/KinectBridge/*.exe
 unity/KinectKids3D/Assets/StreamingAssets/KinectBridge/*.config
 unity/KinectKids3D/Assets/StreamingAssets/KinectBridge/*.pdb
+unity/KinectKids3D/Assets/Resources/Audio/RideMusic.ogg
+unity/KinectKids3D/Assets/Resources/Audio/RideMusic.ogg.meta

@@ -48,9 +48,20 @@ jobs:
             './unity/KinectKids3D/Assets/Scripts/HauntedProp.cs',
             './unity/KinectKids3D/Assets/Scripts/MagicBolt.cs',
             './unity/KinectKids3D/Assets/Editor/KinectKidsProjectSetup.cs',
-            './unity/KinectKids3D/Assets/Editor/KinectKidsWindowsBuild.cs'
+            './unity/KinectKids3D/Assets/Editor/KinectKidsWindowsBuild.cs',
+            './unity/KinectKids3D/Assets/Editor/KinectKidsMusicSetup.cs',
+            './THIRD_PARTY_NOTICES.md'
           )
           foreach ($path in $required) {
             if (-not (Test-Path $path -PathType Leaf)) { throw "Unity-filen saknas: $path" }
+          }
+          $parts = Get-ChildItem './unity/KinectKids3D/MusicSource/RideMusic.base64.part*' | Sort-Object Name
+          if ($parts.Count -ne 6) { throw "Förväntade 6 musikdelar men hittade $($parts.Count)." }
+          $encoded = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          $music = [Convert]::FromBase64String($encoded)
+          if ($music.Length -ne 1945137) { throw "Musiken har fel storlek: $($music.Length)." }
+          $sha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($music)).ToLowerInvariant()
+          if ($sha -ne '8006838cc5aceee5b79eb48139061309e7e95a7388d47de60a9a5cab05728ca7') {
+            throw "Musikens SHA-256 stämmer inte: $sha"
           }
           Write-Host 'Unity-prototypens struktur och manifest är giltiga.'

@@ -42,11 +42,12 @@ och Kinectens vanliga drivrutiner måste däremot finnas på datorn.
 
 ## Musik
 
-Vi har valt [Free Horror Music Pack - SVL](https://shononoki.itch.io/free-horror-music-pack)
-av Shononoki. Paketets sida tillåter kommersiella och icke-kommersiella projekt utan krav
-på erkännande. Ladda ned OGG-paketet, välj en lämplig lugn loop och spara den som
-`Assets\Resources\Audio\RideMusic.ogg`. Spelet använder automatiskt reservmusiken tills
-den slutliga loopen har provlyssnats och valts.
+Vi har valt den 80 sekunder långa loopen **Playground** från
+[Free Horror Music Pack - SVL](https://shononoki.itch.io/free-horror-music-pack) av
+Shononoki. Paketets sida tillåter kommersiella och icke-kommersiella projekt utan krav
+på erkännande. Unity återskapar `Assets\Resources\Audio\RideMusic.ogg` automatiskt och
+offline från de mindre källdelarna i `MusicSource`; procedurmusiken finns kvar som reserv.
+Licensnoteringen finns i projektets `THIRD_PARTY_NOTICES.md`.
 
 ## Kontroller
 
