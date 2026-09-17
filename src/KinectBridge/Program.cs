@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
+using System.IO.Pipes;
 using System.Linq;
-using System.Net;
-using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using Microsoft.Kinect;
@@ -13,11 +13,12 @@ namespace KinectKids.Bridge
 {
     internal sealed class Program : IDisposable
     {
-        private const int Port = 17385;
         private readonly Dictionary<int, DateTime> firstSeen = new Dictionary<int, DateTime>();
-        private readonly UdpClient udp = new UdpClient();
+        private readonly object sendSync = new object();
         private KinectSensor sensor;
         private Process parent;
+        private NamedPipeClientStream pipe;
+        private StreamWriter writer;
         private bool stopping;
 
         private static int Main(string[] args)
@@ -31,7 +32,7 @@ namespace KinectKids.Bridge
                 }
                 catch (Exception exception)
                 {
-                    program.SendStatus("ERROR", DeepestMessage(exception));
+                    program.TrySendStatus("ERROR", DeepestMessage(exception));
                     Console.Error.WriteLine(exception);
                     return 1;
                 }
@@ -40,16 +41,24 @@ namespace KinectKids.Bridge
 
         private void Run(string[] args)
         {
-            int parentId;
-            if (args.Length >= 2 && args[0] == "--parent" && int.TryParse(args[1], out parentId))
+            int parentId = ReadIntArgument(args, "--parent");
+            if (parentId > 0)
             {
                 try { parent = Process.GetProcessById(parentId); }
                 catch { parent = null; }
             }
 
+            string pipeName = ReadArgument(args, "--pipe");
+            if (string.IsNullOrWhiteSpace(pipeName)) pipeName = "KinectKidsV1";
+            pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.Out);
+            pipe.Connect(10000);
+            writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
+            SendStatus("INFO", "Kinect-bryggan är startad");
+            SendStatus("INFO", "Letar efter ansluten Kinect 360…");
             sensor = KinectSensor.KinectSensors.FirstOrDefault(item => item.Status == KinectStatus.Connected);
             if (sensor == null) throw new InvalidOperationException("Ingen ansluten Kinect 360 hittades.");
 
+            SendStatus("INFO", "Kinect hittad – startar djup- och skelettström…");
             sensor.DepthStream.Enable(DepthImageFormat.Resolution320x240Fps30);
             sensor.SkeletonStream.Enable();
             sensor.SkeletonFrameReady += OnSkeletonFrameReady;
@@ -121,7 +130,7 @@ namespace KinectKids.Bridge
                 left.Position, DepthImageFormat.Resolution320x240Fps30);
             DepthImagePoint rightDepth = sensor.CoordinateMapper.MapSkeletonPointToDepthPoint(
                 right.Position, DepthImageFormat.Resolution320x240Fps30);
-            packet.Append('\n').Append("P|").Append(player).Append('|').Append(body.TrackingId)
+            packet.Append('~').Append("P|").Append(player).Append('|').Append(body.TrackingId)
                 .Append('|').Append(F(shoulder.Position.X)).Append('|').Append(F(head.Position.Y))
                 .Append('|').Append(F(shoulder.Position.Y)).Append('|').Append(F(shoulder.Position.Z))
                 .Append('|').Append(F(leftDepth.X / 320f)).Append('|').Append(F(leftDepth.Y / 240f))
@@ -140,10 +149,32 @@ namespace KinectKids.Bridge
             Send("S|" + kind + "|" + (message ?? string.Empty).Replace('\n', ' ').Replace('\r', ' '));
         }
 
+        private void TrySendStatus(string kind, string message)
+        {
+            try { if (writer != null) SendStatus(kind, message); }
+            catch { }
+        }
+
         private void Send(string message)
         {
-            byte[] bytes = Encoding.UTF8.GetBytes(message);
-            udp.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, Port));
+            lock (sendSync)
+            {
+                if (writer == null) throw new IOException("Den lokala Kinect-pipen är inte ansluten.");
+                writer.WriteLine(message);
+            }
+        }
+
+        private static string ReadArgument(string[] args, string name)
+        {
+            for (int i = 0; i + 1 < args.Length; i++)
+                if (string.Equals(args[i], name, StringComparison.OrdinalIgnoreCase)) return args[i + 1];
+            return null;
+        }
+
+        private static int ReadIntArgument(string[] args, string name)
+        {
+            int value;
+            return int.TryParse(ReadArgument(args, name), out value) ? value : 0;
         }
 
         private static string DeepestMessage(Exception exception)
@@ -165,7 +196,10 @@ namespace KinectKids.Bridge
                 catch { }
                 sensor = null;
             }
-            udp.Close();
+            if (writer != null) writer.Dispose();
+            writer = null;
+            if (pipe != null) pipe.Dispose();
+            pipe = null;
             if (parent != null) parent.Dispose();
         }
     }

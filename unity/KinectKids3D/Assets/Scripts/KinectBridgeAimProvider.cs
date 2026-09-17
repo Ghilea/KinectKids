@@ -3,27 +3,26 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
+using System.IO.Pipes;
 using System.Threading;
 using UnityEngine;
 
 namespace KinectKids3D
 {
     /// <summary>
-    /// Tar emot enbart ledpositioner från KinectBridge.exe via datorns loopback-adress.
+    /// Tar emot enbart ledpositioner från KinectBridge.exe via en lokal Windows-pipe.
     /// Bryggan är x86 så att Kinect SDK 1.8 fungerar även när Unity körs som 64-bitarsprogram.
     /// </summary>
     public sealed class KinectBridgeAimProvider : IAimProvider
     {
-        private const int Port = 17385;
+        private const int StartupTimeoutSeconds = 30;
         private readonly object sync = new object();
         private readonly List<AimSample> latest = new List<AimSample>(4);
         private readonly List<PlayerPose> latestPoses = new List<PlayerPose>(2);
         private readonly Dictionary<int, HandGestureState> gestures = new Dictionary<int, HandGestureState>();
         private readonly ManualResetEvent ready = new ManualResetEvent(false);
-        private UdpClient receiver;
+        private NamedPipeServerStream pipe;
+        private StreamReader reader;
         private Thread receiveThread;
         private Process bridgeProcess;
         private volatile bool stopping;
@@ -47,30 +46,40 @@ namespace KinectKids3D
                 string executable = EnsureBridgeExecutable();
                 if (string.IsNullOrEmpty(executable)) return false;
 
-                receiver = new UdpClient(AddressFamily.InterNetwork);
-                receiver.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                receiver.Client.Bind(new IPEndPoint(IPAddress.Loopback, Port));
+                string pipeName = "KinectKidsV1-" + Process.GetCurrentProcess().Id;
+                pipe = new NamedPipeServerStream(pipeName, PipeDirection.In, 1,
+                    PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                 receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "KinectKids Kinect bridge" };
                 receiveThread.Start();
 
                 var start = new ProcessStartInfo
                 {
                     FileName = executable,
-                    Arguments = "--parent " + Process.GetCurrentProcess().Id,
+                    Arguments = "--parent " + Process.GetCurrentProcess().Id + " --pipe " + pipeName,
                     WorkingDirectory = Path.GetDirectoryName(executable),
                     UseShellExecute = false,
+                    RedirectStandardError = true,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden
                 };
                 bridgeProcess = Process.Start(start);
                 if (bridgeProcess == null) throw new InvalidOperationException("KinectBridge.exe kunde inte startas.");
 
-                if (!ready.WaitOne(TimeSpan.FromSeconds(7)))
+                DateTime deadline = DateTime.UtcNow.AddSeconds(StartupTimeoutSeconds);
+                while (!ready.WaitOne(250) && DateTime.UtcNow < deadline)
                 {
                     if (bridgeProcess.HasExited)
-                        status = "Kinect-bryggan stängdes före anslutning (kod " + bridgeProcess.ExitCode + ")";
-                    else
-                        status = "Kinect-bryggan svarade inte – kontrollera USB och stäng Kinect Explorer";
+                    {
+                        string error = bridgeProcess.StandardError.ReadToEnd();
+                        status = "Kinect-bryggan stängdes (kod " + bridgeProcess.ExitCode + ")";
+                        if (!string.IsNullOrWhiteSpace(error)) status += ": " + Compact(error);
+                        Dispose();
+                        return false;
+                    }
+                }
+                if (!ready.WaitOne(0))
+                {
+                    status += " – start tog över 30 sekunder; koppla ur sensorn och anslut igen";
                     Dispose();
                     return false;
                 }
@@ -104,15 +113,16 @@ namespace KinectKids3D
         {
             try
             {
-                var endpoint = new IPEndPoint(IPAddress.Loopback, 0);
+                pipe.WaitForConnection();
+                reader = new StreamReader(pipe);
                 while (!stopping)
                 {
-                    byte[] bytes = receiver.Receive(ref endpoint);
-                    if (!IPAddress.IsLoopback(endpoint.Address)) continue;
-                    ParsePacket(Encoding.UTF8.GetString(bytes));
+                    string packet = reader.ReadLine();
+                    if (packet == null) break;
+                    ParsePacket(packet);
                 }
             }
-            catch (SocketException)
+            catch (IOException)
             {
                 if (!stopping) status = "Kontakten med Kinect-bryggan bröts";
             }
@@ -125,7 +135,7 @@ namespace KinectKids3D
 
         private void ParsePacket(string packet)
         {
-            string[] lines = packet.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] lines = packet.Split(new[] { '~' }, StringSplitOptions.RemoveEmptyEntries);
             if (lines.Length == 0) return;
             if (lines[0].StartsWith("S|", StringComparison.Ordinal))
             {
@@ -279,16 +289,28 @@ namespace KinectKids3D
             return exception.Message;
         }
 
+        private static string Compact(string value)
+        {
+            string compact = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            while (compact.Contains("  ")) compact = compact.Replace("  ", " ");
+            return compact.Length <= 260 ? compact : compact.Substring(0, 257) + "…";
+        }
+
         public void Dispose()
         {
             if (disposed) return;
             disposed = true;
             stopping = true;
             IsAvailable = false;
-            if (receiver != null)
+            if (reader != null)
             {
-                receiver.Close();
-                receiver = null;
+                reader.Dispose();
+                reader = null;
+            }
+            if (pipe != null)
+            {
+                pipe.Dispose();
+                pipe = null;
             }
             if (receiveThread != null && receiveThread.IsAlive) receiveThread.Join(500);
             receiveThread = null;

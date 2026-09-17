@@ -31,7 +31,7 @@ All grafik i den här första versionen byggs av riktiga 3D-objekt när spelet s
 5. Stäng Kinect Explorer, Kinect Studio och den gamla KinectKids-appen.
 6. Tryck på **Play** i Unity.
 
-Första gången Play trycks bygger Unity automatiskt `KinectBridge.exe` som x86 och startar den i bakgrunden. Bryggan skickar bara ledpositioner över datorns lokala loopback-adress; inga bilder sparas eller lämnar datorn. Om sensorn inte kan starta växlar prototypen till musläge och visar orsaken uppe till vänster.
+Första gången Play trycks bygger Unity automatiskt `KinectBridge.exe` som x86 och startar den i bakgrunden. Bryggan skickar bara ledpositioner genom en lokal Windows-pipe; ingen nätverksport öppnas och inga bilder sparas eller lämnar datorn. Kinect får upp till 30 sekunder att initieras och statusraden visar vilket startsteg som pågår. Om sensorn inte kan starta växlar prototypen till musläge och visar orsaken uppe till vänster.
 
 ## Skapa en version för skolan
 

@@ -69,7 +69,7 @@ Vi ska bygga dessa spel i ordning baserat på komplexitet och pedagogisk värde:
 #### Tekniska Krav för alla framtida versioner
 *   **Säkerhet:** Inga bilder lagras. Endå `SkeletonData` skickas till UI.
 *   **USB-kompatibilitet:** Måste fungera på USB 2.0 (baksida av PC). Hantera "Bandbredd-fel" snyggt med svenska meddelanden.
-*   **Unity/Kinect-kompatibilitet:** Unity kör som x64 och tar emot leddata från `KinectBridge.exe`, som kör Kinect SDK 1.8 som x86 över endast `127.0.0.1`. Ingen sensorbild skickas eller lagras.
+*   **Unity/Kinect-kompatibilitet:** Unity kör som x64 och tar emot leddata från `KinectBridge.exe`, som kör Kinect SDK 1.8 som x86 genom en lokal Windows-pipe. Ingen nätverksport öppnas och ingen sensorbild skickas eller lagras.
 *   **Skoldistribution:** Skolor får en färdig Windows-mapp med EXE, datafiler och Kinect-brygga. Unity Hub eller Unity Editor får inte krävas på skoldatorn.
 *   **Kalibrering:** En enkel vy där barnen ställer sig för att kalibrera sensorn innan varje session.
 
