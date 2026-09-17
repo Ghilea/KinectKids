@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 
 namespace KinectKids3D
@@ -18,6 +19,9 @@ namespace KinectKids3D
         private float trackZ;
         private float phase;
         private bool revealed;
+        private AudioSource scareAudio;
+        private AudioClip[] revealSounds;
+        private AudioClip[] creatureSounds;
 
         public static WallDoorScare Create(float z, int side, int route)
         {
@@ -33,6 +37,23 @@ namespace KinectKids3D
 
         private void Build(int side)
         {
+            scareAudio = gameObject.AddComponent<AudioSource>();
+            scareAudio.playOnAwake = false;
+            scareAudio.spatialBlend = 0.82f;
+            scareAudio.minDistance = 2.5f;
+            scareAudio.maxDistance = 24f;
+            scareAudio.rolloffMode = AudioRolloffMode.Linear;
+            revealSounds = new[]
+            {
+                Resources.Load<AudioClip>("Audio/SFX/Doors/door_creak_open"),
+                Resources.Load<AudioClip>("Audio/SFX/Doors/floor_creak_01"),
+                Resources.Load<AudioClip>("Audio/SFX/Doors/floor_creak_02"),
+                Resources.Load<AudioClip>("Audio/SFX/Doors/floor_creak_03")
+            }.Where(clip => clip != null).ToArray();
+            creatureSounds = Resources.LoadAll<AudioClip>("Audio/SFX/Creatures")
+                .Where(clip => clip != null && clip.name.StartsWith("ghost_moan_"))
+                .ToArray();
+
             GameObject doorModel = ImportedModelFactory.Create(
                 "Models/KenneyGraveyard/crypt-door", transform, "Stängd kryptdörr",
                 new Vector3(side * 5.20f, 1.72f, 0f), 3.45f,
@@ -81,6 +102,7 @@ namespace KinectKids3D
             {
                 revealed = true;
                 SetCreatureVisible(true);
+                PlayRevealSounds();
             }
 
             if (door != null) door.localRotation = Quaternion.Slerp(doorClosed, doorOpen, amount);
@@ -97,6 +119,16 @@ namespace KinectKids3D
                 SetCreatureVisible(false);
                 enabled = false;
             }
+        }
+
+        private void PlayRevealSounds()
+        {
+            if (scareAudio == null) return;
+            scareAudio.pitch = Random.Range(0.92f, 1.04f);
+            if (revealSounds != null && revealSounds.Length > 0)
+                scareAudio.PlayOneShot(revealSounds[Random.Range(0, revealSounds.Length)], 0.72f);
+            if (creatureSounds != null && creatureSounds.Length > 0)
+                scareAudio.PlayOneShot(creatureSounds[Random.Range(0, creatureSounds.Length)], 0.62f);
         }
 
         private void SetCreatureVisible(bool visible)

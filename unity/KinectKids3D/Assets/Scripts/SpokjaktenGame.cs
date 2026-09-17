@@ -56,17 +56,16 @@ namespace KinectKids3D
         private GUIStyle centerStyle;
         private AudioSource effects;
         private AudioSource musicSource;
-        private AudioClip hitSound;
-        private AudioClip bossSound;
-        private AudioClip castSound;
-        private AudioClip movementSuccessSound;
-        private AudioClip collisionSound;
-        private AudioClip scareSound;
-        private AudioClip hazardCueSound;
-        private AudioClip doorCreakSound;
-        private AudioClip chainRattleSound;
-        private AudioClip batRushSound;
-        private AudioClip phantomSound;
+        private AudioClip[] hitSounds;
+        private AudioClip[] bossSounds;
+        private AudioClip[] castSounds;
+        private AudioClip[] movementSuccessSounds;
+        private AudioClip[] collisionSounds;
+        private AudioClip[] scareSounds;
+        private AudioClip[] hazardCueSounds;
+        private AudioClip[] chainRattleSounds;
+        private AudioClip[] batRushSounds;
+        private AudioClip[] phantomSounds;
         private AudioSource ghostVoice;
         private AudioSource environmentVoice;
         private AudioClip[] ghostSounds;
@@ -138,22 +137,33 @@ namespace KinectKids3D
             effects = gameObject.AddComponent<AudioSource>();
             effects.playOnAwake = false;
             effects.spatialBlend = 0;
-            hitSound = CreateTone("Träff", 640f, 0.10f, 0.20f);
-            bossSound = CreateTone("Bossträff", 185f, 0.22f, 0.28f);
-            castSound = CreateNoiseBurst("Magikast", 0.12f, 0.16f, 1101);
-            movementSuccessSound = CreateTone("Undanmanöver", 880f, 0.22f, 0.20f);
-            collisionSound = CreateNoiseBurst("Krock", 0.34f, 0.26f, 9001);
-            scareSound = CreateNoiseBurst("Överraskning", 0.25f, 0.11f, 4404);
-            hazardCueSound = CreateWarningSound();
-            doorCreakSound = CreateCreakSound();
-            chainRattleSound = CreateMetalRattle();
-            batRushSound = CreateNoiseBurst("Fladdermöss", 0.72f, 0.14f, 7281);
-            phantomSound = CreateGhostVoice("Vålnad nära vagnen", 1.22f, 96f, 3108);
+            hitSounds = LoadClipSet("Audio/SFX/Impacts", "hit_",
+                CreateTone("Träff", 640f, 0.10f, 0.20f));
+            bossSounds = LoadNamedClips(CreateTone("Bossträff", 185f, 0.22f, 0.28f),
+                "Audio/SFX/Impacts/horror_bass_01", "Audio/SFX/Impacts/horror_bass_02");
+            castSounds = LoadClipSet("Audio/SFX/Magic", "magic_",
+                CreateNoiseBurst("Magikast", 0.12f, 0.16f, 1101));
+            movementSuccessSounds = LoadNamedClips(CreateTone("Undanmanöver", 880f, 0.22f, 0.20f),
+                "Audio/SFX/Environment/success_bell");
+            collisionSounds = LoadClipSet("Audio/SFX/Impacts", "slam_",
+                CreateNoiseBurst("Krock", 0.34f, 0.26f, 9001));
+            scareSounds = LoadNamedClips(CreateNoiseBurst("Överraskning", 0.25f, 0.11f, 4404),
+                "Audio/SFX/Impacts/horror_high_01", "Audio/SFX/Impacts/horror_mid_01",
+                "Audio/SFX/Environment/weird_01", "Audio/SFX/Environment/weird_03",
+                "Audio/SFX/Environment/weird_05");
+            hazardCueSounds = LoadNamedClips(CreateWarningSound(),
+                "Audio/SFX/Environment/metal_03", "Audio/SFX/Environment/metal_08");
+            chainRattleSounds = LoadNamedClips(CreateMetalRattle(),
+                "Audio/SFX/Environment/chain_rattle", "Audio/SFX/Environment/metal_clank");
+            batRushSounds = LoadNamedClips(CreateNoiseBurst("Fladdermöss", 0.72f, 0.14f, 7281),
+                "Audio/SFX/Creatures/bat_wings");
+            phantomSounds = LoadClipSet("Audio/SFX/Creatures", "ghost_moan_",
+                CreateGhostVoice("Vålnad nära vagnen", 1.22f, 96f, 3108));
 
             AudioSource ambience = gameObject.AddComponent<AudioSource>();
-            ambience.clip = CreateAmbience();
+            ambience.clip = Resources.Load<AudioClip>("Audio/SFX/Ambience/ambient_horror") ?? CreateAmbience();
             ambience.loop = true;
-            ambience.volume = 0.20f;
+            ambience.volume = 0.16f;
             ambience.spatialBlend = 0;
             ambience.Play();
 
@@ -177,14 +187,7 @@ namespace KinectKids3D
             ghostVoice = gameObject.AddComponent<AudioSource>();
             ghostVoice.playOnAwake = false;
             ghostVoice.spatialBlend = 0f;
-            ghostSounds = new[]
-            {
-                CreateGhostVoice("Avlägset spöke", 1.42f, 154f, 6201),
-                CreateGhostVoice("Viskning i muren", 1.08f, 212f, 7712),
-                CreateGhostVoice("Klagande vålnad", 1.78f, 118f, 8839),
-                CreateEvilLaugh("Elakt skratt", 1.65f, 9917),
-                CreateEvilLaugh("Kort häxskratt", 1.18f, 4471)
-            };
+            ghostSounds = phantomSounds;
 
             environmentVoice = gameObject.AddComponent<AudioSource>();
             environmentVoice.playOnAwake = false;
@@ -422,8 +425,7 @@ namespace KinectKids3D
             routeChoiceActive = false;
             actionMessage = selectedRoute < 0 ? "VÄNSTRA HEMLIGA GÅNGEN!" : "HÖGRA HEMLIGA GÅNGEN!";
             actionMessageUntil = Time.time + 2.1f;
-            effects.PlayOneShot(movementSuccessSound);
-            effects.PlayOneShot(doorCreakSound, 0.86f);
+            PlayRandom(effects, movementSuccessSounds);
             RouteDoor.OpenRoute(selectedRoute);
 
             if (routeHazardsAdded) return;
@@ -481,7 +483,7 @@ namespace KinectKids3D
                     currentHazard = hazard;
 
                 if (gap <= QuickEventCueDistance && gap >= QuickEventPassedDistance && hazard.Reveal())
-                    effects.PlayOneShot(hazardCueSound, 0.78f);
+                    PlayRandom(effects, hazardCueSounds, 0.78f);
 
                 if (gap <= QuickEventActionDistance && gap >= QuickEventPassedDistance)
                 {
@@ -495,7 +497,7 @@ namespace KinectKids3D
                         if (!succeeds || !hazard.MarkSuccess(pair.Key)) continue;
                         int player = Mathf.Clamp(pair.Key, 0, 1);
                         scores[player] += 40;
-                        effects.PlayOneShot(movementSuccessSound);
+                        PlayRandom(effects, movementSuccessSounds);
                         actionMessage = "SNYGGT, SPELARE " + (player + 1) + "!  +40";
                         actionMessageUntil = Time.time + 1.25f;
                     }
@@ -513,7 +515,7 @@ namespace KinectKids3D
                 hazard.ResolveVisual(everyoneSucceeded);
                 if (!everyoneSucceeded)
                 {
-                    effects.PlayOneShot(collisionSound);
+                    PlayRandom(effects, collisionSounds);
                     cameraShakeUntil = Time.time + 0.55f;
                     actionMessage = "OJ!  -25";
                     actionMessageUntil = Time.time + 1.1f;
@@ -528,7 +530,7 @@ namespace KinectKids3D
                 int side = UnityEngine.Random.value < 0.5f ? -1 : 1;
                 nextScareIndex++;
                 SideScare.Create(rideCamera.transform, side);
-                effects.PlayOneShot(scareSound);
+                PlayRandom(effects, scareSounds);
                 PlayGhostSound(side, 0.82f);
                 cameraShakeUntil = Mathf.Max(cameraShakeUntil, Time.time + 0.22f);
             }
@@ -539,9 +541,9 @@ namespace KinectKids3D
             HauntedEncounterKind kind = (HauntedEncounterKind)(nextEncounterIndex % 3);
             nextEncounterIndex++;
             HauntedEncounter.Create(rideCamera.transform, kind, encounterSide);
-            AudioClip sound = kind == HauntedEncounterKind.BatBurst
-                ? batRushSound
-                : kind == HauntedEncounterKind.SwingingChain ? chainRattleSound : phantomSound;
+            AudioClip sound = RandomClip(kind == HauntedEncounterKind.BatBurst
+                ? batRushSounds
+                : kind == HauntedEncounterKind.SwingingChain ? chainRattleSounds : phantomSounds);
             environmentVoice.clip = sound;
             environmentVoice.panStereo = encounterSide * 0.58f;
             environmentVoice.volume = 0.74f;
@@ -629,13 +631,13 @@ namespace KinectKids3D
                         ? firedTarget.transform.position + Vector3.up
                         : ray.GetPoint(18f);
                     MagicBolt.Launch(boltStart, boltEnd, boltColor);
-                    effects.PlayOneShot(castSound);
+                    PlayRandom(effects, castSounds, 0.92f);
                     if (firedTarget != null)
                     {
                         bool wasBoss = firedTarget.IsBoss;
                         int points = firedTarget.Hit();
                         scores[player] += points;
-                        effects.PlayOneShot(wasBoss ? bossSound : hitSound);
+                        PlayRandom(effects, wasBoss ? bossSounds : hitSounds, wasBoss ? 0.95f : 0.82f);
                         actionMessage = "+" + points;
                         actionMessageUntil = Time.time + 0.7f;
                         if (wasBoss && firedTarget.Health <= 0)
@@ -773,7 +775,7 @@ namespace KinectKids3D
                         actionMessage = (active.HandId % 2 == 1 ? "HÖGER" : "VÄNSTER")
                             + " HAND SIKTAR – DEN ANDRA KASTAR";
                         actionMessageUntil = Time.time + 1.8f;
-                        effects.PlayOneShot(movementSuccessSound, 0.62f);
+                        PlayRandom(effects, movementSuccessSounds, 0.62f);
                     }
                 }
             }
@@ -810,7 +812,7 @@ namespace KinectKids3D
             Vector3 end = rideCamera.transform.position + rideCamera.transform.forward * 1.15f;
             bossProjectile = BossProjectile.Create(kind, start, end);
             nextBossAttackAt = Time.time + UnityEngine.Random.Range(3.0f, 4.0f);
-            effects.PlayOneShot(scareSound);
+            PlayRandom(effects, scareSounds);
         }
 
         private void ResolveBossAttack()
@@ -827,7 +829,7 @@ namespace KinectKids3D
                 if (succeeds)
                 {
                     scores[player] += 35;
-                    effects.PlayOneShot(movementSuccessSound);
+                    PlayRandom(effects, movementSuccessSounds);
                 }
                 else
                 {
@@ -838,7 +840,7 @@ namespace KinectKids3D
 
             if (anyoneFailed || currentPoses.Count == 0)
             {
-                effects.PlayOneShot(collisionSound);
+                PlayRandom(effects, collisionSounds);
                 cameraShakeUntil = Time.time + 0.55f;
                 actionMessage = "BOSSEN TRÄFFADE!  -30";
             }
@@ -1066,6 +1068,35 @@ namespace KinectKids3D
             texture.SetPixel(0, 0, color);
             texture.Apply();
             return texture;
+        }
+
+        private static AudioClip[] LoadClipSet(string resourceFolder, string namePrefix, AudioClip fallback)
+        {
+            AudioClip[] loaded = Resources.LoadAll<AudioClip>(resourceFolder)
+                .Where(clip => clip != null && clip.name.StartsWith(namePrefix, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(clip => clip.name)
+                .ToArray();
+            return loaded.Length > 0 ? loaded : new[] { fallback };
+        }
+
+        private static AudioClip[] LoadNamedClips(AudioClip fallback, params string[] resourcePaths)
+        {
+            AudioClip[] loaded = resourcePaths
+                .Select(path => Resources.Load<AudioClip>(path))
+                .Where(clip => clip != null)
+                .ToArray();
+            return loaded.Length > 0 ? loaded : new[] { fallback };
+        }
+
+        private static AudioClip RandomClip(AudioClip[] clips)
+        {
+            return clips == null || clips.Length == 0 ? null : clips[UnityEngine.Random.Range(0, clips.Length)];
+        }
+
+        private static void PlayRandom(AudioSource source, AudioClip[] clips, float volume = 1f)
+        {
+            AudioClip clip = RandomClip(clips);
+            if (source != null && clip != null) source.PlayOneShot(clip, volume);
         }
 
         private static AudioClip CreateTone(string clipName, float frequency, float duration, float volume)

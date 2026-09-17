@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 
 namespace KinectKids3D
@@ -12,6 +13,8 @@ namespace KinectKids3D
         private bool opening;
         private bool automatic;
         private float trackZ;
+        private AudioSource doorAudio;
+        private AudioClip[] doorSounds;
 
         public int Route { get; private set; }
 
@@ -32,13 +35,14 @@ namespace KinectKids3D
         public static void OpenRoute(int selectedRoute)
         {
             foreach (RouteDoor door in Object.FindObjectsByType<RouteDoor>(FindObjectsSortMode.None))
-                if (!door.automatic) door.opening = door.Route == selectedRoute;
+                if (!door.automatic && door.Route == selectedRoute) door.BeginOpening();
         }
 
         private void Update()
         {
-            if (automatic && Camera.main != null)
-                opening = trackZ - Camera.main.transform.position.z <= 11f;
+            if (automatic && !opening && Camera.main != null
+                && trackZ - Camera.main.transform.position.z <= 11f)
+                BeginOpening();
             float target = opening ? 1f : 0f;
             openAmount = Mathf.MoveTowards(openAmount, target, Time.deltaTime * 0.62f);
             float eased = openAmount * openAmount * (3f - 2f * openAmount);
@@ -48,6 +52,19 @@ namespace KinectKids3D
 
         private void Build(Material wood, Material metal, Material glow)
         {
+            doorAudio = gameObject.AddComponent<AudioSource>();
+            doorAudio.playOnAwake = false;
+            doorAudio.spatialBlend = 0.72f;
+            doorAudio.minDistance = 3f;
+            doorAudio.maxDistance = 28f;
+            doorAudio.rolloffMode = AudioRolloffMode.Linear;
+            doorSounds = new[]
+            {
+                Resources.Load<AudioClip>("Audio/SFX/Doors/door_creak_open"),
+                Resources.Load<AudioClip>("Audio/SFX/Doors/door_open"),
+                Resources.Load<AudioClip>("Audio/SFX/Doors/grind_stone")
+            }.Where(clip => clip != null).ToArray();
+
             GameObject importedPortal = ImportedModelFactory.Create(
                 "Models/KayKit/wall_doorway", transform, "Importerad slottsportal",
                 new Vector3(0f, 2.55f, 0.30f), 9.55f, Quaternion.Euler(0f, 180f, 0f));
@@ -87,6 +104,15 @@ namespace KinectKids3D
                 AddPart(leaf, "Rostigt dörrband", new Vector3(-side * 2.02f, 1.35f, -0.22f), new Vector3(3.55f, 0.16f, 0.12f), metal);
                 AddPart(leaf, "Lysande dörrsymbol", new Vector3(-side * 2.02f, 2.55f, -0.24f), Vector3.one * 0.30f, glow, PrimitiveType.Sphere);
             }
+        }
+
+        private void BeginOpening()
+        {
+            if (opening) return;
+            opening = true;
+            if (doorAudio == null || doorSounds == null || doorSounds.Length == 0) return;
+            doorAudio.pitch = Random.Range(0.92f, 1.04f);
+            doorAudio.PlayOneShot(doorSounds[Random.Range(0, doorSounds.Length)], 0.88f);
         }
 
         private static void AddPart(Transform parent, string name, Vector3 position, Vector3 scale,
