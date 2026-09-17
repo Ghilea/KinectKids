@@ -97,6 +97,19 @@ namespace KinectKids3D
 
         private void BuildModel()
         {
+            if (Kind == TargetKind.Ghost)
+            {
+                GameObject importedGhost = ImportedModelFactory.Create(
+                    "Models/Quaternius/Ghost", transform, "Animerat slottsspöke",
+                    new Vector3(0f, 1.05f, 0f), 2.65f, Quaternion.Euler(0f, 180f, 0f),
+                    "idle", "fly", "move");
+                if (importedGhost != null)
+                {
+                    RegisterRenderers(importedGhost);
+                    return;
+                }
+            }
+
             Color skin = Kind == TargetKind.Ghost
                 ? new Color(0.68f, 0.73f, 0.71f)
                 : new Color(0.58f, 0.66f, 0.44f);
@@ -242,6 +255,15 @@ namespace KinectKids3D
             if (renderer == null) return;
             renderers.Add(renderer);
             baseColors.Add(renderer.material.color);
+        }
+
+        private void RegisterRenderers(GameObject model)
+        {
+            foreach (Renderer renderer in model.GetComponentsInChildren<Renderer>(true))
+            {
+                renderers.Add(renderer);
+                baseColors.Add(renderer.material.color);
+            }
         }
     }
 }

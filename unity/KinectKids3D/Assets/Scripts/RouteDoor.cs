@@ -41,9 +41,15 @@ namespace KinectKids3D
 
         private void Build(Material wood, Material metal, Material glow)
         {
-            AddPart(transform, "Dörrpost vänster", new Vector3(-4.45f, 2.55f, 0f), new Vector3(0.65f, 5.25f, 0.70f), metal);
-            AddPart(transform, "Dörrpost höger", new Vector3(4.45f, 2.55f, 0f), new Vector3(0.65f, 5.25f, 0.70f), metal);
-            AddPart(transform, "Dörröverstycke", new Vector3(0f, 5.0f, 0f), new Vector3(9.55f, 0.62f, 0.70f), metal);
+            GameObject importedPortal = ImportedModelFactory.Create(
+                "Models/KayKit/wall_doorway", transform, "Importerad slottsportal",
+                new Vector3(0f, 2.55f, 0.30f), 9.55f, Quaternion.Euler(0f, 180f, 0f));
+            if (importedPortal == null)
+            {
+                AddPart(transform, "Dörrpost vänster", new Vector3(-4.45f, 2.55f, 0f), new Vector3(0.65f, 5.25f, 0.70f), metal);
+                AddPart(transform, "Dörrpost höger", new Vector3(4.45f, 2.55f, 0f), new Vector3(0.65f, 5.25f, 0.70f), metal);
+                AddPart(transform, "Dörröverstycke", new Vector3(0f, 5.0f, 0f), new Vector3(9.55f, 0.62f, 0.70f), metal);
+            }
 
             leftLeaf = new GameObject("Vänster dörrblad").transform;
             leftLeaf.SetParent(transform, false);

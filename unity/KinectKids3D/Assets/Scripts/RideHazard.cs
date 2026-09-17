@@ -126,6 +126,11 @@ namespace KinectKids3D
                 GameObject spider = new GameObject("Nedfirad slottsöspindel");
                 spider.transform.SetParent(transform, false);
                 movingPart = spider.transform;
+                GameObject importedSpider = ImportedModelFactory.Create(
+                    "Models/Quaternius/Spider", spider.transform, "Animerad jättespindel",
+                    Vector3.zero, 3.15f, Quaternion.Euler(0f, 180f, 0f), "walk", "idle", "attack");
+                if (importedSpider == null)
+                {
                 AddPrimitive(spider.transform, PrimitiveType.Sphere, "Spindelbakkropp",
                     new Vector3(0f, 0.08f, 0.20f), new Vector3(0.82f, 0.58f, 1.05f), chitin);
                 AddPrimitive(spider.transform, PrimitiveType.Sphere, "Spindelhuvud",
@@ -151,6 +156,7 @@ namespace KinectKids3D
                 LowPolyMeshFactory.CreateTaperedLimb(spider.transform, "Höger giftklo",
                     new Vector3(0.20f, -0.12f, -0.92f), new Vector3(0.34f, -0.40f, -1.25f),
                     0.09f, 0.025f, chitin);
+                }
             }
             else
             {

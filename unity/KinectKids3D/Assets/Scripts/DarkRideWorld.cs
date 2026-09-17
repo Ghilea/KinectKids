@@ -365,11 +365,18 @@ namespace KinectKids3D
         {
             float x = TrackCenter(z, route) + side * 5.15f;
             Vector3 position = new Vector3(x, 2.75f, z);
-            CreateCube("Fackelhållare", position + new Vector3(-side * 0.18f, -0.28f, 0),
-                new Vector3(0.12f, 0.75f, 0.12f), rail,
-                Quaternion.Euler(0f, 0f, side * 20f));
-            CreatePrimitive(PrimitiveType.Cylinder, "Fackelskål", position,
-                new Vector3(0.30f, 0.12f, 0.30f), rail);
+            GameObject importedTorch = ImportedModelFactory.Create(
+                "Models/KayKit/torch_mounted", root, "Importerad väggfackla",
+                position + new Vector3(-side * 0.10f, -0.22f, 0f), 1.25f,
+                Quaternion.Euler(0f, side < 0 ? 90f : -90f, 0f));
+            if (importedTorch == null)
+            {
+                CreateCube("Fackelhållare", position + new Vector3(-side * 0.18f, -0.28f, 0),
+                    new Vector3(0.12f, 0.75f, 0.12f), rail,
+                    Quaternion.Euler(0f, 0f, side * 20f));
+                CreatePrimitive(PrimitiveType.Cylinder, "Fackelskål", position,
+                    new Vector3(0.30f, 0.12f, 0.30f), rail);
+            }
             GameObject flame = CreateSphere("Fackellåga", position + Vector3.up * 0.33f,
                 new Vector3(0.28f, 0.55f, 0.28f), amberGlow);
             CreateSphere("Fackelkärna", position + Vector3.up * 0.28f,
@@ -457,11 +464,17 @@ namespace KinectKids3D
                 GameObject bat = new GameObject("Fladdermus " + (i + 1));
                 bat.transform.SetParent(swarm.transform, false);
                 bat.transform.localPosition = new Vector3((i - 2) * 0.55f, (i % 2) * 0.35f, i * 0.28f);
-                CreateChildCube(bat.transform, "Kropp", Vector3.zero, new Vector3(0.18f, 0.16f, 0.34f), batMaterial);
-                CreateChildCube(bat.transform, "Vänster vinge", new Vector3(-0.28f, 0f, 0f),
-                    new Vector3(0.48f, 0.06f, 0.22f), batMaterial);
-                CreateChildCube(bat.transform, "Höger vinge", new Vector3(0.28f, 0f, 0f),
-                    new Vector3(0.48f, 0.06f, 0.22f), batMaterial);
+                GameObject importedBat = ImportedModelFactory.Create(
+                    "Models/Quaternius/Bat", bat.transform, "Animerad fladdermus",
+                    Vector3.zero, 0.82f, Quaternion.Euler(0f, 180f, 0f), "fly", "flying", "idle");
+                if (importedBat == null)
+                {
+                    CreateChildCube(bat.transform, "Kropp", Vector3.zero, new Vector3(0.18f, 0.16f, 0.34f), batMaterial);
+                    CreateChildCube(bat.transform, "Vänster vinge", new Vector3(-0.28f, 0f, 0f),
+                        new Vector3(0.48f, 0.06f, 0.22f), batMaterial);
+                    CreateChildCube(bat.transform, "Höger vinge", new Vector3(0.28f, 0f, 0f),
+                        new Vector3(0.48f, 0.06f, 0.22f), batMaterial);
+                }
                 HauntedProp.Attach(bat, HauntedMotion.Flutter, 0.35f + i * 0.025f, 2.7f + i * 0.3f);
             }
             HauntedProp.Attach(swarm, HauntedMotion.Flutter, 1.15f, 0.75f);
