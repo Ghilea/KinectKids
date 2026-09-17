@@ -52,6 +52,7 @@ jobs:
             './unity/KinectKids3D/Assets/Scripts/MagicBolt.cs',
             './unity/KinectKids3D/Assets/Resources/Textures/CastleStone.jpg',
             './unity/KinectKids3D/Assets/Resources/Textures/CastleRoad.jpg',
+            './unity/KinectKids3D/Assets/horror_music.mp3',
             './unity/KinectKids3D/Assets/Editor/KinectKidsProjectSetup.cs',
             './unity/KinectKids3D/Assets/Editor/KinectKidsWindowsBuild.cs',
             './unity/KinectKids3D/Assets/Editor/KinectKidsMusicSetup.cs',
