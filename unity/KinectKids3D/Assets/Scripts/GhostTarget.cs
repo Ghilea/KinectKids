@@ -48,8 +48,10 @@ namespace KinectKids3D
         {
             float bob = Mathf.Sin(Time.time * (IsBoss ? 1.6f : 2.4f) + phase) * (IsBoss ? 0.11f : 0.18f);
             transform.position = new Vector3(transform.position.x, baseY + bob, transform.position.z);
-            if (leftArm != null) leftArm.localRotation = Quaternion.Euler(58f + Mathf.Sin(Time.time * 2.5f + phase) * 13f, 0, 68f);
-            if (rightArm != null) rightArm.localRotation = Quaternion.Euler(58f - Mathf.Sin(Time.time * 2.5f + phase) * 13f, 0, -68f);
+            if (leftArm != null) leftArm.localRotation = Quaternion.Euler(
+                8f + Mathf.Sin(Time.time * 2.5f + phase) * 12f, 0f, 8f);
+            if (rightArm != null) rightArm.localRotation = Quaternion.Euler(
+                8f - Mathf.Sin(Time.time * 2.5f + phase) * 12f, 0f, -8f);
         }
 
         public int Hit()
@@ -96,11 +98,15 @@ namespace KinectKids3D
         private void BuildModel()
         {
             Color skin = Kind == TargetKind.Ghost
-                ? new Color(0.72f, 0.88f, 1f)
-                : new Color(0.26f, 0.80f, 0.55f);
-            Material skinMaterial = DarkRideWorld.GlowMaterial(skin, Kind == TargetKind.Ghost ? 1.5f : 0.55f);
-            Material clothes = DarkRideWorld.MaterialOf(IsBoss ? new Color(0.05f, 0.10f, 0.27f) : new Color(0.18f, 0.12f, 0.30f));
-            Material eye = DarkRideWorld.GlowMaterial(new Color(1f, 0.52f, 0.04f), 3f);
+                ? new Color(0.68f, 0.73f, 0.71f)
+                : new Color(0.58f, 0.66f, 0.44f);
+            Material skinMaterial = Kind == TargetKind.Ghost
+                ? DarkRideWorld.TexturedMaterial(skin, HauntedTextureFactory.GhostCloth(113), 0f)
+                : DarkRideWorld.TexturedMaterial(skin, HauntedTextureFactory.RottenSkin(127), 0f);
+            Material clothes = DarkRideWorld.TexturedMaterial(
+                IsBoss ? new Color(0.24f, 0.29f, 0.43f) : new Color(0.38f, 0.24f, 0.34f),
+                HauntedTextureFactory.TatteredCloth(IsBoss ? 166 : 151), 0f);
+            Material eye = DarkRideWorld.GlowMaterial(new Color(0.88f, 0.22f, 0.025f), 1.7f);
             Material mouth = DarkRideWorld.MaterialOf(new Color(0.055f, 0.012f, 0.014f));
             Material bone = DarkRideWorld.MaterialOf(new Color(0.70f, 0.65f, 0.48f));
             Material blackIron = DarkRideWorld.MaterialOf(new Color(0.055f, 0.065f, 0.075f), 0.78f);
@@ -108,24 +114,35 @@ namespace KinectKids3D
 
             if (Kind == TargetKind.Ghost)
             {
-                AddPrimitive(PrimitiveType.Sphere, "Spökhuvud", new Vector3(0, 1.75f, 0), new Vector3(0.9f, 0.9f, 0.72f), skinMaterial);
-                AddPrimitive(PrimitiveType.Capsule, "Spökkropp", new Vector3(0, 0.82f, 0), new Vector3(0.82f, 1.05f, 0.66f), skinMaterial);
+                GameObject shroud = LowPolyMeshFactory.CreateTatteredBody(transform, "Vågig spöksvepning",
+                    skinMaterial, 1.58f, 0.43f, 0.73f, 0.88f, 210 + Mathf.RoundToInt(phase * 10f));
+                RegisterRenderer(shroud);
+                AddPrimitive(PrimitiveType.Sphere, "Spökhuva", new Vector3(0, 1.72f, 0),
+                    new Vector3(0.78f, 0.82f, 0.66f), skinMaterial);
+                AddPrimitive(PrimitiveType.Sphere, "Huvans mörker", new Vector3(0, 1.69f, -0.52f),
+                    new Vector3(0.53f, 0.57f, 0.16f), mouth);
                 AddEye(-0.20f, 1.84f, eye, scale);
                 AddEye(0.20f, 1.84f, eye, scale);
-                AddPrimitive(PrimitiveType.Sphere, "Gapande mun", new Vector3(0, 1.55f, -0.62f),
-                    new Vector3(0.34f, 0.22f, 0.10f), mouth);
+                AddPrimitive(PrimitiveType.Sphere, "Gapande mun", new Vector3(0, 1.53f, -0.64f),
+                    new Vector3(0.27f, 0.19f, 0.08f), mouth);
                 for (int side = -1; side <= 1; side += 2)
                 {
-                    AddPrimitive(PrimitiveType.Capsule, "Spökarm", new Vector3(side * 0.78f, 1.05f, -0.05f),
-                        new Vector3(0.20f, 0.72f, 0.20f), skinMaterial,
-                        Quaternion.Euler(62f, 0f, side * 58f));
-                    AddPrimitive(PrimitiveType.Sphere, "Spöksvans", new Vector3(side * 0.35f, -0.08f, 0),
-                        new Vector3(0.38f, 0.62f, 0.36f), skinMaterial);
+                    GameObject upperArm = LowPolyMeshFactory.CreateTaperedLimb(transform, "Svepande spökarm",
+                        new Vector3(side * 0.52f, 1.28f, 0f), new Vector3(side * 1.08f, 1.06f, -0.08f),
+                        0.19f, 0.13f, skinMaterial);
+                    RegisterRenderer(upperArm);
+                    GameObject forearm = LowPolyMeshFactory.CreateTaperedLimb(transform, "Spökhand",
+                        new Vector3(side * 1.08f, 1.06f, -0.08f), new Vector3(side * 1.38f, 0.92f, -0.22f),
+                        0.13f, 0.025f, skinMaterial);
+                    RegisterRenderer(forearm);
                 }
             }
             else
             {
-                AddPrimitive(PrimitiveType.Capsule, "Kropp", new Vector3(0, 0.92f * scale, 0), new Vector3(0.88f, 1.08f * scale, 0.64f), clothes);
+                GameObject torso = LowPolyMeshFactory.CreateTatteredBody(transform, "Formad trasig rock", clothes,
+                    1.72f * scale, 0.42f * scale, 0.72f * scale, 0.58f * scale,
+                    IsBoss ? 303 : 286 + Mathf.RoundToInt(phase * 8f));
+                RegisterRenderer(torso);
                 AddPrimitive(PrimitiveType.Sphere, "Huvud", new Vector3(0, 1.86f * scale, 0), new Vector3(0.87f, 0.92f, 0.76f), skinMaterial);
                 AddEye(-0.20f * scale, 1.94f * scale, eye, scale);
                 AddEye(0.20f * scale, 1.94f * scale, eye, scale);
@@ -137,14 +154,10 @@ namespace KinectKids3D
                     AddPrimitive(PrimitiveType.Cube, "Trasig tand", new Vector3(tooth * 0.11f, 1.69f * scale, -0.73f),
                         new Vector3(0.075f, 0.12f, 0.06f), bone,
                         Quaternion.Euler(0f, 0f, tooth * 9f));
-                leftArm = AddPrimitive(PrimitiveType.Capsule, "Vänster arm", new Vector3(-0.68f * scale, 1.22f * scale, -0.18f), new Vector3(0.28f, 0.72f * scale, 0.28f), skinMaterial).transform;
-                rightArm = AddPrimitive(PrimitiveType.Capsule, "Höger arm", new Vector3(0.68f * scale, 1.22f * scale, -0.18f), new Vector3(0.28f, 0.72f * scale, 0.28f), skinMaterial).transform;
-                AddPrimitive(PrimitiveType.Cube, "Trasig rock vänster", new Vector3(-0.29f * scale, 0.62f * scale, -0.42f),
-                    new Vector3(0.50f, 0.72f * scale, 0.12f), clothes, Quaternion.Euler(0f, 0f, -7f));
-                AddPrimitive(PrimitiveType.Cube, "Trasig rock höger", new Vector3(0.29f * scale, 0.59f * scale, -0.42f),
-                    new Vector3(0.50f, 0.68f * scale, 0.12f), clothes, Quaternion.Euler(0f, 0f, 9f));
-                AddPrimitive(PrimitiveType.Capsule, "Vänster ben", new Vector3(-0.27f * scale, 0.02f, 0), new Vector3(0.34f, 0.64f * scale, 0.34f), clothes);
-                AddPrimitive(PrimitiveType.Capsule, "Höger ben", new Vector3(0.27f * scale, 0.02f, 0), new Vector3(0.34f, 0.64f * scale, 0.34f), clothes);
+                leftArm = CreateZombieArm(-1, scale, skinMaterial);
+                rightArm = CreateZombieArm(1, scale, skinMaterial);
+                CreateZombieLeg(-1, scale, clothes);
+                CreateZombieLeg(1, scale, clothes);
                 AddPrimitive(PrimitiveType.Cube, "Vänster känga", new Vector3(-0.28f * scale, -0.40f, -0.18f),
                     new Vector3(0.38f, 0.25f, 0.62f), blackIron);
                 AddPrimitive(PrimitiveType.Cube, "Höger känga", new Vector3(0.28f * scale, -0.40f, -0.18f),
@@ -175,6 +188,36 @@ namespace KinectKids3D
             AddPrimitive(PrimitiveType.Sphere, "Öga", new Vector3(x, y, -0.39f * scale), Vector3.one * 0.16f * scale, material);
         }
 
+        private Transform CreateZombieArm(int side, float scale, Material material)
+        {
+            GameObject pivot = new GameObject(side < 0 ? "Vänster axel" : "Höger axel");
+            pivot.transform.SetParent(transform, false);
+            pivot.transform.localPosition = new Vector3(side * 0.46f * scale, 1.43f * scale, -0.02f);
+
+            Vector3 elbow = new Vector3(side * 0.42f * scale, -0.34f * scale, -0.13f);
+            Vector3 hand = new Vector3(side * 0.68f * scale, -0.69f * scale, -0.39f);
+            GameObject upper = LowPolyMeshFactory.CreateTaperedLimb(pivot.transform, "Benig överarm",
+                Vector3.zero, elbow, 0.16f * scale, 0.12f * scale, material);
+            GameObject lower = LowPolyMeshFactory.CreateTaperedLimb(pivot.transform, "Benig underarm",
+                elbow, hand, 0.12f * scale, 0.055f * scale, material);
+            RegisterRenderer(upper);
+            RegisterRenderer(lower);
+            return pivot.transform;
+        }
+
+        private void CreateZombieLeg(int side, float scale, Material material)
+        {
+            Vector3 hip = new Vector3(side * 0.24f * scale, 0.72f * scale, 0.04f);
+            Vector3 knee = new Vector3(side * 0.30f * scale, 0.17f * scale, -0.02f);
+            Vector3 ankle = new Vector3(side * 0.28f * scale, -0.35f, -0.08f);
+            GameObject upper = LowPolyMeshFactory.CreateTaperedLimb(transform, "Trasigt byxben",
+                hip, knee, 0.22f * scale, 0.16f * scale, material);
+            GameObject lower = LowPolyMeshFactory.CreateTaperedLimb(transform, "Trasigt byxben",
+                knee, ankle, 0.16f * scale, 0.11f * scale, material);
+            RegisterRenderer(upper);
+            RegisterRenderer(lower);
+        }
+
         private GameObject AddPrimitive(PrimitiveType type, string objectName, Vector3 localPosition,
             Vector3 localScale, Material material, Quaternion? rotation = null)
         {
@@ -191,6 +234,14 @@ namespace KinectKids3D
             Collider collider = part.GetComponent<Collider>();
             if (collider != null) Destroy(collider);
             return part;
+        }
+
+        private void RegisterRenderer(GameObject model)
+        {
+            Renderer renderer = model.GetComponent<Renderer>();
+            if (renderer == null) return;
+            renderers.Add(renderer);
+            baseColors.Add(renderer.material.color);
         }
     }
 }

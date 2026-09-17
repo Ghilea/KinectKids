@@ -24,19 +24,19 @@ namespace KinectKids3D
             if (castleStone != null) castleStone.wrapMode = TextureWrapMode.Repeat;
             if (castleRoad != null) castleRoad.wrapMode = TextureWrapMode.Repeat;
             root.SetParent(parent, false);
-            stone = TexturedMaterial(new Color(0.58f, 0.61f, 0.64f),
+            stone = TexturedMaterial(new Color(0.92f, 0.94f, 0.96f),
                 castleStone != null ? castleStone : HauntedTextureFactory.DampStone(8,
                     new Color(0.22f, 0.24f, 0.25f), new Color(0.028f, 0.033f, 0.038f)), 0.08f);
-            darkStone = TexturedMaterial(new Color(0.24f, 0.27f, 0.32f),
+            darkStone = TexturedMaterial(new Color(0.38f, 0.41f, 0.46f),
                 castleStone != null ? castleStone : HauntedTextureFactory.DampStone(31,
                     new Color(0.13f, 0.15f, 0.17f), new Color(0.016f, 0.022f, 0.030f)), 0.05f);
-            road = TexturedMaterial(new Color(0.62f, 0.61f, 0.56f),
+            road = TexturedMaterial(new Color(0.90f, 0.87f, 0.80f),
                 castleRoad != null ? castleRoad : HauntedTextureFactory.DampStone(51,
                     new Color(0.26f, 0.27f, 0.25f), new Color(0.035f, 0.040f, 0.037f)), 0.03f);
             wood = TexturedMaterial(new Color(0.30f, 0.18f, 0.10f), HauntedTextureFactory.OldWood(17), 0f);
             rail = TexturedMaterial(new Color(0.42f, 0.43f, 0.42f), HauntedTextureFactory.RustedMetal(23), 0.72f);
-            purpleGlow = GlowMaterial(new Color(0.52f, 0.08f, 0.95f), 2.3f);
-            greenGlow = GlowMaterial(new Color(0.05f, 1f, 0.46f), 2.1f);
+            purpleGlow = GlowMaterial(new Color(0.25f, 0.025f, 0.38f), 0.42f);
+            greenGlow = GlowMaterial(new Color(0.025f, 0.31f, 0.12f), 0.38f);
             amberGlow = GlowMaterial(new Color(1f, 0.34f, 0.045f), 2.2f);
             cobweb = GlowMaterial(new Color(0.24f, 0.28f, 0.30f), 0.32f);
         }
@@ -44,13 +44,13 @@ namespace KinectKids3D
         public void Build(Camera rideCamera)
         {
             RenderSettings.fog = true;
-            RenderSettings.fogColor = new Color(0.009f, 0.014f, 0.027f);
+            RenderSettings.fogColor = new Color(0.002f, 0.003f, 0.006f);
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.034f;
+            RenderSettings.fogDensity = 0.041f;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.018f, 0.024f, 0.050f);
-            RenderSettings.ambientEquatorColor = new Color(0.012f, 0.018f, 0.032f);
-            RenderSettings.ambientGroundColor = new Color(0.006f, 0.007f, 0.011f);
+            RenderSettings.ambientSkyColor = new Color(0.006f, 0.008f, 0.014f);
+            RenderSettings.ambientEquatorColor = new Color(0.004f, 0.005f, 0.009f);
+            RenderSettings.ambientGroundColor = new Color(0.0015f, 0.002f, 0.003f);
 
             BuildTrack();
             BuildEntranceHall();
@@ -88,9 +88,30 @@ namespace KinectKids3D
                 Quaternion rotation = TrackRotation(z);
                 Material zone = z < 48 ? stone : z < 105 ? darkStone : stone;
                 CreateCube("Kullerstensväg", new Vector3(center, -0.22f, z), new Vector3(12f, 0.45f, 8f), road, rotation);
-                CreateCube("Vänster vägg", new Vector3(center - 5.8f, 2.8f, z), new Vector3(0.6f, 6f, 8.1f), zone, rotation);
-                CreateCube("Höger vägg", new Vector3(center + 5.8f, 2.8f, z), new Vector3(0.6f, 6f, 8.1f), zone, rotation);
+                CreateCube("Vänster murkärna", new Vector3(center - 5.8f, 2.8f, z), new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
+                CreateCube("Höger murkärna", new Vector3(center + 5.8f, 2.8f, z), new Vector3(0.6f, 6f, 8.1f), darkStone, rotation);
                 CreateCube("Tak", new Vector3(center, 5.65f, z), new Vector3(12f, 0.5f, 8.1f), darkStone, rotation);
+                CreateMasonryFacing(center, z, rotation, zone);
+            }
+        }
+
+        private void CreateMasonryFacing(float center, float z, Quaternion rotation, Material material)
+        {
+            GameObject section = new GameObject("Modellerad slottsmur");
+            section.transform.SetParent(root, false);
+            section.transform.position = new Vector3(center, 0f, z);
+            section.transform.rotation = rotation;
+            for (int side = -1; side <= 1; side += 2)
+            for (int rowIndex = 0; rowIndex < 4; rowIndex++)
+            for (int column = 0; column < 4; column++)
+            {
+                float stagger = rowIndex % 2 == 0 ? 0f : 0.52f;
+                float depth = 1.82f + ((rowIndex + column) % 3) * 0.08f;
+                float y = 0.72f + rowIndex * 1.40f;
+                float localZ = -3.0f + column * 1.95f + stagger;
+                CreateChildPrimitive(section.transform, PrimitiveType.Cube, "Enskilt stenblock",
+                    new Vector3(side * 5.46f, y, localZ), new Vector3(0.34f, 1.25f, depth), material,
+                    Quaternion.Euler(0f, 0f, side * (((rowIndex + column) % 3) - 1) * 0.55f));
             }
         }
 
@@ -106,7 +127,6 @@ namespace KinectKids3D
             CreateSign(14f, "SPÖKJAKTEN 3D", amberGlow);
             CreateArmor(22f, -1);
             CreateArmor(31f, 1);
-            CreateFloatingOrb(38f, 3.1f, 2.2f, purpleGlow);
             CreateBatSwarm(25f, -2.6f, 3.35f);
             CreateBatSwarm(44f, 2.4f, 2.75f);
             CreateCobweb(20f, -1);
@@ -127,8 +147,6 @@ namespace KinectKids3D
                     CreateSphere("Spökeld", grave.transform.position + Vector3.up * 0.95f, Vector3.one * 0.24f, greenGlow);
                 }
             }
-            CreateFloatingOrb(71f, -2.8f, 3.1f, purpleGlow);
-            CreateFloatingOrb(92f, 2.9f, 2.4f, greenGlow);
             CreateBatSwarm(63f, 2.2f, 3.2f);
             CreateCobweb(59f, 1);
             CreateCobweb(89f, -1);
@@ -179,8 +197,10 @@ namespace KinectKids3D
             CreateCube("Valv vänster", new Vector3(center - 4.4f, 2.3f, z), new Vector3(0.75f, 4.8f, 0.8f), stone, rotation);
             CreateCube("Valv höger", new Vector3(center + 4.4f, 2.3f, z), new Vector3(0.75f, 4.8f, 0.8f), stone, rotation);
             CreateCube("Valv över", new Vector3(center, 4.65f, z), new Vector3(9.4f, 0.6f, 0.8f), stone, rotation);
-            CreateSphere("Blacklight vänster", new Vector3(center - 3.6f, 4.45f, z - 0.45f), Vector3.one * 0.18f, glow);
-            CreateSphere("Blacklight höger", new Vector3(center + 3.6f, 4.45f, z - 0.45f), Vector3.one * 0.18f, glow);
+            CreateCube("Valvjärn vänster", new Vector3(center - 3.6f, 4.45f, z - 0.45f),
+                new Vector3(0.18f, 0.18f, 0.24f), rail);
+            CreateCube("Valvjärn höger", new Vector3(center + 3.6f, 4.45f, z - 0.45f),
+                new Vector3(0.18f, 0.18f, 0.24f), rail);
         }
 
         private void CreateCastleGate(float z)
@@ -249,8 +269,8 @@ namespace KinectKids3D
             Light light = lightObject.AddComponent<Light>();
             light.type = LightType.Point;
             light.color = new Color(1f, 0.30f, 0.055f);
-            light.intensity = 3.5f;
-            light.range = 7.8f;
+            light.intensity = 2.8f;
+            light.range = 6.6f;
             light.shadows = LightShadows.None;
             HauntedProp.Attach(lightObject, HauntedMotion.Flicker, 0f, Random.Range(7f, 11f));
         }
@@ -458,19 +478,26 @@ namespace KinectKids3D
 
         public static Material MaterialOf(Color color, float metallic = 0f)
         {
-            Material material = new Material(Shader.Find("Standard"));
-            material.color = color;
-            material.SetFloat("_Metallic", metallic);
-            material.SetFloat("_Glossiness", metallic > 0 ? 0.78f : 0.2f);
+            Shader shader = Shader.Find("Standard");
+            if (shader == null) shader = Shader.Find("Universal Render Pipeline/Lit");
+            Material material = new Material(shader);
+            if (material.HasProperty("_Color")) material.SetColor("_Color", color);
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", metallic);
+            if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", metallic > 0 ? 0.78f : 0.2f);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", metallic > 0 ? 0.78f : 0.2f);
             return material;
         }
 
-        private static Material TexturedMaterial(Color tint, Texture2D texture, float metallic)
+        public static Material TexturedMaterial(Color tint, Texture2D texture, float metallic)
         {
             Material material = MaterialOf(tint, metallic);
-            material.mainTexture = texture;
-            material.mainTextureScale = new Vector2(2.4f, 2.4f);
-            material.SetFloat("_Glossiness", metallic > 0 ? 0.42f : 0.08f);
+            if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", texture);
+            if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", texture);
+            if (material.HasProperty("_MainTex")) material.SetTextureScale("_MainTex", new Vector2(1.15f, 1.15f));
+            if (material.HasProperty("_BaseMap")) material.SetTextureScale("_BaseMap", new Vector2(1.15f, 1.15f));
+            if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", metallic > 0 ? 0.42f : 0.05f);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", metallic > 0 ? 0.42f : 0.05f);
             return material;
         }
 

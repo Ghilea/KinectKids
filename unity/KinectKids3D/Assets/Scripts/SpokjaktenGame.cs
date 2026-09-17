@@ -78,7 +78,7 @@ namespace KinectKids3D
                 cameraObject.AddComponent<AudioListener>();
             }
             rideCamera.clearFlags = CameraClearFlags.SolidColor;
-            rideCamera.backgroundColor = new Color(0.008f, 0.012f, 0.030f);
+            rideCamera.backgroundColor = new Color(0.0015f, 0.0025f, 0.006f);
             rideCamera.fieldOfView = 63f;
             rideCamera.nearClipPlane = 0.06f;
             rideCamera.farClipPlane = 95f;

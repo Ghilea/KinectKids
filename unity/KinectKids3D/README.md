@@ -12,12 +12,14 @@ Det här är den nya 3D-grunden för KinectKids. Den ligger bredvid den tidigare
 - exakt ett sikte per spelare; den mest aktiva handen väljs automatiskt
 - håll siktet på målet en kort stund eller gör en lätt knuff framåt för att skjuta spökmagi
 - vagnen stannar vid slutbossen, som kastar projektiler tills han är besegrad
-- kroppshinder där spelaren måste ducka eller väja åt vänster/höger
+- en stor slotts­spindel som firas ner från taket och kräver att spelaren duckar
+- gargoyler som bryter ut ur väggarna och kräver att spelaren väjer åt vänster/höger
 - ståhöjd och kroppens mitt kalibreras automatiskt per spelare
 - en eller två spelare kan samla egna poäng
 - musreserv om Kinect inte kan öppnas
 - fritt licensierad OGG-musik när `Resources/Audio/RideMusic.ogg` finns, annars procedurgenererad reservmusik
-- handgjorda slotts- och kullerstenstexturer samt procedurgenererat murket trä och rost
+- handgjorda slotts- och kullerstenstexturer, modellerade murblock med fogar samt procedurgenererat murket trä och rost
+- formade lågpolygonmodeller med trasigt tyg och smutsig hud i stället för lysande kapselkroppar
 - spindelväv, vakande porträtt, kedjor, fladdermöss och flimrande ljus
 - separat 32-bitars Kinect-brygga för stabil SDK 1.8-kompatibilitet i 64-bitars Unity
 
@@ -57,8 +59,8 @@ Licensnoteringen finns i projektets `THIRD_PARTY_NOTICES.md`.
 | Rör den hand du vill använda | Spelet väljer den som enda sikte |
 | Håll siktet på målet kort | Kasta spökmagi automatiskt |
 | Lätt knuff framåt | Kasta spökmagi direkt |
-| Ducka | Undvik den svängande spökbommen |
-| Luta kroppen åt visad sida | Väj för anflygande spöken |
+| Ducka | Undvik den stora spindeln som firas ner från slottstaket |
+| Luta kroppen åt visad sida | Väj för gargoylens arm som slår ut ur väggen |
 | Musen + vänsterklick | Reservsikte och kast utan Kinect |
 | `S`/`↓`, `A`/`←`, `D`/`→` | Testa ducka/väj i musläge |
 | `Mellanslag` eller `P` | Paus |

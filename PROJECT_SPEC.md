@@ -41,9 +41,10 @@ Vi ska bygga dessa spel i ordning baserat på komplexitet och pedagogisk värde:
 4.  **Spökjakt: Slottet** (Ny utveckling från "Zombietåg")
     *   *Logik:* En renad version av Zombietåget med "spöken" istället för zombies, mörkare tema.
     *   *Mekanik:* Varje spelare har exakt ett sikte. Spelet väljer automatiskt den mest aktiva handen och fungerar därför för både vänster- och högerhänta. En träff avfyras efter en kort mållåsning eller en lätt framåtknuff.
-    *   *Kroppshinder:* Spelaren måste ducka under bommar och luta kroppen åt angiven sida när faror kommer mot vagnen. Slutbossen kastar dessutom projektiler som kräver samma rörelser.
+    *   *Kroppshinder:* En stor spindel firas ner från slottstaket och kräver duckning. Gargoyler och stenklor slår ut ur väggarna och kräver att spelaren lutar sig åt angiven sida. Slutbossen kastar dessutom projektiler som kräver samma rörelser.
     *   *Bossfas:* Vagnen stannar i finalhallen och kör inte vidare förrän bossens livsmätare är tom.
-    *   *Miljö:* Fritt licensierad musik med lokal reservmusik, mörkt slott, texturerade stenmurar och kullerstensvägar, rustningar, facklor, krypta, spindelväv, rörliga fladdermöss och överraskningshändelser längs rälsen.
+    *   *Miljö:* Fritt licensierad musik med lokal reservmusik, ett mörkt slott där facklor lokalt avslöjar modellerade murblock, sten- och kullerstenstexturer, rustningar, krypta, spindelväv, rörliga fladdermöss och överraskningshändelser längs rälsen.
+    *   *Figurer:* Sammanhängande lågpolygonmodeller med trasiga silhuetter och egna smuts-, tyg- och hudmaterial används i prototypen. Enbart ögon och små magiska detaljer får självlysning.
     *   *Tillgänglighet:* Kroppens mitt och ståhöjd kalibreras separat för varje spårad spelare. Mus och tangentbord finns kvar som testläge.
 5.  **Simon Säger: Rörelselektron**
     *   *Logik:* "Händer upp!", "Ducka!", "Sträck ut!".

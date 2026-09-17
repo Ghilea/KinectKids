@@ -46,6 +46,40 @@ namespace KinectKids3D
             });
         }
 
+        public static Texture2D GhostCloth(int seed)
+        {
+            return Create("Smutsig spöksvepning", (x, y) =>
+            {
+                float weave = (Mathf.Sin(x * 0.48f) + Mathf.Sin(y * 0.53f)) * 0.035f;
+                float grime = Mathf.Clamp01((Noise(x / 3, y / 3, seed + 41) - 0.54f) * 2.2f);
+                float tear = Noise(x, y, seed + 91) > 0.82f ? 0.28f : 0f;
+                Color cloth = new Color(0.53f + weave, 0.60f + weave, 0.62f + weave);
+                return Color.Lerp(cloth, new Color(0.07f, 0.085f, 0.08f), grime * 0.62f + tear);
+            });
+        }
+
+        public static Texture2D RottenSkin(int seed)
+        {
+            return Create("Rutten hud", (x, y) =>
+            {
+                float n = Noise(x / 2, y / 2, seed);
+                float wound = Mathf.Clamp01((Noise(x, y, seed + 73) - 0.69f) * 4.2f);
+                Color skin = Color.Lerp(new Color(0.12f, 0.24f, 0.15f), new Color(0.34f, 0.46f, 0.23f), n);
+                return Color.Lerp(skin, new Color(0.20f, 0.018f, 0.022f), wound * 0.70f);
+            });
+        }
+
+        public static Texture2D TatteredCloth(int seed)
+        {
+            return Create("Slitet tyg", (x, y) =>
+            {
+                float weave = Mathf.Sin(x * 0.60f) * Mathf.Sin(y * 0.55f) * 0.08f;
+                float stain = Mathf.Clamp01((Noise(x / 4, y / 4, seed + 9) - 0.48f) * 1.8f);
+                return Color.Lerp(new Color(0.14f + weave, 0.055f, 0.085f),
+                    new Color(0.018f, 0.012f, 0.020f), stain * 0.72f);
+            });
+        }
+
         private static Texture2D Create(string name, System.Func<int, int, Color> pixel)
         {
             var texture = new Texture2D(Size, Size, TextureFormat.RGB24, true)

@@ -43,6 +43,7 @@ jobs:
             './unity/KinectKids3D/Assets/Scripts/KinectV1AimProvider.cs',
             './unity/KinectKids3D/Assets/Scripts/KinectBridgeAimProvider.cs',
             './unity/KinectKids3D/Assets/Scripts/HauntedTextureFactory.cs',
+            './unity/KinectKids3D/Assets/Scripts/LowPolyMeshFactory.cs',
             './unity/KinectKids3D/Assets/Scripts/PlayerPose.cs',
             './unity/KinectKids3D/Assets/Scripts/RideHazard.cs',
             './unity/KinectKids3D/Assets/Scripts/BossProjectile.cs',
