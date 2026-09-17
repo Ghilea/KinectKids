@@ -34,7 +34,13 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Get-Content './unity/KinectKids3D/Packages/manifest.json' -Raw | ConvertFrom-Json | Out-Null
+          $manifest = Get-Content './unity/KinectKids3D/Packages/manifest.json' -Raw | ConvertFrom-Json
+          foreach ($module in @('com.unity.modules.audio', 'com.unity.modules.imgui',
+              'com.unity.modules.particlesystem', 'com.unity.modules.physics')) {
+            if ($manifest.dependencies.PSObject.Properties.Name -notcontains $module) {
+              throw "Unity-modulen saknas i manifest.json: $module"
+            }
+          }
           $required = @(
             './unity/KinectKids3D/ProjectSettings/ProjectVersion.txt',
             './unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.cs',
