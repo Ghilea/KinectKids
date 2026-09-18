@@ -896,7 +896,9 @@ namespace KinectKids3D
             wagonDamageTaken = 0;
             if (WagonDamageVisual.Instance != null)
                 WagonDamageVisual.Instance.SetHealth(wagonHealth, startingWagonHealth, false);
-            actionMessage = easy ? "BARNLÄGE – STÖRRE SIKTHJÄLP" : "NORMALT LÄGE";
+            actionMessage = easy
+                ? "BARNLÄGE – INGA LIV OCH VAGNEN KAN INTE FÖRSTÖRAS"
+                : "NORMALT LÄGE";
             actionMessageUntil = Time.time + 1.4f;
             SavePreferences();
         }
@@ -1036,6 +1038,13 @@ namespace KinectKids3D
         {
             player = Mathf.Clamp(player, 0, 1);
             combos[player] = 0;
+            if (easyMode)
+            {
+                scores[player] = Mathf.Max(0, scores[player] - 5);
+                actionMessage = "NÄSTAN! FÖRSÖK IGEN – DU HAR OBEGRÄNSAT MED FÖRSÖK";
+                actionMessageUntil = Time.time + 1.15f;
+                return;
+            }
             if (lives[player] > 0)
             {
                 lives[player] = Mathf.Max(0, lives[player] - amount);
@@ -1087,6 +1096,15 @@ namespace KinectKids3D
         private void DamageWagon(int amount, string message)
         {
             if (finished || gameOver) return;
+            if (easyMode)
+            {
+                combos[0] = combos[1] = 0;
+                cameraShakeUntil = Mathf.Max(cameraShakeUntil, Time.time + 0.16f);
+                actionMessage = "NÄSTAN – DEN SÄKRA VAGNEN KÖR VIDARE!";
+                actionMessageUntil = Time.time + 1.15f;
+                PlayRandom(effects, collisionSounds, 0.28f);
+                return;
+            }
             wagonHealth = Mathf.Max(0, wagonHealth - amount);
             wagonDamageTaken += amount;
             combos[0] = combos[1] = 0;
@@ -1817,13 +1835,15 @@ namespace KinectKids3D
             GUI.Label(new Rect(Screen.width - 145, Screen.height - 30, 130, 22), "F11  HELSKÄRM", smallStyle);
             if (requestedPlayers > 1)
                 GUI.Label(new Rect(Screen.width - 298, 83, 280, 26), "SPELARE 2   " + scores[1], smallStyle);
-            GUI.Label(new Rect(Screen.width - 298, 105, 280, 25),
-                "VAGN " + new string('♥', wagonHealth) + "   COMBO " + Mathf.Max(combos[0], combos[1]), smallStyle);
+            GUI.Label(new Rect(Screen.width - 298, 105, 280, 25), easyMode
+                ? "SÄKER VAGN   COMBO " + Mathf.Max(combos[0], combos[1])
+                : "VAGN " + new string('♥', wagonHealth) + "   COMBO " + Mathf.Max(combos[0], combos[1]), smallStyle);
 
-            GUI.Label(new Rect(22, 102, 390, 24),
-                "LIV P1 " + new string('♥', lives[0])
-                + (requestedPlayers > 1 ? "    P2 " + new string('♥', lives[1]) : string.Empty)
-                + "    RELIKER " + collectedRelics + "/" + TotalRelics, smallStyle);
+            GUI.Label(new Rect(22, 102, 450, 24), easyMode
+                ? "BARNLÄGE – OBEGRÄNSADE FÖRSÖK    RELIKER " + collectedRelics + "/" + TotalRelics
+                : "LIV P1 " + new string('♥', lives[0])
+                    + (requestedPlayers > 1 ? "    P2 " + new string('♥', lives[1]) : string.Empty)
+                    + "    RELIKER " + collectedRelics + "/" + TotalRelics, smallStyle);
 
             if (showSettings)
             {
@@ -1939,7 +1959,7 @@ namespace KinectKids3D
                     + "   Träffsäkerhet: " + accuracy + "%"
                     + "\nBästa combo: " + Mathf.Max(maxCombos[0], maxCombos[1])
                     + "   Reliker: " + collectedRelics + "/" + TotalRelics
-                    + "   Vagn: " + wagonHealth
+                    + "   Vagn: " + (easyMode ? "SÄKER" : wagonHealth.ToString())
                     + "\nREKORD  Poäng: " + PlayerPrefs.GetInt("SpokjaktenHighScore", 0)
                     + "   Combo: " + PlayerPrefs.GetInt("SpokjaktenBestCombo", 0)
                     + "   Reliker: " + PlayerPrefs.GetInt("SpokjaktenBestRelics", 0)
@@ -1965,7 +1985,7 @@ namespace KinectKids3D
 
             float rowY = y + 128f;
             GUI.Label(new Rect(x + 48f, rowY, 180f, 30f), "SVÅRIGHET", hudStyle);
-            if (GUI.Button(new Rect(x + 240f, rowY, 170f, 38f), "BARNLÄGE" + (easyMode ? "  ✓" : string.Empty)))
+            if (GUI.Button(new Rect(x + 240f, rowY, 170f, 38f), "BARNLÄGE – SÄKERT" + (easyMode ? "  ✓" : string.Empty)))
             {
                 easyMode = true;
                 SavePreferences();
@@ -2183,7 +2203,7 @@ namespace KinectKids3D
         private string MedalText(int accuracy)
         {
             List<string> medals = new List<string>();
-            if (!gameOver && wagonDamageTaken == 0) medals.Add("OSKADD VAGN");
+            if (!gameOver && wagonDamageTaken == 0) medals.Add(easyMode ? "TRYGG FÄRD" : "OSKADD VAGN");
             if (accuracy >= 70) medals.Add("SKARPSKYTT");
             if (collectedRelics >= TotalRelics) medals.Add("RELIKJÄGARE");
             if (leftHandShots.Sum() >= 5 && rightHandShots.Sum() >= 5) medals.Add("DUBBELHAND");
