@@ -204,28 +204,49 @@ namespace KinectKids3D
                 gestures[handId] = gesture;
             }
 
+            Vector2 rawAim = new Vector2(Mathf.Clamp01(x), Mathf.Clamp01(y));
             bool fire = false;
+            float forwardSpeed = 0f;
             if (gesture.Initialized)
             {
-                float dt = Mathf.Max(0.001f, (float)(now - gesture.LastAt).TotalSeconds);
-                float forwardSpeed = (gesture.LastDepth - handZ) / dt;
-                bool handIsReady = handY > shoulderY - 0.42f && handZ > shoulderZ - 0.16f;
-                if (handIsReady) gesture.Armed = true;
-                if (gesture.Armed && now >= gesture.CooldownUntil
-                    && forwardSpeed > 0.36f && handZ < shoulderZ - 0.085f)
+                float dt = Mathf.Clamp((float)(now - gesture.LastAt).TotalSeconds, 0.001f, 0.10f);
+                float depthStep = gesture.LastDepth - handZ;
+                float instantForwardSpeed = depthStep / dt;
+                float velocityBlend = 1f - Mathf.Exp(-18f * dt);
+                gesture.SmoothedForwardSpeed = Mathf.Lerp(
+                    gesture.SmoothedForwardSpeed, instantForwardSpeed, velocityBlend);
+                forwardSpeed = gesture.SmoothedForwardSpeed;
+
+                // Ett nytt kast laddas genom att handen bromsar in, inte genom
+                // att barnet först måste dra tillbaka den intill kroppen.
+                if (!gesture.PunchReady && now >= gesture.CooldownUntil
+                    && forwardSpeed < 0.12f)
+                    gesture.PunchReady = true;
+
+                if (gesture.PunchReady && now >= gesture.CooldownUntil
+                    && forwardSpeed > 0.45f && depthStep > 0.012f)
                 {
                     fire = true;
-                    gesture.Armed = false;
-                    gesture.CooldownUntil = now.AddMilliseconds(340);
+                    gesture.PunchReady = false;
+                    gesture.CooldownUntil = now.AddMilliseconds(300);
+                    gesture.LockedAim = gesture.LastAim;
+                    gesture.AimLockedUntil = now.AddMilliseconds(260);
                 }
+            }
+            else
+            {
+                gesture.PunchReady = true;
+                gesture.LastAim = rawAim;
             }
 
             gesture.Initialized = true;
             gesture.LastDepth = handZ;
             gesture.LastAt = now;
-            float progress = gesture.Armed ? Mathf.Clamp01((shoulderZ - handZ + 0.16f) / 0.28f) : 0f;
+            Vector2 displayedAim = now < gesture.AimLockedUntil ? gesture.LockedAim : rawAim;
+            if (now >= gesture.AimLockedUntil) gesture.LastAim = rawAim;
+            float progress = Mathf.Clamp01(Mathf.Max(0f, forwardSpeed) / 0.45f);
             output.Add(new AimSample(player, handId,
-                new Vector2(Mathf.Clamp01(x), Mathf.Clamp01(y)), fire, progress));
+                displayedAim, fire, progress));
         }
 
         private string EnsureBridgeExecutable()
@@ -358,10 +379,14 @@ namespace KinectKids3D
         private sealed class HandGestureState
         {
             public bool Initialized;
-            public bool Armed;
+            public bool PunchReady;
             public float LastDepth;
+            public float SmoothedForwardSpeed;
+            public Vector2 LastAim;
+            public Vector2 LockedAim;
             public DateTime LastAt;
             public DateTime CooldownUntil;
+            public DateTime AimLockedUntil;
         }
     }
 }

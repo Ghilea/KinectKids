@@ -1691,7 +1691,7 @@ namespace KinectKids3D
             {
                 GUI.Box(new Rect(Screen.width * 0.5f - 330, 112, 660, 68), string.Empty);
                 GUI.Label(new Rect(Screen.width * 0.5f - 315, 118, 630, 54),
-                    "Sikta med valfri hand och kasta framåt – ducka och väj när pilarna visas!", centerStyle);
+                    "Sikta och gör en snabb stöt framåt med valfri hand – ducka när pilarna visas!", centerStyle);
             }
 
             if (paused)
@@ -1823,7 +1823,7 @@ namespace KinectKids3D
             GUI.Box(new Rect(x, y, width, height), string.Empty);
             GUI.Label(new Rect(x + 30f, y + 18f, width - 60f, 48f), "KINECT-KALIBRERING", centerStyle);
             GUI.Label(new Rect(x + 45f, y + 68f, width - 90f, 58f),
-                "Stå rakt och stilla tills mätaren är full. Testa sedan att sikta och kasta med båda händerna, ducka och sidoväja.", centerStyle);
+                "Stå rakt och stilla tills mätaren är full. Sikta och gör sedan en snabb stöt framåt med varje hand.", centerStyle);
 
             float progress = Mathf.Clamp01(calibrationStableSeconds / 1.6f);
             GUI.DrawTexture(new Rect(x + 110f, y + 132f, width - 220f, 18f), whiteTexture);
@@ -1843,7 +1843,7 @@ namespace KinectKids3D
             DrawInterfaceReticles();
 
             GUI.Label(new Rect(x + 45f, y + 448f, width - 90f, 44f),
-                "BÅDA HÄNDER: sikta var för sig och kasta respektive hand framåt.", centeredSmallStyle);
+                "BÅDA HÄNDER: sikta stilla och slå snabbt framåt direkt från siktläget.", centeredSmallStyle);
             if (GUI.Button(new Rect(x + 45f, y + height - 72f, 150f, 42f), "TILLBAKA"))
                 flow = GameFlow.Menu;
             GUI.enabled = calibrationTrackingStable;
