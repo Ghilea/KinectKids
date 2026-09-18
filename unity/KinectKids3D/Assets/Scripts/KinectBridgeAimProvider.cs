@@ -27,6 +27,7 @@ namespace KinectKids3D
         private Process bridgeProcess;
         private volatile bool stopping;
         private bool disposed;
+        private DateTime lastTrackedFrameAt = DateTime.MinValue;
         private string status = "Startar Kinect-bryggan…";
 
         public bool IsAvailable { get; private set; }
@@ -176,10 +177,17 @@ namespace KinectKids3D
 
             lock (sync)
             {
+                // Behåll den senaste stabila posen under mycket korta bortfall.
+                // Kinect 360 kan missa enstaka bildrutor när handen är långt
+                // ut från kroppen; UI och sikte ska inte blinka bort för det.
+                if (poses.Count == 0 && latestPoses.Count > 0
+                    && now - lastTrackedFrameAt < TimeSpan.FromMilliseconds(420))
+                    return;
                 latest.Clear();
                 latest.AddRange(samples);
                 latestPoses.Clear();
                 latestPoses.AddRange(poses);
+                if (poses.Count > 0) lastTrackedFrameAt = now;
             }
             IsAvailable = true;
             status = "Kinect 360 ansluten via säker 32-bitarsbrygga";

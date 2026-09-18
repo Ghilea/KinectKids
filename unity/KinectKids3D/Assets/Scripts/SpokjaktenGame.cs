@@ -53,7 +53,7 @@ namespace KinectKids3D
         private readonly Dictionary<int, ReticleState> reticles = new Dictionary<int, ReticleState>();
         private readonly Dictionary<int, Light> reticleLights = new Dictionary<int, Light>();
         private readonly Dictionary<int, ActiveHandState> activeHands = new Dictionary<int, ActiveHandState>();
-        private readonly Dictionary<int, Vector2> smoothedHandPositions = new Dictionary<int, Vector2>();
+        private readonly Dictionary<int, HandFilterState> handFilters = new Dictionary<int, HandFilterState>();
         private readonly Dictionary<long, PoseCalibration> poseCalibrations = new Dictionary<long, PoseCalibration>();
         private readonly Dictionary<int, PoseState> currentPoses = new Dictionary<int, PoseState>();
         private readonly int[] scores = new int[2];
@@ -85,6 +85,7 @@ namespace KinectKids3D
         private GUIStyle hudStyle;
         private GUIStyle smallStyle;
         private GUIStyle centerStyle;
+        private GUIStyle centeredSmallStyle;
         private AudioSource effects;
         private AudioSource musicSource;
         private AudioSource ambienceSource;
@@ -149,6 +150,10 @@ namespace KinectKids3D
         private readonly bool[] calibrationLeanPassed = new bool[2];
         private readonly bool[] calibrationHandSwitchPassed = new bool[2];
         private readonly float[] calibrationHandSwitchTime = new float[2];
+        private readonly float[] calibrationDuckTime = new float[2];
+        private readonly float[] calibrationLeanTime = new float[2];
+        private readonly int[] calibrationVisibleHands = new int[2];
+        private float calibrationUnstableSeconds;
         private bool calibrationTrackingStable;
         private const int TotalRelics = 6;
 
@@ -196,7 +201,8 @@ namespace KinectKids3D
             if (kinect.TryStart())
             {
                 aimProvider = kinect;
-                inputStatus = kinect.Status + " – en hand siktar, den andra kastar; håll båda över huvudet för att byta";
+                inputStatus = kinect.Status
+                    + " – en hand siktar, den andra kastar; håll den nya sikthanden högre för att byta";
             }
             else
             {
@@ -360,7 +366,7 @@ namespace KinectKids3D
             aimLocks.Clear();
             reticles.Clear();
             activeHands.Clear();
-            smoothedHandPositions.Clear();
+            handFilters.Clear();
             poseCalibrations.Clear();
             currentPoses.Clear();
             scores[0] = scores[1] = 0;
@@ -517,7 +523,9 @@ namespace KinectKids3D
             poseCalibrations.Clear();
             currentPoses.Clear();
             reticles.Clear();
+            handFilters.Clear();
             calibrationStableSeconds = 0f;
+            calibrationUnstableSeconds = 0f;
             calibrationTrackingStable = false;
             for (int player = 0; player < 2; player++)
             {
@@ -526,6 +534,8 @@ namespace KinectKids3D
                 calibrationLeanPassed[player] = false;
                 calibrationHandSwitchPassed[player] = false;
                 calibrationHandSwitchTime[player] = 0f;
+                calibrationDuckTime[player] = 0f;
+                calibrationLeanTime[player] = 0f;
             }
             flow = GameFlow.Calibration;
             SavePreferences();
@@ -540,13 +550,14 @@ namespace KinectKids3D
                 if (reticleLight != null) reticleLight.enabled = false;
 
             int[] handCounts = new int[2];
-            bool[] bothHandsRaised = { true, true };
-            foreach (AimSample sample in samples)
+            var calibrationHands = new[] { new List<AimSample>(2), new List<AimSample>(2) };
+            foreach (AimSample rawSample in samples)
             {
+                AimSample sample = SmoothHand(rawSample);
                 int player = Mathf.Clamp(sample.PlayerIndex, 0, 1);
                 if (player >= requestedPlayers) continue;
                 handCounts[player]++;
-                if (sample.Position.y > 0.28f) bothHandsRaised[player] = false;
+                calibrationHands[player].Add(sample);
                 if (sample.Fire) calibrationCastPassed[player] = true;
                 if (!reticles.ContainsKey(player))
                 {
@@ -564,6 +575,9 @@ namespace KinectKids3D
                 }
             }
 
+            calibrationVisibleHands[0] = handCounts[0];
+            calibrationVisibleHands[1] = handCounts[1];
+
             bool neutralPose = currentPoses.Count >= requestedPlayers;
             bool handsFound = true;
             bool kinectInput = aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider;
@@ -576,8 +590,14 @@ namespace KinectKids3D
                     handsFound = false;
                     continue;
                 }
-                if (pose.DuckAmount >= 0.15f) calibrationDuckPassed[player] = true;
-                if (Mathf.Abs(pose.LeanAmount) >= 0.14f) calibrationLeanPassed[player] = true;
+                calibrationDuckTime[player] = pose.DuckAmount >= 0.15f
+                    ? calibrationDuckTime[player] + Time.deltaTime
+                    : Mathf.Max(0f, calibrationDuckTime[player] - Time.deltaTime * 2f);
+                calibrationLeanTime[player] = Mathf.Abs(pose.LeanAmount) >= 0.14f
+                    ? calibrationLeanTime[player] + Time.deltaTime
+                    : Mathf.Max(0f, calibrationLeanTime[player] - Time.deltaTime * 2f);
+                if (calibrationDuckTime[player] >= 0.30f) calibrationDuckPassed[player] = true;
+                if (calibrationLeanTime[player] >= 0.30f) calibrationLeanPassed[player] = true;
                 if (pose.DuckAmount > 0.08f || Mathf.Abs(pose.LeanAmount) > 0.11f)
                     neutralPose = false;
                 if (handCounts[player] < (kinectInput ? 2 : 1)) handsFound = false;
@@ -585,10 +605,12 @@ namespace KinectKids3D
                 {
                     calibrationHandSwitchPassed[player] = true;
                 }
-                else if (handCounts[player] >= 2 && bothHandsRaised[player])
+                else if (calibrationHands[player].Count >= 2
+                    && Mathf.Abs(calibrationHands[player][0].Position.y
+                        - calibrationHands[player][1].Position.y) >= 0.10f)
                 {
                     calibrationHandSwitchTime[player] += Time.deltaTime;
-                    if (calibrationHandSwitchTime[player] >= 0.80f)
+                    if (calibrationHandSwitchTime[player] >= 0.55f)
                         calibrationHandSwitchPassed[player] = true;
                 }
                 else
@@ -600,10 +622,18 @@ namespace KinectKids3D
             if (!calibrationTrackingStable)
             {
                 if (neutralPose && handsFound)
+                {
                     calibrationStableSeconds += Time.deltaTime;
+                    calibrationUnstableSeconds = 0f;
+                }
                 else
-                    calibrationStableSeconds = Mathf.Max(0f, calibrationStableSeconds - Time.deltaTime * 1.8f);
-                if (calibrationStableSeconds >= 2.0f) calibrationTrackingStable = true;
+                {
+                    calibrationUnstableSeconds += Time.deltaTime;
+                    if (calibrationUnstableSeconds > 0.45f)
+                        calibrationStableSeconds = Mathf.Max(0f,
+                            calibrationStableSeconds - Time.deltaTime * 0.35f);
+                }
+                if (calibrationStableSeconds >= 1.6f) calibrationTrackingStable = true;
             }
         }
 
@@ -979,7 +1009,13 @@ namespace KinectKids3D
                     poseCalibrations[pose.TrackingId] = calibration;
                 }
 
-                calibration.StandingHeadY = Mathf.Max(calibration.StandingHeadY, pose.HeadY);
+                if (flow == GameFlow.Calibration)
+                {
+                    float headDifference = pose.HeadY - calibration.StandingHeadY;
+                    if (headDifference >= -0.06f && headDifference <= 0.12f)
+                        calibration.StandingHeadY = Mathf.Lerp(
+                            calibration.StandingHeadY, pose.HeadY, 0.08f);
+                }
                 if (currentHazard == null)
                     calibration.CenterX = Mathf.Lerp(calibration.CenterX, pose.CenterX, 0.035f);
 
@@ -1239,13 +1275,39 @@ namespace KinectKids3D
 
         private AimSample SmoothHand(AimSample sample)
         {
-            Vector2 previous;
-            if (!smoothedHandPositions.TryGetValue(sample.HandId, out previous)
-                || Vector2.Distance(previous, sample.Position) > 0.32f)
-                previous = sample.Position;
-            Vector2 smoothed = Vector2.Lerp(previous, sample.Position, 0.38f);
-            smoothedHandPositions[sample.HandId] = smoothed;
-            sample.Position = smoothed;
+            HandFilterState state;
+            if (!handFilters.TryGetValue(sample.HandId, out state))
+            {
+                state = new HandFilterState
+                {
+                    Position = sample.Position,
+                    LastRaw = sample.Position
+                };
+                handFilters[sample.HandId] = state;
+                return sample;
+            }
+
+            Vector2 raw = new Vector2(Mathf.Clamp(sample.Position.x, 0.025f, 0.975f),
+                Mathf.Clamp(sample.Position.y, 0.025f, 0.975f));
+            float rawJump = Vector2.Distance(raw, state.LastRaw);
+            state.LastRaw = raw;
+
+            // Begränsa enskilda Kinect-spikar. Stora riktiga handrörelser
+            // kommer fortfarande ikapp över flera bildrutor i stället för att
+            // teleportera siktet tvärs över skärmen.
+            Vector2 delta = raw - state.Position;
+            const float maximumStep = 0.115f;
+            if (delta.magnitude > maximumStep)
+                raw = state.Position + delta.normalized * maximumStep;
+
+            float distance = Vector2.Distance(state.Position, raw);
+            if (distance < 0.0045f) raw = state.Position;
+            float smoothTime = Mathf.Lerp(0.15f, 0.075f,
+                Mathf.InverseLerp(0.015f, 0.14f, distance));
+            if (rawJump > 0.22f) smoothTime = Mathf.Max(smoothTime, 0.13f);
+            state.Position = Vector2.SmoothDamp(state.Position, raw, ref state.Velocity,
+                smoothTime, 1.65f, Mathf.Max(0.001f, Time.deltaTime));
+            sample.Position = state.Position;
             return sample;
         }
 
@@ -1320,22 +1382,27 @@ namespace KinectKids3D
             state.SwitchGestureActive = false;
             if (hands.Count >= 2)
             {
-                // En avsiktlig och lättförklarad handbytesgest: båda händerna
-                // hålls högt i bild i 0,8 sekunder. Gesten måste släppas innan
-                // nästa byte, så den kan aldrig pendla fram och tillbaka.
-                bool bothHandsRaised = hands.All(item => item.Position.y <= 0.28f);
-                state.SwitchGestureActive = bothHandsRaised;
-                if (!bothHandsRaised)
+                // Handbyte: lyft handen som ska bli den nya sikthanden tydligt
+                // högre än den nuvarande. Det är enklare och stabilare än att
+                // kräva att båda händerna ska vara över huvudet samtidigt.
+                AimSample other = hands.First(item => item.HandId != active.HandId);
+                bool switchRequested = other.Position.y <= active.Position.y - 0.10f;
+                bool neutralHands = Mathf.Abs(other.Position.y - active.Position.y) < 0.055f;
+                state.SwitchGestureActive = switchRequested;
+                if (neutralHands)
                 {
                     state.SwitchStartedAt = -1f;
                     state.CanSwitch = true;
                 }
+                else if (!switchRequested)
+                {
+                    state.SwitchStartedAt = -1f;
+                }
                 else if (state.CanSwitch)
                 {
                     if (state.SwitchStartedAt < 0f) state.SwitchStartedAt = Time.time;
-                    if (Time.time - state.SwitchStartedAt >= 0.80f)
+                    if (Time.time - state.SwitchStartedAt >= 0.55f)
                     {
-                        AimSample other = hands.First(item => item.HandId != active.HandId);
                         state.ActiveHandId = other.HandId;
                         active = other;
                         state.CanSwitch = false;
@@ -1691,11 +1758,19 @@ namespace KinectKids3D
                 SavePreferences();
             }
 
-            rowY += 55f;
-            GUI.Label(new Rect(x + 45f, rowY, width - 90f, 48f), inputStatus, centerStyle);
-            rowY += 58f;
-            if (GUI.Button(new Rect(x + 145f, rowY, width - 290f, 58f), "KALIBRERA OCH STARTA"))
+            float statusY = y + height - 176f;
+            GUI.Label(new Rect(x + 45f, statusY, width - 90f, 58f), MenuInputStatus(), centeredSmallStyle);
+            if (GUI.Button(new Rect(x + 145f, y + height - 92f, width - 290f, 58f), "KALIBRERA OCH STARTA"))
                 BeginCalibration();
+        }
+
+        private string MenuInputStatus()
+        {
+            bool kinect = aimProvider != null && aimProvider.IsAvailable
+                && (aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider);
+            if (kinect) return "KINECT ANSLUTEN\n" + aimProvider.Status;
+            return "KINECT EJ TILLGÄNGLIG – MUSLÄGE AKTIVT\n"
+                + "Kontrollera USB/ström och stäng andra Kinect-program innan spelet startas om.";
         }
 
         private void DrawMenuSlider(float x, float width, ref float rowY, string label,
@@ -1725,13 +1800,15 @@ namespace KinectKids3D
             GUI.Box(new Rect(x, y, width, height), string.Empty);
             GUI.Label(new Rect(x + 30f, y + 18f, width - 60f, 48f), "KINECT-KALIBRERING", centerStyle);
             GUI.Label(new Rect(x + 45f, y + 68f, width - 90f, 58f),
-                "Stå rakt och stilla tills mätaren är full. Testa sedan gärna kast, duckning och sidoväjning.", centerStyle);
+                "Stå rakt och stilla tills mätaren är full. Testa sedan kast, duckning, sidoväjning och lyft den nya sikthanden högre.", centerStyle);
 
-            float progress = Mathf.Clamp01(calibrationStableSeconds / 2f);
+            float progress = Mathf.Clamp01(calibrationStableSeconds / 1.6f);
             GUI.DrawTexture(new Rect(x + 110f, y + 132f, width - 220f, 18f), whiteTexture);
             GUI.DrawTexture(new Rect(x + 113f, y + 135f, (width - 226f) * progress, 12f), goldTexture);
+            GUI.Label(new Rect(x + 110f, y + 128f, width - 220f, 25f),
+                Mathf.RoundToInt(progress * 100f) + "%", centeredSmallStyle);
             GUI.Label(new Rect(x + 80f, y + 154f, width - 160f, 30f),
-                calibrationTrackingStable ? "SPÅRNINGEN ÄR STABIL" : "HÅLL ER STILLA...", centerStyle);
+                CalibrationProgressText(), centerStyle);
 
             float cardWidth = requestedPlayers == 1 ? width - 110f : (width - 135f) * 0.5f;
             for (int player = 0; player < requestedPlayers; player++)
@@ -1748,7 +1825,8 @@ namespace KinectKids3D
                     reticle.PlayerIndex == 1 ? playerTwoRing : playerOneRing);
             }
 
-            GUI.Label(new Rect(x + 45f, y + 448f, width - 90f, 44f), inputStatus, centerStyle);
+            GUI.Label(new Rect(x + 45f, y + 448f, width - 90f, 44f),
+                "HANDBYTE: håll handen du vill sikta med tydligt högre i en halv sekund.", centeredSmallStyle);
             if (GUI.Button(new Rect(x + 45f, y + height - 72f, 150f, 42f), "TILLBAKA"))
                 flow = GameFlow.Menu;
             GUI.enabled = calibrationTrackingStable;
@@ -1762,7 +1840,8 @@ namespace KinectKids3D
         {
             GUI.Box(card, string.Empty);
             bool body = currentPoses.ContainsKey(player);
-            bool hands = reticles.ContainsKey(player);
+            bool kinectInput = aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider;
+            bool hands = calibrationVisibleHands[player] >= (kinectInput ? 2 : 1);
             GUI.Label(new Rect(card.x + 16f, card.y + 12f, card.width - 32f, 32f),
                 "SPELARE " + (player + 1), hudStyle);
             GUI.Label(new Rect(card.x + 18f, card.y + 55f, card.width - 36f, 170f),
@@ -1773,6 +1852,23 @@ namespace KinectKids3D
                 + CalibrationMark(calibrationDuckPassed[player]) + " Duckning testad\n"
                 + CalibrationMark(calibrationLeanPassed[player]) + " Sidoväjning testad",
                 centerStyle);
+        }
+
+        private string CalibrationProgressText()
+        {
+            if (calibrationTrackingStable) return "SPÅRNINGEN ÄR STABIL";
+            bool kinectInput = aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider;
+            for (int player = 0; player < requestedPlayers; player++)
+            {
+                if (!currentPoses.ContainsKey(player))
+                    return "STÄLL SPELARE " + (player + 1) + " MITT FRAMFÖR KINECT";
+                if (calibrationVisibleHands[player] < (kinectInput ? 2 : 1))
+                    return "VISA BÅDA HÄNDERNA TYDLIGT";
+            }
+            if (calibrationStableSeconds > 0.05f)
+                return "BRA – HÅLL ER STILLA  "
+                    + Mathf.CeilToInt(1.6f - calibrationStableSeconds) + " s";
+            return "STÅ RAKT OCH HÅLL ER STILLA";
         }
 
         private static string CalibrationMark(bool complete)
@@ -1807,6 +1903,12 @@ namespace KinectKids3D
             titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 25, fontStyle = FontStyle.Bold, normal = { textColor = Color.white } };
             hudStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, normal = { textColor = Color.white } };
             smallStyle = new GUIStyle(GUI.skin.label) { fontSize = 14, normal = { textColor = new Color(0.76f, 0.91f, 1f) } };
+            centeredSmallStyle = new GUIStyle(smallStyle)
+            {
+                fontSize = 15,
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = true
+            };
             centerStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 22,
@@ -2194,6 +2296,13 @@ namespace KinectKids3D
             public bool CastHandIsRight;
             public bool DualHand;
             public bool AttackBlocked;
+        }
+
+        private sealed class HandFilterState
+        {
+            public Vector2 Position;
+            public Vector2 LastRaw;
+            public Vector2 Velocity;
         }
     }
 }

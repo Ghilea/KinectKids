@@ -61,7 +61,17 @@ namespace KinectKids.Bridge
 
             SendStatus("INFO", "Kinect hittad – startar djup- och skelettström…");
             sensor.DepthStream.Enable(DepthImageFormat.Resolution320x240Fps30);
-            sensor.SkeletonStream.Enable();
+            // Kinect v1-data blir mycket orolig när en hand förs ut från
+            // kroppen. SDK-filtreringen tar bort led-jitter innan koordinaterna
+            // skickas till Unity, men behåller tillräckligt snabb respons för kast.
+            sensor.SkeletonStream.Enable(new TransformSmoothParameters
+            {
+                Smoothing = 0.62f,
+                Correction = 0.28f,
+                Prediction = 0.22f,
+                JitterRadius = 0.075f,
+                MaxDeviationRadius = 0.18f
+            });
             sensor.SkeletonFrameReady += OnSkeletonFrameReady;
             try
             {
@@ -133,6 +143,12 @@ namespace KinectKids.Bridge
             Joint head = body.Joints[JointType.Head];
             Joint left = body.Joints[JointType.HandLeft];
             Joint right = body.Joints[JointType.HandRight];
+            // En kort tappad hand får inte radera hela spelaren. Handleden är
+            // ofta fortfarande spårad när handen ligger nära bildkanten.
+            if (left.TrackingState == JointTrackingState.NotTracked)
+                left = body.Joints[JointType.WristLeft];
+            if (right.TrackingState == JointTrackingState.NotTracked)
+                right = body.Joints[JointType.WristRight];
             if (left.TrackingState == JointTrackingState.NotTracked
                 || right.TrackingState == JointTrackingState.NotTracked) return;
 
