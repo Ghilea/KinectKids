@@ -51,6 +51,9 @@ namespace KinectKids
         private GameEngine game;
         private ZombieRailEngine zombieGame;
         private MathGame mathGame;
+        private SwedishGame swedishGame;
+        private ShapeGame shapeGame;
+        private PatternGame patternGame;
         private SimonSaysGame simonGame;
         private readonly GameManager moduleManager = new GameManager();
         private readonly ProgressionService progression = new ProgressionService();
@@ -72,6 +75,9 @@ namespace KinectKids
             game = new GameEngine(Playfield);
             zombieGame = new ZombieRailEngine(Playfield);
             mathGame = new MathGame(Playfield);
+            swedishGame = new SwedishGame(Playfield);
+            shapeGame = new ShapeGame(Playfield);
+            patternGame = new PatternGame(Playfield);
             simonGame = new SimonSaysGame();
             moduleManager.GameEvent += OnModuleGameEvent;
             CreateHandCursors();
@@ -148,6 +154,24 @@ namespace KinectKids
             ShowCalibration();
         }
 
+        private void SwedishStartButton_Click(object sender, RoutedEventArgs e)
+        {
+            selectedGame = GameMode.Swedish;
+            ShowCalibration();
+        }
+
+        private void ShapeStartButton_Click(object sender, RoutedEventArgs e)
+        {
+            selectedGame = GameMode.Shapes;
+            ShowCalibration();
+        }
+
+        private void PatternStartButton_Click(object sender, RoutedEventArgs e)
+        {
+            selectedGame = GameMode.Patterns;
+            ShowCalibration();
+        }
+
         private void SimonStartButton_Click(object sender, RoutedEventArgs e)
         {
             selectedGame = GameMode.SimonSays;
@@ -162,17 +186,11 @@ namespace KinectKids
 
         private void SpookyAdventureButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!progression.IsGameUnlocked("SpookyAdventure3D"))
-            {
-                UpdateProgressionUi();
-                return;
-            }
-
             string executable = FindSpookyAdventureExecutable();
             if (executable == null)
             {
                 MessageBox.Show(
-                    "Spökjakten 3D är upplåst men behöver byggas i Unity först.\n\n" +
+                    "Spökjakten 3D finns i menyn men behöver byggas i Unity först.\n\n" +
                     "Öppna unity\\KinectKids3D i Unity 6 och bygg Windows-versionen till " +
                     "unity\\KinectKids3D\\Build.",
                     "Spökjakten 3D",
@@ -207,6 +225,15 @@ namespace KinectKids
             {
                 case GameMode.Math:
                     CalibrationTitle.Text = "Gör er redo för Matematikbanan";
+                    break;
+                case GameMode.Swedish:
+                    CalibrationTitle.Text = "Gör er redo för Bokstavsjakten";
+                    break;
+                case GameMode.Shapes:
+                    CalibrationTitle.Text = "Gör er redo för Formverkstan";
+                    break;
+                case GameMode.Patterns:
+                    CalibrationTitle.Text = "Gör er redo för Mönsterjakten";
                     break;
                 case GameMode.SimonSays:
                     CalibrationTitle.Text = "Gör er redo för Simon säger";
@@ -279,9 +306,15 @@ namespace KinectKids
             game.Reset();
             zombieGame.Reset();
             mathGame.Reset();
+            swedishGame.Reset();
+            shapeGame.Reset();
+            patternGame.Reset();
             simonGame.Reset();
             IGame selectedModule = null;
             if (selectedGame == GameMode.Math) selectedModule = mathGame;
+            if (selectedGame == GameMode.Swedish) selectedModule = swedishGame;
+            if (selectedGame == GameMode.Shapes) selectedModule = shapeGame;
+            if (selectedGame == GameMode.Patterns) selectedModule = patternGame;
             if (selectedGame == GameMode.SimonSays) selectedModule = simonGame;
             moduleManager.Select(selectedModule);
             ConfigureGameMode();
@@ -318,6 +351,9 @@ namespace KinectKids
             BalloonBackdrop.Visibility = zombies ? Visibility.Collapsed : Visibility.Visible;
             BalloonBackdrop.Background = selectedGame == GameMode.Math
                 ? BrushFrom("#173D63")
+                : selectedGame == GameMode.Swedish ? BrushFrom("#512847")
+                : selectedGame == GameMode.Shapes ? BrushFrom("#594018")
+                : selectedGame == GameMode.Patterns ? BrushFrom("#193F55")
                 : selectedGame == GameMode.SimonSays ? BrushFrom("#282B57") : BrushFrom("#102B46");
             Playfield.Background = Brushes.Transparent;
             GameSkeletonCanvas.Opacity = selectedGame == GameMode.SimonSays ? 0.9 : zombies ? 0.46 : 0.72;
@@ -327,6 +363,15 @@ namespace KinectKids
             {
                 case GameMode.Math:
                     GameInstructionText.Text = "Träffa ballongen med rätt svar!";
+                    break;
+                case GameMode.Swedish:
+                    GameInstructionText.Text = "Slå på kortet med rätt bokstav!";
+                    break;
+                case GameMode.Shapes:
+                    GameInstructionText.Text = "Slå på formen som efterfrågas!";
+                    break;
+                case GameMode.Patterns:
+                    GameInstructionText.Text = "Titta på mönstret och välj vad som kommer sedan!";
                     break;
                 case GameMode.SimonSays:
                     GameInstructionText.Text = "Följ rörelsen som Simon visar!";
@@ -351,7 +396,7 @@ namespace KinectKids
                 UpdateRailBackground();
                 BossBanner.Visibility = zombieGame.BossIsActive ? Visibility.Visible : Visibility.Collapsed;
             }
-            else if (selectedGame == GameMode.Math || selectedGame == GameMode.SimonSays)
+            else if (IsModuleGame(selectedGame))
             {
                 moduleManager.Update(elapsed);
                 if (moduleManager.CurrentGame != null)
@@ -361,8 +406,7 @@ namespace KinectKids
             {
                 game.Update(elapsed);
             }
-            if (selectedGame != GameMode.Math
-                && selectedGame != GameMode.SimonSays
+            if (!IsModuleGame(selectedGame)
                 && DateTime.UtcNow >= instructionHidesAt)
                 GameInstruction.Visibility = Visibility.Collapsed;
 
@@ -439,6 +483,21 @@ namespace KinectKids
                 {
                     handAimProgress[cursorIndex].Width = 0;
                     points = mathGame.PopAt(new Point(x, y), 29, playerIndex);
+                }
+                else if (selectedGame == GameMode.Swedish)
+                {
+                    handAimProgress[cursorIndex].Width = 0;
+                    points = swedishGame.PopAt(new Point(x, y), 29, playerIndex);
+                }
+                else if (selectedGame == GameMode.Shapes)
+                {
+                    handAimProgress[cursorIndex].Width = 0;
+                    points = shapeGame.PopAt(new Point(x, y), 29, playerIndex);
+                }
+                else if (selectedGame == GameMode.Patterns)
+                {
+                    handAimProgress[cursorIndex].Width = 0;
+                    points = patternGame.PopAt(new Point(x, y), 29, playerIndex);
                 }
                 else if (selectedGame == GameMode.SimonSays)
                 {
@@ -737,14 +796,11 @@ namespace KinectKids
 
             if (selectedGame == GameMode.Math)
             {
-                bool unlocked = progression.AddMathScore(0, scores[0]);
+                progression.AddMathScore(0, scores[0]);
                 if (PlayerTwoScoreBox.Visibility == Visibility.Visible)
-                    unlocked = progression.AddMathScore(1, scores[1]) || unlocked;
+                    progression.AddMathScore(1, scores[1]);
 
-                scoreText += unlocked
-                    ? "\nSpökjakten 3D är nu upplåst!"
-                    : "\n" + progression.GetRemainingForSpookyAdventure() +
-                      " mattepoäng kvar till Spökjakten 3D.";
+                scoreText += "\nTotalt har ni samlat " + progression.GetCombinedMathScore() + " mattepoäng.";
                 UpdateProgressionUi();
             }
 
@@ -789,6 +845,9 @@ namespace KinectKids
             zombieGame.Reset();
             moduleManager.Stop();
             mathGame.Reset();
+            swedishGame.Reset();
+            shapeGame.Reset();
+            patternGame.Reset();
             simonGame.Reset();
             PauseOverlay.Visibility = Visibility.Collapsed;
             ResultOverlay.Visibility = Visibility.Collapsed;
@@ -828,16 +887,20 @@ namespace KinectKids
         private void UpdateProgressionUi()
         {
             if (SpookyAdventureButton == null || ProgressText == null) return;
-            bool unlocked = progression.IsGameUnlocked("SpookyAdventure3D");
-            SpookyAdventureButton.IsEnabled = unlocked;
-            SpookyAdventureButton.Opacity = unlocked ? 1 : 0.58;
-            SpookyAdventureButton.Content = unlocked
-                ? "Spökjakten 3D"
-                : "Spökjakten 3D 🔒";
-            ProgressText.Text = unlocked
-                ? "Belöning upplåst: Spökjakten 3D är redo."
-                : "Samla " + progression.GetRemainingForSpookyAdventure() +
-                  " mattepoäng till för att låsa upp Spökjakten 3D.";
+            SpookyAdventureButton.IsEnabled = true;
+            SpookyAdventureButton.Opacity = 1;
+            SpookyAdventureButton.Content = "Spökjakten 3D";
+            ProgressText.Text = "Alla spel är öppna • Samlade mattepoäng: " +
+                                progression.GetCombinedMathScore();
+        }
+
+        private static bool IsModuleGame(GameMode mode)
+        {
+            return mode == GameMode.Math
+                   || mode == GameMode.Swedish
+                   || mode == GameMode.Shapes
+                   || mode == GameMode.Patterns
+                   || mode == GameMode.SimonSays;
         }
 
         private static string FindSpookyAdventureExecutable()
@@ -857,6 +920,9 @@ namespace KinectKids
             Balloons,
             ZombieTrain,
             Math,
+            Swedish,
+            Shapes,
+            Patterns,
             SimonSays
         }
     }

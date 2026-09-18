@@ -72,6 +72,7 @@
     <Compile Include="Game\ZombieTarget.cs" />
     <Compile Include="Game\IGame.cs" />
     <Compile Include="Game\MathGame.cs" />
+    <Compile Include="Game\LearningChoiceGames.cs" />
     <Compile Include="Game\SimonSaysGame.cs" />
     <Compile Include="Game\GameManager.cs" />
     <Compile Include="Input\IPlayerTracker.cs" />
@@ -79,6 +80,7 @@
     <Compile Include="Input\KinectPlayerTracker.Stub.cs" Condition=" '$(UseKinectStub)' == 'true' " />
     <Compile Include="Models\BodyJoint.cs" />
     <Compile Include="Models\MathQuestion.cs" />
+    <Compile Include="Models\LearningQuestion.cs" />
     <Compile Include="Models\TrackedPlayer.cs" />
     <Compile Include="Services\ProgressionService.cs" />
     <Compile Include="Input\MousePlayerTracker.cs" />
