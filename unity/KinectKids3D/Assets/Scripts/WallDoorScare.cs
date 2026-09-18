@@ -169,9 +169,11 @@ namespace KinectKids3D
             if (scareAudio == null) return;
             scareAudio.pitch = Random.Range(0.92f, 1.04f);
             if (revealSounds != null && revealSounds.Length > 0)
-                scareAudio.PlayOneShot(revealSounds[Random.Range(0, revealSounds.Length)], 0.72f);
+                scareAudio.PlayOneShot(revealSounds[Random.Range(0, revealSounds.Length)],
+                    0.72f * SpokjaktenGame.CurrentEffectsVolume);
             if (creatureSounds != null && creatureSounds.Length > 0)
-                scareAudio.PlayOneShot(creatureSounds[Random.Range(0, creatureSounds.Length)], 0.62f);
+                scareAudio.PlayOneShot(creatureSounds[Random.Range(0, creatureSounds.Length)],
+                    0.62f * SpokjaktenGame.CurrentEffectsVolume);
         }
 
         private void SetCreatureVisible(bool visible)

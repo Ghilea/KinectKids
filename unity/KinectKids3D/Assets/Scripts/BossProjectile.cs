@@ -19,14 +19,14 @@ namespace KinectKids3D
             ? "DUCKA!"
             : Kind == HazardKind.DodgeLeft ? "VÄJ ÅT VÄNSTER!" : "VÄJ ÅT HÖGER!";
 
-        public static BossProjectile Create(HazardKind kind, Vector3 start, Vector3 end)
+        public static BossProjectile Create(HazardKind kind, Vector3 start, Vector3 end, bool easyMode = false)
         {
             GameObject root = new GameObject("Bosskast - " + kind);
             BossProjectile projectile = root.AddComponent<BossProjectile>();
             projectile.Kind = kind;
             projectile.start = start;
             projectile.end = end;
-            projectile.duration = 2.90f;
+            projectile.duration = easyMode ? 3.35f : 2.90f;
             projectile.startedAt = Time.time;
             projectile.Build();
             projectile.SetVisualsVisible(false);

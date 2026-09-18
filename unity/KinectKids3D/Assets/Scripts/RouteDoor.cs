@@ -113,7 +113,8 @@ namespace KinectKids3D
             opening = true;
             if (doorAudio == null || doorSounds == null || doorSounds.Length == 0) return;
             doorAudio.pitch = Random.Range(0.92f, 1.04f);
-            doorAudio.PlayOneShot(doorSounds[Random.Range(0, doorSounds.Length)], 0.88f);
+            doorAudio.PlayOneShot(doorSounds[Random.Range(0, doorSounds.Length)],
+                0.88f * SpokjaktenGame.CurrentEffectsVolume);
         }
 
         private void ResetDoor()

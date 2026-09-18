@@ -3,17 +3,27 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace KinectKids3D
 {
     public sealed class SpokjaktenGame : MonoBehaviour
     {
+        private enum GameFlow
+        {
+            Menu,
+            Calibration,
+            Countdown,
+            Riding
+        }
+
         public static SpokjaktenGame Instance { get; private set; }
+        public static float CurrentEffectsVolume => Instance != null ? Instance.effectsVolume : 1f;
         private const float CountdownSeconds = 3f;
         private const float RideSpeed = 2.18f;
         private const float BossStopDistance = 344f;
-        private const float QuickEventCueDistance = 4.0f;
-        private const float QuickEventActionDistance = 3.55f;
+        private const float QuickEventCueDistance = 4.8f;
+        private const float QuickEventActionDistance = 4.15f;
         private const float QuickEventPassedDistance = -0.30f;
         private const float TargetGraceSeconds = 0.48f;
         private const float DwellShotSeconds = 0.58f;
@@ -77,6 +87,7 @@ namespace KinectKids3D
         private GUIStyle centerStyle;
         private AudioSource effects;
         private AudioSource musicSource;
+        private AudioSource ambienceSource;
         private AudioClip[] hitSounds;
         private AudioClip[] bossSounds;
         private AudioClip[] castSounds;
@@ -128,6 +139,17 @@ namespace KinectKids3D
         private bool recordSaved;
         private float musicVolume = 1f;
         private float brightnessLevel = 1f;
+        private float effectsVolume = 0.86f;
+        private float voiceVolume = 1f;
+        private GameFlow flow = GameFlow.Menu;
+        private int requestedPlayers = 1;
+        private float calibrationStableSeconds;
+        private readonly bool[] calibrationCastPassed = new bool[2];
+        private readonly bool[] calibrationDuckPassed = new bool[2];
+        private readonly bool[] calibrationLeanPassed = new bool[2];
+        private readonly bool[] calibrationHandSwitchPassed = new bool[2];
+        private readonly float[] calibrationHandSwitchTime = new float[2];
+        private bool calibrationTrackingStable;
         private const int TotalRelics = 6;
 
         private void Awake()
@@ -139,12 +161,15 @@ namespace KinectKids3D
         {
             Application.targetFrameRate = 60;
             QualitySettings.vSyncCount = 1;
+            LoadPreferences();
             CreateCamera();
             new DarkRideWorld(transform).Build(rideCamera);
+            ApplyInitialBrightness();
             CreateInput();
             CreateAudio();
             CreateHudTextures();
             ResetRide();
+            flow = GameFlow.Menu;
         }
 
         private void CreateCamera()
@@ -209,19 +234,19 @@ namespace KinectKids3D
             phantomSounds = LoadClipSet("Audio/SFX/Creatures", "ghost_moan_",
                 CreateGhostVoice("Vålnad nära vagnen", 1.22f, 96f, 3108));
 
-            AudioSource ambience = gameObject.AddComponent<AudioSource>();
-            ambience.clip = Resources.Load<AudioClip>("Audio/SFX/Ambience/ambient_horror") ?? CreateAmbience();
-            ambience.loop = true;
-            ambience.volume = 0.16f;
-            ambience.spatialBlend = 0;
-            ambience.Play();
+            ambienceSource = gameObject.AddComponent<AudioSource>();
+            ambienceSource.clip = Resources.Load<AudioClip>("Audio/SFX/Ambience/ambient_horror") ?? CreateAmbience();
+            ambienceSource.loop = true;
+            ambienceSource.volume = 0.16f * effectsVolume;
+            ambienceSource.spatialBlend = 0;
+            ambienceSource.Play();
 
             musicSource = gameObject.AddComponent<AudioSource>();
             AudioClip licensedMusic = Resources.Load<AudioClip>("Audio/CustomRideMusic");
             if (licensedMusic == null) licensedMusic = Resources.Load<AudioClip>("Audio/RideMusic");
             musicSource.clip = licensedMusic != null ? licensedMusic : CreateRideMusic();
             musicSource.loop = true;
-            musicSource.volume = licensedMusic != null ? 1f : 0.62f;
+            musicSource.volume = (licensedMusic != null ? 1f : 0.62f) * musicVolume;
             musicSource.spatialBlend = 0f;
             musicSource.priority = 0;
             musicSource.mute = false;
@@ -245,7 +270,7 @@ namespace KinectKids3D
             announcerVoice = gameObject.AddComponent<AudioSource>();
             announcerVoice.playOnAwake = false;
             announcerVoice.spatialBlend = 0f;
-            announcerVoice.volume = 1f;
+            announcerVoice.volume = voiceVolume;
             announcerVoice.priority = 8;
             announcerVoice.bypassReverbZones = true;
             duckSuccessVoice = Resources.Load<AudioClip>("Audio/SFX/Voice/duck_success");
@@ -253,6 +278,50 @@ namespace KinectKids3D
             bossSuccessVoice = Resources.Load<AudioClip>("Audio/SFX/Voice/boss_success");
             playerHitVoice = Resources.Load<AudioClip>("Audio/SFX/Voice/player_hit");
             wagonHitVoice = Resources.Load<AudioClip>("Audio/SFX/Voice/wagon_hit");
+            ApplyAudioVolumes();
+        }
+
+        private void LoadPreferences()
+        {
+            easyMode = PlayerPrefs.GetInt("SpokjaktenEasyMode", 1) != 0;
+            requestedPlayers = Mathf.Clamp(PlayerPrefs.GetInt("SpokjaktenPlayers", 1), 1, 2);
+            musicVolume = Mathf.Clamp(PlayerPrefs.GetFloat("SpokjaktenMusicVolume", 0.90f), 0f, 1.2f);
+            musicMuted = PlayerPrefs.GetInt("SpokjaktenMusicMuted", 0) != 0;
+            effectsVolume = Mathf.Clamp01(PlayerPrefs.GetFloat("SpokjaktenEffectsVolume", 0.86f));
+            voiceVolume = Mathf.Clamp01(PlayerPrefs.GetFloat("SpokjaktenVoiceVolume", 1f));
+            brightnessLevel = Mathf.Clamp(PlayerPrefs.GetFloat("SpokjaktenBrightness", 1f), 0.65f, 1.55f);
+            bool fullscreen = PlayerPrefs.GetInt("SpokjaktenFullscreen", Screen.fullScreen ? 1 : 0) != 0;
+            if (Screen.fullScreen != fullscreen) Screen.fullScreen = fullscreen;
+        }
+
+        private void SavePreferences()
+        {
+            PlayerPrefs.SetInt("SpokjaktenEasyMode", easyMode ? 1 : 0);
+            PlayerPrefs.SetInt("SpokjaktenPlayers", requestedPlayers);
+            PlayerPrefs.SetFloat("SpokjaktenMusicVolume", musicVolume);
+            PlayerPrefs.SetInt("SpokjaktenMusicMuted", musicMuted ? 1 : 0);
+            PlayerPrefs.SetFloat("SpokjaktenEffectsVolume", effectsVolume);
+            PlayerPrefs.SetFloat("SpokjaktenVoiceVolume", voiceVolume);
+            PlayerPrefs.SetFloat("SpokjaktenBrightness", brightnessLevel);
+            PlayerPrefs.SetInt("SpokjaktenFullscreen", Screen.fullScreen ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+
+        private void ApplyInitialBrightness()
+        {
+            RenderSettings.ambientIntensity *= brightnessLevel;
+            foreach (Light light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                if (light != null && light.type != LightType.Directional)
+                    light.intensity *= brightnessLevel;
+        }
+
+        private void ApplyAudioVolumes()
+        {
+            if (effects != null) effects.volume = effectsVolume;
+            if (ghostVoice != null) ghostVoice.volume = effectsVolume;
+            if (environmentVoice != null) environmentVoice.volume = effectsVolume;
+            if (ambienceSource != null) ambienceSource.volume = 0.16f * effectsVolume;
+            if (announcerVoice != null) announcerVoice.volume = voiceVolume;
         }
 
         private IEnumerator StartMusicWhenReady(bool importedMusic)
@@ -351,24 +420,55 @@ namespace KinectKids3D
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.F11)) Screen.fullScreen = !Screen.fullScreen;
+            if (Input.GetKeyDown(KeyCode.F11))
+            {
+                Screen.fullScreen = !Screen.fullScreen;
+                SavePreferences();
+            }
             if (Input.GetKeyDown(KeyCode.F1)) showSettings = !showSettings;
-            if (Input.GetKeyDown(KeyCode.M)) musicMuted = !musicMuted;
-            if (Input.GetKeyDown(KeyCode.LeftBracket)) musicVolume = Mathf.Max(0f, musicVolume - 0.1f);
-            if (Input.GetKeyDown(KeyCode.RightBracket)) musicVolume = Mathf.Min(1.2f, musicVolume + 0.1f);
+            if (Input.GetKeyDown(KeyCode.M))
+            {
+                musicMuted = !musicMuted;
+                SavePreferences();
+            }
+            if (Input.GetKeyDown(KeyCode.LeftBracket))
+            {
+                musicVolume = Mathf.Max(0f, musicVolume - 0.1f);
+                SavePreferences();
+            }
+            if (Input.GetKeyDown(KeyCode.RightBracket))
+            {
+                musicVolume = Mathf.Min(1.2f, musicVolume + 0.1f);
+                SavePreferences();
+            }
             if (Input.GetKeyDown(KeyCode.Minus)) AdjustBrightness(-0.1f);
             if (Input.GetKeyDown(KeyCode.Equals)) AdjustBrightness(0.1f);
+            UpdateDynamicMusic();
+
+            if (flow == GameFlow.Menu)
+            {
+                PositionCamera(0f);
+                if (Input.GetKeyDown(KeyCode.Return)) BeginCalibration();
+                return;
+            }
+
+            if (flow == GameFlow.Calibration)
+            {
+                UpdateCalibration();
+                PositionCamera(0f);
+                if (calibrationTrackingStable && Input.GetKeyDown(KeyCode.Return)) CompleteCalibration();
+                if (Input.GetKeyDown(KeyCode.Escape)) flow = GameFlow.Menu;
+                return;
+            }
+
             if (Input.GetKeyDown(KeyCode.F2)) JumpToNextCheckpoint();
-            if (gameTime < CountdownSeconds && Input.GetKeyDown(KeyCode.Alpha1)) SetDifficulty(true);
-            if (gameTime < CountdownSeconds && Input.GetKeyDown(KeyCode.Alpha2)) SetDifficulty(false);
             if (Input.GetKeyDown(KeyCode.P) || Input.GetKeyDown(KeyCode.Space)) paused = !paused;
-            if (finished && Input.GetKeyDown(KeyCode.R)) ResetRide();
+            if (finished && Input.GetKeyDown(KeyCode.R)) ReloadRide();
             if (Input.GetKeyDown(KeyCode.B) && !bossDefeated)
             {
                 rideDistance = BossStopDistance;
                 bossBattle = true;
             }
-            UpdateDynamicMusic();
             if (paused || finished || gameOver)
             {
                 if (finished) SaveRecord();
@@ -378,15 +478,17 @@ namespace KinectKids3D
             gameTime += Time.deltaTime;
             float rideTime = Mathf.Max(0, gameTime - CountdownSeconds);
             UpdatePlayerPoses();
-            if (gameTime < CountdownSeconds)
+            if (flow == GameFlow.Countdown)
             {
                 PositionCamera(0);
+                if (gameTime >= CountdownSeconds) flow = GameFlow.Riding;
                 return;
             }
 
             if (!bossBattle)
                 rideDistance = Mathf.Min(DarkRideWorld.TrackLength - 3f,
-                    rideDistance + RideSpeed * (bossDefeated ? 1.35f : 1f) * Time.deltaTime);
+                    rideDistance + RideSpeed * (easyMode ? 0.91f : 1f)
+                    * (bossDefeated ? 1.35f : 1f) * Time.deltaTime);
             UpdateRouteChoice();
             if (!bossDefeated && rideDistance >= BossStopDistance)
             {
@@ -408,6 +510,122 @@ namespace KinectKids3D
                 reticles.Clear();
                 SaveRecord();
             }
+        }
+
+        private void BeginCalibration()
+        {
+            poseCalibrations.Clear();
+            currentPoses.Clear();
+            reticles.Clear();
+            calibrationStableSeconds = 0f;
+            calibrationTrackingStable = false;
+            for (int player = 0; player < 2; player++)
+            {
+                calibrationCastPassed[player] = false;
+                calibrationDuckPassed[player] = false;
+                calibrationLeanPassed[player] = false;
+                calibrationHandSwitchPassed[player] = false;
+                calibrationHandSwitchTime[player] = 0f;
+            }
+            flow = GameFlow.Calibration;
+            SavePreferences();
+        }
+
+        private void UpdateCalibration()
+        {
+            UpdatePlayerPoses();
+            IReadOnlyList<AimSample> samples = aimProvider.GetAimSamples();
+            reticles.Clear();
+            foreach (Light reticleLight in reticleLights.Values)
+                if (reticleLight != null) reticleLight.enabled = false;
+
+            int[] handCounts = new int[2];
+            bool[] bothHandsRaised = { true, true };
+            foreach (AimSample sample in samples)
+            {
+                int player = Mathf.Clamp(sample.PlayerIndex, 0, 1);
+                if (player >= requestedPlayers) continue;
+                handCounts[player]++;
+                if (sample.Position.y > 0.28f) bothHandsRaised[player] = false;
+                if (sample.Fire) calibrationCastPassed[player] = true;
+                if (!reticles.ContainsKey(player))
+                {
+                    Ray ray = rideCamera.ViewportPointToRay(
+                        new Vector3(sample.Position.x, 1f - sample.Position.y, 0f));
+                    UpdateReticleLight(player, ray);
+                    reticles[player] = new ReticleState
+                    {
+                        PlayerIndex = player,
+                        Position = sample.Position,
+                        Progress = sample.GestureProgress,
+                        IsRightHand = sample.HandId % 2 == 1,
+                        DualHand = false
+                    };
+                }
+            }
+
+            bool neutralPose = currentPoses.Count >= requestedPlayers;
+            bool handsFound = true;
+            bool kinectInput = aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider;
+            for (int player = 0; player < requestedPlayers; player++)
+            {
+                PoseState pose;
+                if (!currentPoses.TryGetValue(player, out pose))
+                {
+                    neutralPose = false;
+                    handsFound = false;
+                    continue;
+                }
+                if (pose.DuckAmount >= 0.15f) calibrationDuckPassed[player] = true;
+                if (Mathf.Abs(pose.LeanAmount) >= 0.14f) calibrationLeanPassed[player] = true;
+                if (pose.DuckAmount > 0.08f || Mathf.Abs(pose.LeanAmount) > 0.11f)
+                    neutralPose = false;
+                if (handCounts[player] < (kinectInput ? 2 : 1)) handsFound = false;
+                if (!kinectInput)
+                {
+                    calibrationHandSwitchPassed[player] = true;
+                }
+                else if (handCounts[player] >= 2 && bothHandsRaised[player])
+                {
+                    calibrationHandSwitchTime[player] += Time.deltaTime;
+                    if (calibrationHandSwitchTime[player] >= 0.80f)
+                        calibrationHandSwitchPassed[player] = true;
+                }
+                else
+                {
+                    calibrationHandSwitchTime[player] = 0f;
+                }
+            }
+
+            if (!calibrationTrackingStable)
+            {
+                if (neutralPose && handsFound)
+                    calibrationStableSeconds += Time.deltaTime;
+                else
+                    calibrationStableSeconds = Mathf.Max(0f, calibrationStableSeconds - Time.deltaTime * 1.8f);
+                if (calibrationStableSeconds >= 2.0f) calibrationTrackingStable = true;
+            }
+        }
+
+        private void CompleteCalibration()
+        {
+            SetDifficulty(easyMode);
+            gameTime = 0f;
+            paused = false;
+            reticles.Clear();
+            actionMessage = string.Empty;
+            actionMessageUntil = 0f;
+            flow = GameFlow.Countdown;
+            SavePreferences();
+        }
+
+        private void ReloadRide()
+        {
+            SavePreferences();
+            enabled = false;
+            Scene scene = SceneManager.GetActiveScene();
+            if (scene.buildIndex >= 0) SceneManager.LoadScene(scene.buildIndex);
+            else SceneManager.LoadScene(scene.name);
         }
 
         private void UpdateDynamicMusic()
@@ -432,6 +650,7 @@ namespace KinectKids3D
                 if (light != null && light.type != LightType.Directional) light.intensity *= ratio;
             actionMessage = "LJUSSTYRKA " + Mathf.RoundToInt(brightnessLevel * 100f) + "%";
             actionMessageUntil = Time.time + 1f;
+            SavePreferences();
         }
 
         private void JumpToNextCheckpoint()
@@ -480,6 +699,7 @@ namespace KinectKids3D
             wagonHealth = easy ? 7 : 5;
             actionMessage = easy ? "BARNLÄGE – STÖRRE SIKTHJÄLP" : "NORMALT LÄGE";
             actionMessageUntil = Time.time + 1.4f;
+            SavePreferences();
         }
 
         private void PositionCamera(float z)
@@ -747,6 +967,7 @@ namespace KinectKids3D
             currentPoses.Clear();
             foreach (PlayerPose pose in aimProvider.GetPlayerPoses())
             {
+                if (pose.PlayerIndex < 0 || pose.PlayerIndex >= requestedPlayers) continue;
                 PoseCalibration calibration;
                 if (!poseCalibrations.TryGetValue(pose.TrackingId, out calibration))
                 {
@@ -788,10 +1009,10 @@ namespace KinectKids3D
                     foreach (KeyValuePair<int, PoseState> pair in currentPoses)
                     {
                         bool succeeds = hazard.Kind == HazardKind.Duck
-                            ? pair.Value.DuckAmount >= 0.20f
+                            ? pair.Value.DuckAmount >= (easyMode ? 0.16f : 0.20f)
                             : hazard.Kind == HazardKind.DodgeLeft
-                                ? pair.Value.LeanAmount <= -0.17f
-                                : pair.Value.LeanAmount >= 0.17f;
+                                ? pair.Value.LeanAmount <= (easyMode ? -0.14f : -0.17f)
+                                : pair.Value.LeanAmount >= (easyMode ? 0.14f : 0.17f);
                         if (!succeeds || !hazard.MarkSuccess(pair.Key)) continue;
                         int player = Mathf.Clamp(pair.Key, 0, 1);
                         scores[player] += 40;
@@ -846,7 +1067,7 @@ namespace KinectKids3D
                 : kind == HauntedEncounterKind.SwingingChain ? chainRattleSounds : phantomSounds);
             environmentVoice.clip = sound;
             environmentVoice.panStereo = encounterSide * 0.58f;
-            environmentVoice.volume = 0.74f;
+            environmentVoice.volume = 0.74f * effectsVolume;
             environmentVoice.pitch = UnityEngine.Random.Range(0.92f, 1.06f);
             environmentVoice.Play();
         }
@@ -865,7 +1086,7 @@ namespace KinectKids3D
             ghostVoice.clip = ghostSounds[UnityEngine.Random.Range(0, ghostSounds.Length)];
             ghostVoice.panStereo = side < 0 ? -0.72f : 0.72f;
             ghostVoice.pitch = UnityEngine.Random.Range(0.86f, 1.08f);
-            ghostVoice.volume = volume;
+            ghostVoice.volume = volume * effectsVolume;
             ghostVoice.Play();
         }
 
@@ -878,6 +1099,7 @@ namespace KinectKids3D
             foreach (IGrouping<int, AimSample> group in samples.GroupBy(item => item.PlayerIndex))
             {
                 int player = Mathf.Clamp(group.Key, 0, 1);
+                if (player >= requestedPlayers) continue;
                 List<AimSample> playerHands = group.ToList();
                 for (int i = 0; i < playerHands.Count; i++) playerHands[i] = SmoothHand(playerHands[i]);
                 AimSample sample = SelectActiveHand(player, playerHands);
@@ -1064,7 +1286,7 @@ namespace KinectKids3D
                 flashlight.color = player == 1
                     ? new Color(1f, 0.62f, 0.74f)
                     : new Color(0.70f, 0.86f, 1f);
-                flashlight.intensity = 5.25f;
+                flashlight.intensity = 5.25f * brightnessLevel;
                 flashlight.range = 30f;
                 flashlight.spotAngle = 38f;
                 flashlight.innerSpotAngle = 22f;
@@ -1155,7 +1377,7 @@ namespace KinectKids3D
             HazardKind kind = (HazardKind)UnityEngine.Random.Range(0, 3);
             Vector3 start = boss.transform.position + new Vector3(0f, 2.15f, -0.6f);
             Vector3 end = rideCamera.transform.position + rideCamera.transform.forward * 1.15f;
-            bossProjectile = BossProjectile.Create(kind, start, end);
+            bossProjectile = BossProjectile.Create(kind, start, end, easyMode);
             if (bossPhase >= 2)
             {
                 Vector3 shifted = boss.transform.position;
@@ -1213,10 +1435,10 @@ namespace KinectKids3D
             foreach (KeyValuePair<int, PoseState> pair in currentPoses)
             {
                 bool succeeds = bossProjectile.Kind == HazardKind.Duck
-                    ? pair.Value.DuckAmount >= 0.13f
+                    ? pair.Value.DuckAmount >= (easyMode ? 0.14f : 0.18f)
                     : bossProjectile.Kind == HazardKind.DodgeLeft
-                        ? pair.Value.LeanAmount <= -0.12f
-                        : pair.Value.LeanAmount >= 0.12f;
+                        ? pair.Value.LeanAmount <= (easyMode ? -0.12f : -0.15f)
+                        : pair.Value.LeanAmount >= (easyMode ? 0.12f : 0.15f);
                 int player = Mathf.Clamp(pair.Key, 0, 1);
                 if (succeeds)
                 {
@@ -1259,6 +1481,16 @@ namespace KinectKids3D
         private void OnGUI()
         {
             EnsureStyles();
+            if (flow == GameFlow.Menu)
+            {
+                DrawStartMenu();
+                return;
+            }
+            if (flow == GameFlow.Calibration)
+            {
+                DrawCalibration();
+                return;
+            }
             float rideTime = Mathf.Max(0, gameTime - CountdownSeconds);
 
             GUI.Box(new Rect(18, 16, 430, 82), string.Empty);
@@ -1271,14 +1503,14 @@ namespace KinectKids3D
                 ? "SLUTBOSS – VAGNEN STÅR STILL"
                 : "FÄRD   " + Mathf.RoundToInt(rideDistance / DarkRideWorld.TrackLength * 100f) + " %", smallStyle);
             GUI.Label(new Rect(Screen.width - 145, Screen.height - 30, 130, 22), "F11  HELSKÄRM", smallStyle);
-            if (reticles.Values.Any(item => item.PlayerIndex == 1))
+            if (requestedPlayers > 1)
                 GUI.Label(new Rect(Screen.width - 298, 83, 280, 26), "SPELARE 2   " + scores[1], smallStyle);
             GUI.Label(new Rect(Screen.width - 298, 105, 280, 25),
                 "VAGN " + new string('♥', wagonHealth) + "   COMBO " + Mathf.Max(combos[0], combos[1]), smallStyle);
 
             GUI.Label(new Rect(22, 102, 390, 24),
                 "LIV P1 " + new string('♥', lives[0])
-                + (reticles.Values.Any(item => item.PlayerIndex == 1) ? "    P2 " + new string('♥', lives[1]) : string.Empty)
+                + (requestedPlayers > 1 ? "    P2 " + new string('♥', lives[1]) : string.Empty)
                 + "    RELIKER " + collectedRelics + "/" + TotalRelics, smallStyle);
 
             if (showSettings)
@@ -1286,9 +1518,11 @@ namespace KinectKids3D
                 GUI.Box(new Rect(18, 138, 390, 164), string.Empty);
                 GUI.Label(new Rect(34, 148, 355, 145),
                     "INSTÄLLNINGAR / TEST\n"
-                    + "F1: stäng   M: musik " + (musicMuted ? "av" : "på")
-                    + "   [ ]: musikvolym " + Mathf.RoundToInt(musicVolume * 100f) + "%\n"
-                    + "- / +: ljusstyrka " + Mathf.RoundToInt(brightnessLevel * 100f) + "%\n"
+                     + "F1: stäng   M: musik " + (musicMuted ? "av" : "på")
+                     + "   [ ]: musikvolym " + Mathf.RoundToInt(musicVolume * 100f) + "%\n"
+                     + "Effekter " + Mathf.RoundToInt(effectsVolume * 100f) + "%   Röst "
+                     + Mathf.RoundToInt(voiceVolume * 100f) + "%\n"
+                     + "- / +: ljusstyrka " + Mathf.RoundToInt(brightnessLevel * 100f) + "%\n"
                     + "F2: nästa kontrollpunkt   B: slutboss\n"
                     + "F11: helskärm   P/Mellanslag: paus", smallStyle);
             }
@@ -1356,13 +1590,13 @@ namespace KinectKids3D
                     306f * boss.Health / boss.MaxHealth, 6), goldTexture);
             }
 
-            if (gameTime < CountdownSeconds)
+            if (flow == GameFlow.Countdown)
             {
                 GUI.Box(new Rect(Screen.width * 0.5f - 285, Screen.height * 0.5f - 115, 570, 230), string.Empty);
                 GUI.Label(new Rect(Screen.width * 0.5f - 250, Screen.height * 0.5f - 91, 500, 58),
                     Mathf.CeilToInt(CountdownSeconds - gameTime).ToString(), centerStyle);
                 GUI.Label(new Rect(Screen.width * 0.5f - 255, Screen.height * 0.5f - 20, 510, 105),
-                    "STÅ RAKT – KINECT KALIBRERAR DIG\n1: BARNLÄGE   2: NORMALT LÄGE", centerStyle);
+                    "GÖR ER REDO!\n" + (easyMode ? "BARNLÄGE" : "NORMALT LÄGE"), centerStyle);
             }
             else if (rideTime < 9f)
             {
@@ -1395,8 +1629,155 @@ namespace KinectKids3D
                     + "\nREKORD  Poäng: " + PlayerPrefs.GetInt("SpokjaktenHighScore", 0)
                     + "   Combo: " + PlayerPrefs.GetInt("SpokjaktenBestCombo", 0)
                     + "   Reliker: " + PlayerPrefs.GetInt("SpokjaktenBestRelics", 0)
-                    + "\nTryck R för en ny åktur", centerStyle);
+                    + "\nTryck R för att gå tillbaka till startmenyn", centerStyle);
             }
+        }
+
+        private void DrawStartMenu()
+        {
+            GUI.Box(new Rect(0f, 0f, Screen.width, Screen.height), string.Empty);
+            float width = Mathf.Min(680f, Screen.width - 60f);
+            float height = Mathf.Min(720f, Screen.height - 50f);
+            float x = (Screen.width - width) * 0.5f;
+            float y = (Screen.height - height) * 0.5f;
+            GUI.Box(new Rect(x, y, width, height), string.Empty);
+            GUI.Label(new Rect(x + 30f, y + 20f, width - 60f, 54f), "SPÖKJAKTEN 3D", centerStyle);
+            GUI.Label(new Rect(x + 35f, y + 70f, width - 70f, 42f),
+                "Välj inställningar och kalibrera Kinect innan vagnen startar", centerStyle);
+
+            float rowY = y + 128f;
+            GUI.Label(new Rect(x + 48f, rowY, 180f, 30f), "SVÅRIGHET", hudStyle);
+            if (GUI.Button(new Rect(x + 240f, rowY, 170f, 38f), "BARNLÄGE" + (easyMode ? "  ✓" : string.Empty)))
+            {
+                easyMode = true;
+                SavePreferences();
+            }
+            if (GUI.Button(new Rect(x + 420f, rowY, 170f, 38f), "NORMALT" + (!easyMode ? "  ✓" : string.Empty)))
+            {
+                easyMode = false;
+                SavePreferences();
+            }
+
+            rowY += 55f;
+            GUI.Label(new Rect(x + 48f, rowY, 180f, 30f), "SPELARE", hudStyle);
+            if (GUI.Button(new Rect(x + 240f, rowY, 170f, 38f), "1 SPELARE" + (requestedPlayers == 1 ? "  ✓" : string.Empty)))
+            {
+                requestedPlayers = 1;
+                SavePreferences();
+            }
+            if (GUI.Button(new Rect(x + 420f, rowY, 170f, 38f), "2 SPELARE" + (requestedPlayers == 2 ? "  ✓" : string.Empty)))
+            {
+                requestedPlayers = 2;
+                SavePreferences();
+            }
+
+            rowY += 65f;
+            DrawMenuSlider(x, width, ref rowY, "MUSIK", ref musicVolume, 0f, 1.2f, true);
+            DrawMenuSlider(x, width, ref rowY, "LJUDEFFEKTER", ref effectsVolume, 0f, 1f, false);
+            DrawMenuSlider(x, width, ref rowY, "SVENSK RÖST", ref voiceVolume, 0f, 1f, false);
+
+            GUI.Label(new Rect(x + 48f, rowY, 190f, 30f), "LJUSSTYRKA", hudStyle);
+            float newBrightness = GUI.HorizontalSlider(new Rect(x + 240f, rowY + 8f, 270f, 24f),
+                brightnessLevel, 0.65f, 1.55f);
+            GUI.Label(new Rect(x + 525f, rowY, 80f, 30f), Mathf.RoundToInt(newBrightness * 100f) + "%", smallStyle);
+            if (Mathf.Abs(newBrightness - brightnessLevel) > 0.002f)
+                AdjustBrightness(newBrightness - brightnessLevel);
+            rowY += 48f;
+
+            string fullscreenLabel = Screen.fullScreen ? "HELSKÄRM: PÅ" : "HELSKÄRM: AV";
+            if (GUI.Button(new Rect(x + 185f, rowY, 310f, 40f), fullscreenLabel + "   (F11)"))
+            {
+                Screen.fullScreen = !Screen.fullScreen;
+                SavePreferences();
+            }
+
+            rowY += 55f;
+            GUI.Label(new Rect(x + 45f, rowY, width - 90f, 48f), inputStatus, centerStyle);
+            rowY += 58f;
+            if (GUI.Button(new Rect(x + 145f, rowY, width - 290f, 58f), "KALIBRERA OCH STARTA"))
+                BeginCalibration();
+        }
+
+        private void DrawMenuSlider(float x, float width, ref float rowY, string label,
+            ref float value, float minimum, float maximum, bool music)
+        {
+            GUI.Label(new Rect(x + 48f, rowY, 190f, 30f), label, hudStyle);
+            float changed = GUI.HorizontalSlider(new Rect(x + 240f, rowY + 8f, 270f, 24f),
+                value, minimum, maximum);
+            GUI.Label(new Rect(x + 525f, rowY, 80f, 30f), Mathf.RoundToInt(changed * 100f) + "%", smallStyle);
+            if (Mathf.Abs(changed - value) > 0.002f)
+            {
+                value = changed;
+                if (music) musicMuted = false;
+                ApplyAudioVolumes();
+                SavePreferences();
+            }
+            rowY += 48f;
+        }
+
+        private void DrawCalibration()
+        {
+            GUI.Box(new Rect(0f, 0f, Screen.width, Screen.height), string.Empty);
+            float width = Mathf.Min(760f, Screen.width - 50f);
+            float height = Mathf.Min(650f, Screen.height - 40f);
+            float x = (Screen.width - width) * 0.5f;
+            float y = (Screen.height - height) * 0.5f;
+            GUI.Box(new Rect(x, y, width, height), string.Empty);
+            GUI.Label(new Rect(x + 30f, y + 18f, width - 60f, 48f), "KINECT-KALIBRERING", centerStyle);
+            GUI.Label(new Rect(x + 45f, y + 68f, width - 90f, 58f),
+                "Stå rakt och stilla tills mätaren är full. Testa sedan gärna kast, duckning och sidoväjning.", centerStyle);
+
+            float progress = Mathf.Clamp01(calibrationStableSeconds / 2f);
+            GUI.DrawTexture(new Rect(x + 110f, y + 132f, width - 220f, 18f), whiteTexture);
+            GUI.DrawTexture(new Rect(x + 113f, y + 135f, (width - 226f) * progress, 12f), goldTexture);
+            GUI.Label(new Rect(x + 80f, y + 154f, width - 160f, 30f),
+                calibrationTrackingStable ? "SPÅRNINGEN ÄR STABIL" : "HÅLL ER STILLA...", centerStyle);
+
+            float cardWidth = requestedPlayers == 1 ? width - 110f : (width - 135f) * 0.5f;
+            for (int player = 0; player < requestedPlayers; player++)
+            {
+                float cardX = requestedPlayers == 1 ? x + 55f : x + 45f + player * (cardWidth + 45f);
+                DrawCalibrationCard(player, new Rect(cardX, y + 195f, cardWidth, 245f));
+            }
+
+            foreach (ReticleState reticle in reticles.Values)
+            {
+                float rx = reticle.Position.x * Screen.width;
+                float ry = reticle.Position.y * Screen.height;
+                GUI.DrawTexture(new Rect(rx - 25f, ry - 25f, 50f, 50f),
+                    reticle.PlayerIndex == 1 ? playerTwoRing : playerOneRing);
+            }
+
+            GUI.Label(new Rect(x + 45f, y + 448f, width - 90f, 44f), inputStatus, centerStyle);
+            if (GUI.Button(new Rect(x + 45f, y + height - 72f, 150f, 42f), "TILLBAKA"))
+                flow = GameFlow.Menu;
+            GUI.enabled = calibrationTrackingStable;
+            if (GUI.Button(new Rect(x + width - 315f, y + height - 78f, 270f, 52f),
+                    calibrationTrackingStable ? "STARTA ÅKTUREN" : "VÄNTAR PÅ STABIL KINECT"))
+                CompleteCalibration();
+            GUI.enabled = true;
+        }
+
+        private void DrawCalibrationCard(int player, Rect card)
+        {
+            GUI.Box(card, string.Empty);
+            bool body = currentPoses.ContainsKey(player);
+            bool hands = reticles.ContainsKey(player);
+            GUI.Label(new Rect(card.x + 16f, card.y + 12f, card.width - 32f, 32f),
+                "SPELARE " + (player + 1), hudStyle);
+            GUI.Label(new Rect(card.x + 18f, card.y + 55f, card.width - 36f, 170f),
+                CalibrationMark(body) + " Kropp hittad\n"
+                + CalibrationMark(hands) + " Händer och sikte\n"
+                + CalibrationMark(calibrationCastPassed[player]) + " Kast testat\n"
+                + CalibrationMark(calibrationHandSwitchPassed[player]) + " Handbyte testat\n"
+                + CalibrationMark(calibrationDuckPassed[player]) + " Duckning testad\n"
+                + CalibrationMark(calibrationLeanPassed[player]) + " Sidoväjning testad",
+                centerStyle);
+        }
+
+        private static string CalibrationMark(bool complete)
+        {
+            return complete ? "✓" : "•";
         }
 
         private void DrawEnemyHealthBars()
