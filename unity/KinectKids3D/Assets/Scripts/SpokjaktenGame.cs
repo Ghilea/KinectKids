@@ -209,19 +209,31 @@ namespace KinectKids3D
 
         private void CreateInput()
         {
-            var kinect = new KinectBridgeAimProvider();
-            if (kinect.TryStart())
+            var automatic = new KinectAutoAimProvider();
+            automatic.Start();
+            aimProvider = automatic;
+            RefreshInputStatus();
+        }
+
+        private bool KinectInputActive()
+        {
+            KinectAutoAimProvider automatic = aimProvider as KinectAutoAimProvider;
+            if (automatic != null) return automatic.KinectConnected;
+            return aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider;
+        }
+
+        private void RefreshInputStatus()
+        {
+            KinectAutoAimProvider automatic = aimProvider as KinectAutoAimProvider;
+            if (automatic != null)
             {
-                aimProvider = kinect;
-                inputStatus = kinect.Status
-                    + " – båda händerna har varsitt sikte och kastar framåt";
+                automatic.Tick();
+                inputStatus = automatic.KinectConnected
+                    ? automatic.Status + " – båda händerna har varsitt sikte och kastar framåt"
+                    : automatic.Status + " – musen fungerar medan Kinect återansluter";
+                return;
             }
-            else
-            {
-                inputStatus = kinect.Status + "  |  Musen styr siktet";
-                kinect.Dispose();
-                aimProvider = new MouseAimProvider();
-            }
+            inputStatus = aimProvider != null ? aimProvider.Status : "Ingen inmatning hittades";
         }
 
         private void CreateAudio()
@@ -476,6 +488,7 @@ namespace KinectKids3D
             if (Input.GetKeyDown(KeyCode.Minus)) AdjustBrightness(-0.1f);
             if (Input.GetKeyDown(KeyCode.Equals)) AdjustBrightness(0.1f);
             UpdateDynamicMusic();
+            RefreshInputStatus();
 
             if (flow == GameFlow.Menu)
             {
@@ -662,6 +675,10 @@ namespace KinectKids3D
             if (new Rect(x + 420f, rowY, 170f, 38f).Contains(point)) return "two";
             rowY = y + 440f;
             if (new Rect(x + 185f, rowY, 310f, 40f).Contains(point)) return "fullscreen";
+            KinectAutoAimProvider automatic = aimProvider as KinectAutoAimProvider;
+            float statusY = y + height - 176f;
+            if (automatic != null && !automatic.KinectConnected
+                && new Rect(x + 245f, statusY + 54f, 190f, 26f).Contains(point)) return "retry-kinect";
             if (new Rect(x + 145f, y + height - 92f, width - 290f, 58f).Contains(point)) return "calibrate";
             return null;
         }
@@ -687,6 +704,12 @@ namespace KinectKids3D
             else if (action == "one") requestedPlayers = 1;
             else if (action == "two") requestedPlayers = 2;
             else if (action == "fullscreen") Screen.fullScreen = !Screen.fullScreen;
+            else if (action == "retry-kinect")
+            {
+                KinectAutoAimProvider automatic = aimProvider as KinectAutoAimProvider;
+                if (automatic != null) automatic.RetryNow();
+                return;
+            }
             else if (action == "calibrate")
             {
                 BeginCalibration();
@@ -736,7 +759,7 @@ namespace KinectKids3D
 
             bool neutralPose = currentPoses.Count >= requestedPlayers;
             bool handsFound = true;
-            bool kinectInput = aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider;
+            bool kinectInput = KinectInputActive();
             for (int player = 0; player < requestedPlayers; player++)
             {
                 PoseState pose;
@@ -1988,6 +2011,10 @@ namespace KinectKids3D
 
             float statusY = y + height - 176f;
             GUI.Label(new Rect(x + 45f, statusY, width - 90f, 58f), MenuInputStatus(), centeredSmallStyle);
+            KinectAutoAimProvider automatic = aimProvider as KinectAutoAimProvider;
+            if (automatic != null && !automatic.KinectConnected
+                && GUI.Button(new Rect(x + 245f, statusY + 54f, 190f, 26f), "FÖRSÖK KINECT IGEN"))
+                automatic.RetryNow();
             if (GUI.Button(new Rect(x + 145f, y + height - 92f, width - 290f, 58f), "KALIBRERA OCH STARTA"))
                 BeginCalibration();
             DrawInterfaceReticles();
@@ -1995,11 +2022,14 @@ namespace KinectKids3D
 
         private string MenuInputStatus()
         {
-            bool kinect = aimProvider != null && aimProvider.IsAvailable
-                && (aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider);
-            if (kinect) return "KINECT ANSLUTEN\n" + aimProvider.Status;
-            return "KINECT EJ TILLGÄNGLIG – MUSLÄGE AKTIVT\n"
-                + "Kontrollera USB/ström och stäng andra Kinect-program innan spelet startas om.";
+            KinectAutoAimProvider automatic = aimProvider as KinectAutoAimProvider;
+            if (automatic != null)
+            {
+                if (automatic.KinectConnected) return "KINECT ANSLUTEN – MENYN STYRS MED HÄNDERNA\n" + automatic.Status;
+                return "KINECT STARTAR / ÅTERANSLUTER – MUSEN FUNGERAR UNDER TIDEN\n" + automatic.Status;
+            }
+            if (KinectInputActive()) return "KINECT ANSLUTEN\n" + aimProvider.Status;
+            return "MUSLÄGE AKTIVT\n" + inputStatus;
         }
 
         private void DrawMenuSlider(float x, float width, ref float rowY, string label,
@@ -2063,7 +2093,7 @@ namespace KinectKids3D
         {
             GUI.Box(card, string.Empty);
             bool body = currentPoses.ContainsKey(player);
-            bool kinectInput = aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider;
+            bool kinectInput = KinectInputActive();
             bool hands = calibrationVisibleHands[player] >= (kinectInput ? 2 : 1);
             string attackTests = kinectInput
                 ? CalibrationMark(calibrationLeftCastPassed[player]) + " Vänster kast testat\n"
@@ -2096,7 +2126,7 @@ namespace KinectKids3D
         private string CalibrationProgressText()
         {
             if (calibrationTrackingStable) return "SPÅRNINGEN ÄR STABIL";
-            bool kinectInput = aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider;
+            bool kinectInput = KinectInputActive();
             for (int player = 0; player < requestedPlayers; player++)
             {
                 if (!currentPoses.ContainsKey(player))

@@ -15,7 +15,6 @@ namespace KinectKids3D
     /// </summary>
     public sealed class KinectBridgeAimProvider : IAimProvider
     {
-        private const int StartupTimeoutSeconds = 30;
         private readonly object sync = new object();
         private readonly List<AimSample> latest = new List<AimSample>(4);
         private readonly List<PlayerPose> latestPoses = new List<PlayerPose>(2);
@@ -31,6 +30,7 @@ namespace KinectKids3D
         private string status = "Startar Kinect-bryggan…";
 
         public bool IsAvailable { get; private set; }
+        public bool HasFailed { get; private set; }
         public string Status => status;
 
         public bool TryStart()
@@ -39,13 +39,18 @@ namespace KinectKids3D
                 && Application.platform != RuntimePlatform.WindowsPlayer)
             {
                 status = "Kinect 360 stöds bara på Windows";
+                HasFailed = true;
                 return false;
             }
 
             try
             {
                 string executable = EnsureBridgeExecutable();
-                if (string.IsNullOrEmpty(executable)) return false;
+                if (string.IsNullOrEmpty(executable))
+                {
+                    HasFailed = true;
+                    return false;
+                }
 
                 string pipeName = "KinectKidsV1-" + Process.GetCurrentProcess().Id;
                 pipe = new NamedPipeServerStream(pipeName, PipeDirection.In, 1,
@@ -65,39 +70,40 @@ namespace KinectKids3D
                 };
                 bridgeProcess = Process.Start(start);
                 if (bridgeProcess == null) throw new InvalidOperationException("KinectBridge.exe kunde inte startas.");
-
-                DateTime deadline = DateTime.UtcNow.AddSeconds(StartupTimeoutSeconds);
-                while (!ready.WaitOne(250) && DateTime.UtcNow < deadline)
-                {
-                    if (bridgeProcess.HasExited)
-                    {
-                        string error = bridgeProcess.StandardError.ReadToEnd();
-                        status = "Kinect-bryggan stängdes (kod " + bridgeProcess.ExitCode + ")";
-                        if (!string.IsNullOrWhiteSpace(error)) status += ": " + FriendlyStatus(Compact(error));
-                        Dispose();
-                        return false;
-                    }
-                }
-                if (!ready.WaitOne(0))
-                {
-                    status += " – start tog över 30 sekunder; koppla ur sensorn och anslut igen";
-                    Dispose();
-                    return false;
-                }
-
-                if (!IsAvailable)
-                {
-                    Dispose();
-                    return false;
-                }
+                bridgeProcess.EnableRaisingEvents = true;
+                bridgeProcess.Exited += OnBridgeExited;
+                status = "Kinect-bryggan startar i bakgrunden…";
+                HasFailed = false;
                 return true;
             }
             catch (Exception exception)
             {
                 status = "Kinect-bryggan kunde inte starta: " + DeepestMessage(exception);
+                HasFailed = true;
                 Dispose();
                 return false;
             }
+        }
+
+        private void OnBridgeExited(object sender, EventArgs eventArgs)
+        {
+            if (stopping) return;
+            IsAvailable = false;
+            HasFailed = true;
+            try
+            {
+                string error = bridgeProcess != null ? bridgeProcess.StandardError.ReadToEnd() : string.Empty;
+                int code = bridgeProcess != null ? bridgeProcess.ExitCode : -1;
+                if (string.IsNullOrWhiteSpace(error))
+                    status = "Kinect-bryggan stängdes (kod " + code + ")";
+                else
+                    status = FriendlyStatus(Compact(error));
+            }
+            catch (Exception exception)
+            {
+                status = "Kinect-bryggan stängdes: " + DeepestMessage(exception);
+            }
+            ready.Set();
         }
 
         public IReadOnlyList<AimSample> GetAimSamples()
@@ -125,12 +131,22 @@ namespace KinectKids3D
             }
             catch (IOException)
             {
-                if (!stopping) status = "Kontakten med Kinect-bryggan bröts";
+                if (!stopping)
+                {
+                    status = "Kontakten med Kinect-bryggan bröts";
+                    IsAvailable = false;
+                    HasFailed = true;
+                }
             }
             catch (ObjectDisposedException) { }
             catch (Exception exception)
             {
-                if (!stopping) status = "Kinect-bryggan gav fel: " + DeepestMessage(exception);
+                if (!stopping)
+                {
+                    status = "Kinect-bryggan gav fel: " + DeepestMessage(exception);
+                    IsAvailable = false;
+                    HasFailed = true;
+                }
             }
         }
 
@@ -147,11 +163,13 @@ namespace KinectKids3D
                     if (statusParts[1] == "READY")
                     {
                         IsAvailable = true;
+                        HasFailed = false;
                         ready.Set();
                     }
                     else if (statusParts[1] == "ERROR")
                     {
                         IsAvailable = false;
+                        HasFailed = true;
                         ready.Set();
                     }
                 }
@@ -190,6 +208,7 @@ namespace KinectKids3D
                 if (poses.Count > 0) lastTrackedFrameAt = now;
             }
             IsAvailable = true;
+            HasFailed = false;
             status = "Kinect 360 ansluten via säker 32-bitarsbrygga";
             ready.Set();
         }
