@@ -62,6 +62,8 @@ namespace KinectKids3D
         private readonly int[] combos = new int[2];
         private readonly int[] maxCombos = new int[2];
         private readonly int[] rescueProgress = new int[2];
+        private readonly int[] leftHandShots = new int[2];
+        private readonly int[] rightHandShots = new int[2];
         private readonly float[] lastHitAt = new float[2];
         private Camera rideCamera;
         private IAimProvider aimProvider;
@@ -129,6 +131,16 @@ namespace KinectKids3D
         private int wagonHealth;
         private int bossPhase;
         private int collectedRelics;
+        private int startingWagonHealth;
+        private int wagonDamageTaken;
+        private int breakablesDestroyed;
+        private int secretsFound;
+        private int directorEvents;
+        private bool secretRouteUnlocked;
+        private bool repairSigilSpawned;
+        private float nextDirectorBeatAt;
+        private int lastDirectorEncounter = -1;
+        private float bossWeakPointUntil;
         private int nextZoneIndex;
         private int nextMiniBossIndex;
         private string zoneTitle;
@@ -373,10 +385,21 @@ namespace KinectKids3D
             {
                 lives[player] = easyMode ? 4 : 3;
                 shots[player] = hits[player] = kills[player] = combos[player] = maxCombos[player] = 0;
+                leftHandShots[player] = rightHandShots[player] = 0;
                 rescueProgress[player] = 0;
                 lastHitAt[player] = -10f;
             }
             wagonHealth = easyMode ? 7 : 5;
+            startingWagonHealth = wagonHealth;
+            wagonDamageTaken = 0;
+            breakablesDestroyed = 0;
+            secretsFound = 0;
+            directorEvents = 0;
+            secretRouteUnlocked = false;
+            repairSigilSpawned = false;
+            nextDirectorBeatAt = 7f;
+            lastDirectorEncounter = -1;
+            bossWeakPointUntil = 0f;
             collectedRelics = 0;
             nextZoneIndex = 0;
             nextMiniBossIndex = 0;
@@ -420,6 +443,10 @@ namespace KinectKids3D
             AddRelic(58f, 0, -2.8f, 0);
             AddRelic(121f, 0, 2.9f, 1);
             AddRelic(184f, 0, -2.4f, 2);
+            targets.Add(SecretRouteSeal.Create(new Vector3(
+                DarkRideWorld.TrackCenter(181f), 2.25f, 181f)));
+            if (WagonDamageVisual.Instance != null)
+                WagonDamageVisual.Instance.SetHealth(wagonHealth, startingWagonHealth, false);
             PositionCamera(0);
         }
 
@@ -818,6 +845,8 @@ namespace KinectKids3D
                 Mathf.Max(Mathf.Max(maxCombos[0], maxCombos[1]), PlayerPrefs.GetInt("SpokjaktenBestCombo", 0)));
             PlayerPrefs.SetInt("SpokjaktenBestRelics",
                 Mathf.Max(collectedRelics, PlayerPrefs.GetInt("SpokjaktenBestRelics", 0)));
+            PlayerPrefs.SetInt("SpokjaktenBestMedals",
+                Mathf.Max(CountMedals(), PlayerPrefs.GetInt("SpokjaktenBestMedals", 0)));
             PlayerPrefs.Save();
         }
 
@@ -840,6 +869,10 @@ namespace KinectKids3D
             easyMode = easy;
             for (int player = 0; player < 2; player++) lives[player] = easy ? 4 : 3;
             wagonHealth = easy ? 7 : 5;
+            startingWagonHealth = wagonHealth;
+            wagonDamageTaken = 0;
+            if (WagonDamageVisual.Instance != null)
+                WagonDamageVisual.Instance.SetHealth(wagonHealth, startingWagonHealth, false);
             actionMessage = easy ? "BARNLÄGE – STÖRRE SIKTHJÄLP" : "NORMALT LÄGE";
             actionMessageUntil = Time.time + 1.4f;
             SavePreferences();
@@ -885,7 +918,9 @@ namespace KinectKids3D
                 targets.Remove(target);
                 if (target.Health > 0 && target.GetComponent<CursedRelic>() == null
                     && target.GetComponent<BreakableProp>() == null
-                    && target.GetComponent<HauntedIllusion>() == null && !target.IsBoss)
+                    && target.GetComponent<HauntedIllusion>() == null
+                    && target.GetComponent<SecretRouteSeal>() == null
+                    && target.GetComponent<RepairSigil>() == null && !target.IsBoss)
                     DamageWagon(target.GetComponent<MiniBossTarget>() != null ? 2 : 1,
                         "ETT MONSTER NÅDDE VAGNEN!");
                 Destroy(target.gameObject);
@@ -935,6 +970,7 @@ namespace KinectKids3D
                 spawned.gameObject.AddComponent<HauntedIllusion>();
                 spawned.name = "Falsk spökillusion";
             }
+            MonsterTelegraph.Attach(spawned, easyMode ? 17.5f : 15.5f, lane < 0f ? -1 : 1);
             targets.Add(spawned);
         }
 
@@ -944,6 +980,7 @@ namespace KinectKids3D
             float z = Mathf.Min(BossStopDistance - 5f, distance + 18f);
             GhostTarget target = MiniBossTarget.Create(kind,
                 new Vector3(DarkRideWorld.TrackCenter(z, selectedRoute), 0.25f, z));
+            MonsterTelegraph.Attach(target, easyMode ? 20f : 18f, index % 2 == 0 ? -1 : 1);
             targets.Add(target);
             string name = kind == MiniBossKind.GiantSpider ? "JÄTTESPINDELN"
                 : kind == MiniBossKind.Vampire ? "VAMPYREN" : "DEN BESATTA RUSTNINGEN";
@@ -962,6 +999,14 @@ namespace KinectKids3D
         public static void ReportMonsterEscape(int damage = 1)
         {
             if (Instance != null) Instance.DamageWagon(damage, "ETT MONSTER KOM UNDAN!");
+        }
+
+        public static void ReportThreatCue(int side)
+        {
+            if (Instance == null) return;
+            if (Instance.environmentVoice != null) Instance.environmentVoice.panStereo = side < 0 ? -0.62f : 0.62f;
+            PlayRandom(Instance.environmentVoice, Instance.hazardCueSounds, 0.42f);
+            Instance.PlayGhostSound(side, 0.44f);
         }
 
         private void DamagePlayer(int player, int amount)
@@ -1020,18 +1065,35 @@ namespace KinectKids3D
         {
             if (finished || gameOver) return;
             wagonHealth = Mathf.Max(0, wagonHealth - amount);
+            wagonDamageTaken += amount;
             combos[0] = combos[1] = 0;
             cameraShakeUntil = Mathf.Max(cameraShakeUntil, Time.time + 0.45f);
             actionMessage = message + "  VAGN " + wagonHealth;
             actionMessageUntil = Time.time + 1.35f;
             PlayRandom(effects, collisionSounds, 0.85f);
             PlayAnnouncement(wagonHitVoice, true);
+            if (WagonDamageVisual.Instance != null)
+                WagonDamageVisual.Instance.SetHealth(wagonHealth, startingWagonHealth, true);
+            if (!repairSigilSpawned && wagonHealth > 0 && wagonHealth <= startingWagonHealth - 2)
+                SpawnRepairSigil();
             if (wagonHealth > 0) return;
             gameOver = true;
             finished = true;
             reticles.Clear();
             actionMessage = "VAGNEN ÄR FÖRSTÖRD";
             actionMessageUntil = float.PositiveInfinity;
+        }
+
+        private void SpawnRepairSigil()
+        {
+            repairSigilSpawned = true;
+            float z = Mathf.Min(BossStopDistance - 8f, rideDistance + 19f);
+            float lane = UnityEngine.Random.value < 0.5f ? -2.7f : 2.7f;
+            GhostTarget repair = RepairSigil.Create(new Vector3(
+                DarkRideWorld.TrackCenter(z, selectedRoute) + lane, 1.65f, z));
+            targets.Add(repair);
+            actionMessage = "ETT REPARATIONSSIGILL HAR VAKNAT!";
+            actionMessageUntil = Time.time + 1.7f;
         }
 
         private void UpdateRouteChoice()
@@ -1075,10 +1137,24 @@ namespace KinectKids3D
 
         private void SelectRoute(int route)
         {
+            if (route < 0 && !secretRouteUnlocked)
+            {
+                route = 1;
+                actionMessage = "SIGILLET HÖLL DEN HEMLIGA DÖRREN STÄNGD – HÖGER VÄG!";
+                actionMessageUntil = Time.time + 2.4f;
+            }
             selectedRoute = route < 0 ? -1 : 1;
             routeChoiceActive = false;
-            actionMessage = selectedRoute < 0 ? "VÄNSTRA HEMLIGA GÅNGEN!" : "HÖGRA HEMLIGA GÅNGEN!";
-            actionMessageUntil = Time.time + 2.1f;
+            if (selectedRoute < 0)
+            {
+                actionMessage = "DEN HEMLIGA GÅNGEN ÄR ÖPPEN!";
+                actionMessageUntil = Time.time + 2.1f;
+            }
+            else if (secretRouteUnlocked)
+            {
+                actionMessage = "HÖGRA FÖRBANNADE GÅNGEN!";
+                actionMessageUntil = Time.time + 2.1f;
+            }
             PlayRandom(effects, movementSuccessSounds);
             RouteDoor.OpenRoute(selectedRoute);
 
@@ -1206,20 +1282,100 @@ namespace KinectKids3D
                 cameraShakeUntil = Mathf.Max(cameraShakeUntil, Time.time + 0.22f);
             }
 
-            if (nextEncounterIndex >= EncounterDistances.Length
-                || rideDistance < EncounterDistances[nextEncounterIndex]) return;
-            int encounterSide = UnityEngine.Random.value < 0.5f ? -1 : 1;
-            HauntedEncounterKind kind = (HauntedEncounterKind)UnityEngine.Random.Range(0, 3);
-            nextEncounterIndex++;
-            HauntedEncounter.Create(rideCamera.transform, kind, encounterSide);
+            if (nextEncounterIndex < EncounterDistances.Length
+                && rideDistance >= EncounterDistances[nextEncounterIndex])
+            {
+                int encounterSide = UnityEngine.Random.value < 0.5f ? -1 : 1;
+                HauntedEncounterKind kind = NextDirectorEncounter();
+                nextEncounterIndex++;
+                TriggerEncounter(kind, encounterSide);
+            }
+
+            UpdateScareDirector();
+        }
+
+        private void UpdateScareDirector()
+        {
+            float rideTime = Mathf.Max(0f, gameTime - CountdownSeconds);
+            if (rideTime < nextDirectorBeatAt || bossBattle || routeChoiceActive) return;
+            int livingThreats = GhostTarget.ActiveTargets.Count(target => target.IsTargetable
+                && target.GetComponent<CursedRelic>() == null
+                && target.GetComponent<BreakableProp>() == null);
+            float performance = Mathf.Clamp01((Mathf.Max(maxCombos[0], maxCombos[1]) - 2f) / 12f);
+            float relief = wagonHealth <= 2 ? 4f : 0f;
+            nextDirectorBeatAt = rideTime + UnityEngine.Random.Range(8.0f, 12.5f)
+                - performance * 2.0f + relief;
+            if (livingThreats >= (easyMode ? 2 : 3)) return;
+
+            int side = UnityEngine.Random.value < 0.5f ? -1 : 1;
+            directorEvents++;
+            float roll = UnityEngine.Random.value;
+            if (roll < 0.24f)
+            {
+                // Ett falsklarm bryter mönstret utan att alltid visa ett monster.
+                PlayRandom(environmentVoice, chainRattleSounds, 0.46f);
+                PlayGhostSound(-side, 0.30f);
+                StartCoroutine(PulseNearbyTorches(1.15f));
+            }
+            else if (roll < 0.48f)
+            {
+                StartCoroutine(DirectorScareChain(side));
+            }
+            else
+            {
+                TriggerEncounter(NextDirectorEncounter(), side);
+            }
+        }
+
+        private HauntedEncounterKind NextDirectorEncounter()
+        {
+            int choice = UnityEngine.Random.Range(0, 3);
+            if (choice == lastDirectorEncounter) choice = (choice + UnityEngine.Random.Range(1, 3)) % 3;
+            lastDirectorEncounter = choice;
+            return (HauntedEncounterKind)choice;
+        }
+
+        private void TriggerEncounter(HauntedEncounterKind kind, int side)
+        {
+            HauntedEncounter.Create(rideCamera.transform, kind, side);
             AudioClip sound = RandomClip(kind == HauntedEncounterKind.BatBurst
                 ? batRushSounds
                 : kind == HauntedEncounterKind.SwingingChain ? chainRattleSounds : phantomSounds);
+            if (environmentVoice == null || sound == null) return;
             environmentVoice.clip = sound;
-            environmentVoice.panStereo = encounterSide * 0.58f;
+            environmentVoice.panStereo = side * 0.58f;
             environmentVoice.volume = 0.74f * effectsVolume;
             environmentVoice.pitch = UnityEngine.Random.Range(0.92f, 1.06f);
             environmentVoice.Play();
+        }
+
+        private IEnumerator DirectorScareChain(int side)
+        {
+            PlayGhostSound(side, 0.34f);
+            yield return PulseNearbyTorches(0.72f);
+            TriggerEncounter(HauntedEncounterKind.PhantomFace, -side);
+            yield return new WaitForSeconds(0.48f);
+            PlayRandom(environmentVoice, scareSounds, 0.62f);
+        }
+
+        private IEnumerator PulseNearbyTorches(float duration)
+        {
+            Light[] torches = FindObjectsByType<Light>(FindObjectsSortMode.None)
+                .Where(light => light != null
+                    && light.name.IndexOf("Fackelljus", StringComparison.OrdinalIgnoreCase) >= 0
+                    && Vector3.Distance(light.transform.position, rideCamera.transform.position) < 24f)
+                .ToArray();
+            float[] intensities = torches.Select(light => light.intensity).ToArray();
+            float end = Time.time + duration;
+            while (Time.time < end)
+            {
+                bool on = Mathf.FloorToInt((end - Time.time) * 12f) % 2 == 0;
+                for (int i = 0; i < torches.Length; i++)
+                    if (torches[i] != null) torches[i].intensity = on ? intensities[i] : 0.03f;
+                yield return null;
+            }
+            for (int i = 0; i < torches.Length; i++)
+                if (torches[i] != null) torches[i].intensity = intensities[i];
         }
 
         private void UpdateGhostAudio()
@@ -1298,6 +1454,8 @@ namespace KinectKids3D
                     MagicBolt.Launch(boltStart, boltEnd, boltColor);
                     PlayRandom(effects, castSounds, 0.92f);
                     shots[player]++;
+                    if (rightHand) rightHandShots[player]++;
+                    else leftHandShots[player]++;
                     if (firedTarget != null)
                     {
                         bool wasBoss = firedTarget.IsBoss;
@@ -1305,6 +1463,8 @@ namespace KinectKids3D
                         bool wasBreakable = firedTarget.GetComponent<BreakableProp>() != null;
                         bool wasIllusion = firedTarget.GetComponent<HauntedIllusion>() != null;
                         bool wasTrap = firedTarget.GetComponent<TrapTrigger>() != null;
+                        bool wasSecretSeal = firedTarget.GetComponent<SecretRouteSeal>() != null;
+                        bool wasRepairSigil = firedTarget.GetComponent<RepairSigil>() != null;
                         hits[player]++;
                         combos[player] = Time.time - lastHitAt[player] <= 2.6f ? combos[player] + 1 : 1;
                         lastHitAt[player] = Time.time;
@@ -1313,7 +1473,8 @@ namespace KinectKids3D
                         int points = firedTarget.Hit() * multiplier;
                         bool killedNow = firedTarget.Health <= 0;
                         if (wasIllusion) points = 0;
-                        if (killedNow && !wasBreakable && !wasIllusion && !wasTrap)
+                        if (killedNow && !wasBreakable && !wasIllusion && !wasTrap
+                            && !wasRelic && !wasSecretSeal && !wasRepairSigil)
                         {
                             kills[player]++;
                             TryRescueTeammate(player);
@@ -1326,14 +1487,34 @@ namespace KinectKids3D
                         }
                         if (wasBreakable && killedNow) points += 25;
                         if (wasTrap && killedNow) points += TriggerTrap(firedTarget.transform.position, player);
+                        if (wasBreakable && killedNow) breakablesDestroyed++;
+                        if (wasSecretSeal && killedNow)
+                        {
+                            secretRouteUnlocked = true;
+                            secretsFound++;
+                            points += 175;
+                            actionMessage = "HEMLIG VÄG UPPLÅST!";
+                            actionMessageUntil = Time.time + 2.2f;
+                        }
+                        if (wasRepairSigil && killedNow)
+                        {
+                            wagonHealth = Mathf.Min(startingWagonHealth, wagonHealth + 1);
+                            points += 90;
+                            actionMessage = "VAGNEN REPARERAD!  VAGN " + wagonHealth;
+                            actionMessageUntil = Time.time + 2.0f;
+                            if (WagonDamageVisual.Instance != null)
+                                WagonDamageVisual.Instance.SetHealth(wagonHealth, startingWagonHealth, false);
+                            PlayRandom(effects, movementSuccessSounds, 1f);
+                        }
                         scores[player] += points;
                         PlayRandom(effects, wasBoss ? bossSounds : hitSounds, wasBoss ? 0.95f : 0.82f);
-                        actionMessage = (wasRelic && killedNow ? "FÖRBANNAD RELIK!  "
+                        if (!wasSecretSeal && !wasRepairSigil)
+                            actionMessage = (wasRelic && killedNow ? "FÖRBANNAD RELIK!  "
                                 : wasBreakable && killedNow ? "KROSSAT!  "
                                 : wasIllusion ? "ILLUSION!  "
                                 : wasTrap && killedNow ? "FÄLLA UTLÖST!  " : string.Empty)
-                            + "+" + points + (multiplier > 1 ? "  x" + multiplier : string.Empty);
-                        actionMessageUntil = Time.time + 0.7f;
+                                + "+" + points + (multiplier > 1 ? "  x" + multiplier : string.Empty);
+                        if (!wasSecretSeal && !wasRepairSigil) actionMessageUntil = Time.time + 0.7f;
                         if (wasBoss && !killedNow) UpdateBossPhase(firedTarget);
                         if (wasBoss && firedTarget.Health <= 0)
                         {
@@ -1456,6 +1637,13 @@ namespace KinectKids3D
             GhostTarget boss = targets.FirstOrDefault(item => item != null && item.IsBoss && item.Health > 0);
             if (boss == null) return;
 
+            if (bossPhase >= 2 && bossWeakPointUntil > 0f
+                && Time.time >= bossWeakPointUntil && boss.IsTargetable)
+            {
+                boss.SetTargetable(false);
+                bossWeakPointUntil = 0f;
+            }
+
             if (bossProjectile != null)
             {
                 if (bossProjectile.Arrived) ResolveBossAttack();
@@ -1467,6 +1655,7 @@ namespace KinectKids3D
             Vector3 start = boss.transform.position + new Vector3(0f, 2.15f, -0.6f);
             Vector3 end = rideCamera.transform.position + rideCamera.transform.forward * 1.15f;
             bossProjectile = BossProjectile.Create(kind, start, end, easyMode);
+            if (bossPhase >= 2) boss.SetTargetable(false);
             if (bossPhase >= 2)
             {
                 Vector3 shifted = boss.transform.position;
@@ -1485,6 +1674,8 @@ namespace KinectKids3D
             int newPhase = boss.Health <= 5 ? 3 : boss.Health <= 10 ? 2 : 1;
             if (newPhase <= bossPhase) return;
             bossPhase = newPhase;
+            boss.SetTargetable(false);
+            bossWeakPointUntil = 0f;
             actionMessage = newPhase == 2
                 ? "FAS 2 – KONDUKTÖREN KALLAR PÅ DE DÖDA!"
                 : "FAS 3 – ALLA LJUS SLOCKNAR!";
@@ -1551,6 +1742,15 @@ namespace KinectKids3D
             else
             {
                 PlayAnnouncement(bossSuccessVoice);
+                GhostTarget boss = targets.FirstOrDefault(item => item != null && item.IsBoss && item.Health > 0);
+                if (boss != null)
+                {
+                    boss.SetTargetable(true);
+                    bossWeakPointUntil = Time.time + (easyMode ? 3.4f : 2.7f);
+                    actionMessage = "SVAG PUNKT ÖPPEN – ATTACKERA!";
+                    actionMessageUntil = bossWeakPointUntil;
+                    nextBossAttackAt = Mathf.Max(nextBossAttackAt, bossWeakPointUntil + 0.35f);
+                }
             }
             Destroy(bossProjectile.gameObject);
             bossProjectile = null;
@@ -1673,7 +1873,9 @@ namespace KinectKids3D
             {
                 GUI.Box(new Rect(Screen.width * 0.5f - 190, Screen.height - 72, 380, 48), string.Empty);
                 GUI.Label(new Rect(Screen.width * 0.5f - 170, Screen.height - 66, 340, 24),
-                    "ZOMBIE-KONDUKTÖREN", centerStyle);
+                    bossPhase >= 2
+                        ? (boss.IsTargetable ? "SVAG PUNKT – SKJUT!" : "KONDUKTÖREN ÄR SKYDDAD")
+                        : "ZOMBIE-KONDUKTÖREN", centerStyle);
                 GUI.DrawTexture(new Rect(Screen.width * 0.5f - 155, Screen.height - 38, 310, 10), whiteTexture);
                 GUI.DrawTexture(new Rect(Screen.width * 0.5f - 153, Screen.height - 36,
                     306f * boss.Health / boss.MaxHealth, 6), goldTexture);
@@ -1705,8 +1907,8 @@ namespace KinectKids3D
                 int totalShots = shots[0] + shots[1];
                 int totalHits = hits[0] + hits[1];
                 int accuracy = totalShots > 0 ? Mathf.RoundToInt(totalHits * 100f / totalShots) : 0;
-                GUI.Box(new Rect(Screen.width * 0.5f - 310, Screen.height * 0.5f - 155, 620, 310), string.Empty);
-                GUI.Label(new Rect(Screen.width * 0.5f - 285, Screen.height * 0.5f - 132, 570, 268),
+                GUI.Box(new Rect(Screen.width * 0.5f - 330, Screen.height * 0.5f - 195, 660, 390), string.Empty);
+                GUI.Label(new Rect(Screen.width * 0.5f - 305, Screen.height * 0.5f - 178, 610, 350),
                     (gameOver ? "VAGNEN GICK SÖNDER" : "BRA JAGAT!")
                     + "\nBETYG: " + FinalGrade(accuracy)
                     + "\nPoäng: " + (scores[0] + scores[1])
@@ -1718,6 +1920,10 @@ namespace KinectKids3D
                     + "\nREKORD  Poäng: " + PlayerPrefs.GetInt("SpokjaktenHighScore", 0)
                     + "   Combo: " + PlayerPrefs.GetInt("SpokjaktenBestCombo", 0)
                     + "   Reliker: " + PlayerPrefs.GetInt("SpokjaktenBestRelics", 0)
+                    + "\nHemligheter: " + secretsFound + "   Krossat: " + breakablesDestroyed
+                    + "   Extra skräckhändelser: " + directorEvents
+                    + "\nMEDALJER: " + MedalText(accuracy)
+                    + "\nBästa antal medaljer: " + PlayerPrefs.GetInt("SpokjaktenBestMedals", 0)
                     + "\nTryck R för att gå tillbaka till startmenyn", centerStyle);
             }
         }
@@ -1930,6 +2136,32 @@ namespace KinectKids3D
             return value >= 1900 ? "S" : value >= 1400 ? "A" : value >= 950 ? "B" : value >= 550 ? "C" : "D";
         }
 
+        private int CountMedals()
+        {
+            int totalShots = shots[0] + shots[1];
+            int accuracy = totalShots > 0 ? Mathf.RoundToInt((hits[0] + hits[1]) * 100f / totalShots) : 0;
+            int count = 0;
+            if (!gameOver && wagonDamageTaken == 0) count++;
+            if (accuracy >= 70) count++;
+            if (collectedRelics >= TotalRelics) count++;
+            if (leftHandShots.Sum() >= 5 && rightHandShots.Sum() >= 5) count++;
+            if (secretRouteUnlocked) count++;
+            if (breakablesDestroyed >= 4) count++;
+            return count;
+        }
+
+        private string MedalText(int accuracy)
+        {
+            List<string> medals = new List<string>();
+            if (!gameOver && wagonDamageTaken == 0) medals.Add("OSKADD VAGN");
+            if (accuracy >= 70) medals.Add("SKARPSKYTT");
+            if (collectedRelics >= TotalRelics) medals.Add("RELIKJÄGARE");
+            if (leftHandShots.Sum() >= 5 && rightHandShots.Sum() >= 5) medals.Add("DUBBELHAND");
+            if (secretRouteUnlocked) medals.Add("HEMLIGHETSFUNNEN");
+            if (breakablesDestroyed >= 4) medals.Add("KROSSARE");
+            return medals.Count == 0 ? "INGA ÄNNU" : string.Join("  •  ", medals);
+        }
+
         private void EnsureStyles()
         {
             if (titleStyle != null) return;
@@ -1992,7 +2224,7 @@ namespace KinectKids3D
             float pulse = 0.65f + Mathf.Sin(Time.time * 5f) * 0.12f;
             GUI.Box(new Rect(Screen.width * 0.5f - 150f, Screen.height * 0.14f, 300f, 50f), string.Empty);
             GUI.Label(new Rect(Screen.width * 0.5f - 140f, Screen.height * 0.145f, 280f, 40f),
-                "VÄLJ VÄG", centerStyle);
+                secretRouteUnlocked ? "VÄLJ VÄG – HEMLIG VÄG UPPLÅST" : "VÄLJ VÄG – VÄNSTER ÄR LÅST", centerStyle);
             DrawRouteArrow(new Vector2(Screen.width * 0.27f, Screen.height * 0.35f), 180f, pulse,
                 new Color(0.18f, 1f, 0.52f));
             DrawRouteArrow(new Vector2(Screen.width * 0.73f, Screen.height * 0.35f), 0f, pulse,

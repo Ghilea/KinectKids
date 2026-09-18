@@ -251,6 +251,7 @@ namespace KinectKids3D
             CreateCobweb(20f, -1);
             CreateWatchingPortrait(36f, 1);
             BreakableProp.Create(29f, 3.8f, 0, BreakablePropKind.Crate);
+            BreakableProp.Create(41f, -3.9f, 0, BreakablePropKind.Portrait);
         }
 
         private void BuildCrypt()
@@ -278,6 +279,7 @@ namespace KinectKids3D
             CreateGraveyardProp("Models/KenneyGraveyard/altar-stone", 98f, 1, 0, 2.1f, -7f);
             BreakableProp.Create(68f, 3.7f, 0, BreakablePropKind.Urn);
             BreakableProp.Create(101f, -3.6f, 0, BreakablePropKind.Urn);
+            BreakableProp.Create(88f, 3.9f, 0, BreakablePropKind.Crate);
             CreateCastleGate(103f);
         }
 
@@ -300,6 +302,7 @@ namespace KinectKids3D
             CreateHangingChain(119f, -3.7f);
             CreateHangingChain(138f, 3.8f);
             BreakableProp.Create(133f, 3.6f, 0, BreakablePropKind.Crate);
+            BreakableProp.Create(146f, -3.8f, 0, BreakablePropKind.Urn);
         }
 
         private void BuildHauntedGallery()
@@ -323,6 +326,7 @@ namespace KinectKids3D
             CreateMist(158f, 0);
             CreateMist(188f, 0);
             BreakableProp.Create(172f, -4.4f, 0, BreakablePropKind.Portrait);
+            BreakableProp.Create(193f, 4.2f, 0, BreakablePropKind.Portrait);
         }
 
         private void BuildForkedPassages()
@@ -361,6 +365,8 @@ namespace KinectKids3D
                 CreateGrabbingHands(route < 0 ? 291f : 268f, route < 0 ? -2.5f : 2.5f, route);
                 BreakableProp.Create(route < 0 ? 232f : 272f, route < 0 ? 3.7f : -3.7f,
                     route, route < 0 ? BreakablePropKind.Urn : BreakablePropKind.Crate);
+                BreakableProp.Create(route < 0 ? 286f : 238f, route < 0 ? -3.8f : 3.8f,
+                    route, BreakablePropKind.Portrait);
                 MirrorScare.Create(route < 0 ? 276f : 241f, route < 0 ? -1 : 1, route);
             }
         }
@@ -384,6 +390,7 @@ namespace KinectKids3D
             CreateCeilingSpider(324f, -1, 0);
             StalkingMonster.Create(326f, -1, 0, 2);
             BreakableProp.Create(319f, 3.7f, 0, BreakablePropKind.Crate);
+            BreakableProp.Create(331f, -3.7f, 0, BreakablePropKind.Urn);
         }
 
         private void BuildFinalHall()
@@ -774,8 +781,10 @@ namespace KinectKids3D
             CreateCube("Gammalt porträtt", new Vector3(x, 2.65f, z), new Vector3(0.14f, 2.15f, 1.45f), wood);
             Material eye = GlowMaterial(new Color(0.80f, 0.025f, 0.018f), 2.7f);
             float inward = -side * 0.095f;
-            CreateSphere("Vakande öga", new Vector3(x + inward, 2.83f, z - 0.22f), Vector3.one * 0.10f, eye);
-            CreateSphere("Vakande öga", new Vector3(x + inward, 2.83f, z + 0.22f), Vector3.one * 0.10f, eye);
+            CreateSphere("Vakande öga", new Vector3(x + inward, 2.83f, z - 0.22f), Vector3.one * 0.10f, eye)
+                .AddComponent<WatchingEye>();
+            CreateSphere("Vakande öga", new Vector3(x + inward, 2.83f, z + 0.22f), Vector3.one * 0.10f, eye)
+                .AddComponent<WatchingEye>();
         }
 
         private void CreateHangingChain(float z, float localX, int route = 0)
@@ -851,6 +860,7 @@ namespace KinectKids3D
             light.spotAngle = 58f;
             light.shadows = LightShadows.None;
             HauntedProp.Attach(lanternLight, HauntedMotion.Flicker, 0f, 8.2f);
+            WagonDamageVisual.Attach(car);
         }
 
         private GameObject CreateCube(string name, Vector3 position, Vector3 scale, Material material, Quaternion? rotation = null)

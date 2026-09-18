@@ -24,6 +24,8 @@ namespace KinectKids3D
         private Transform rightArm;
         private bool externalMotion;
         private Collider hitArea;
+        private Vector3 baseLocalScale = Vector3.one;
+        private Quaternion baseLocalRotation = Quaternion.identity;
 
         public TargetKind Kind { get; private set; }
         public int Health { get; private set; }
@@ -43,6 +45,8 @@ namespace KinectKids3D
             target.Health = target.MaxHealth;
             target.baseY = position.y;
             target.phase = Random.value * Mathf.PI * 2f;
+            target.baseLocalScale = root.transform.localScale;
+            target.baseLocalRotation = root.transform.localRotation;
             target.BuildModel();
             CapsuleCollider hitArea = root.AddComponent<CapsuleCollider>();
             hitArea.center = new Vector3(0, kind == TargetKind.ConductorBoss ? 1.65f : 1.05f, 0);
@@ -61,6 +65,8 @@ namespace KinectKids3D
             target.MaxHealth = Mathf.Max(1, health);
             target.Health = target.MaxHealth;
             target.externalMotion = true;
+            target.baseLocalScale = root.transform.localScale;
+            target.baseLocalRotation = root.transform.localRotation;
             target.RegisterRenderers(root);
             CapsuleCollider capsule = root.AddComponent<CapsuleCollider>();
             capsule.center = colliderCenter;
@@ -124,22 +130,30 @@ namespace KinectKids3D
             // MeshRenderer/SkinnedMeshRenderer som inte längre finns.
             for (int i = 0; i < renderers.Count; i++)
                 if (renderers[i] != null) renderers[i].material.color = Color.white;
-            transform.localScale = Vector3.one * 1.12f;
+            transform.localScale = baseLocalScale * 1.12f;
+            transform.localRotation = baseLocalRotation * Quaternion.Euler(
+                Random.Range(-7f, 7f), Random.Range(-11f, 11f), Random.Range(-8f, 8f));
             yield return new WaitForSeconds(0.11f);
             for (int i = 0; i < renderers.Count && i < baseColors.Count; i++)
                 if (renderers[i] != null) renderers[i].material.color = baseColors[i];
-            transform.localScale = Vector3.one;
+            transform.localScale = baseLocalScale;
+            transform.localRotation = baseLocalRotation;
         }
 
         private IEnumerator Defeat()
         {
             float time = 0;
             Vector3 start = transform.localScale;
-            while (time < 0.38f)
+            Vector3 startPosition = transform.position;
+            MagicBolt.CreateImpact(transform.position + Vector3.up * 0.55f, IsBoss);
+            MagicBolt.CreateImpact(transform.position + Vector3.up * 1.45f, IsBoss);
+            while (time < 0.52f)
             {
                 time += Time.deltaTime;
-                transform.localScale = Vector3.Lerp(start, Vector3.zero, time / 0.38f);
-                transform.Rotate(0, 480f * Time.deltaTime, 0);
+                float amount = Mathf.Clamp01(time / 0.52f);
+                transform.localScale = Vector3.Lerp(start, Vector3.zero, amount * amount);
+                transform.position = startPosition + Vector3.down * amount * 0.65f;
+                transform.Rotate(0, 620f * Time.deltaTime, 55f * Time.deltaTime);
                 yield return null;
             }
             Destroy(gameObject);
