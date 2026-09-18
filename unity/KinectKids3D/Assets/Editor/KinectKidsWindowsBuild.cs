@@ -11,7 +11,7 @@ namespace KinectKids3D.Editor
     internal static class KinectKidsWindowsBuild
     {
         [MenuItem("KinectKids/Bygg skolversion för Windows")]
-        private static void BuildSchoolVersion()
+        public static void BuildSchoolVersion()
         {
             string root = FindProjectRoot();
             if (root == null) throw new InvalidOperationException("KinectKids.sln hittades inte ovanför Unity-projektet.");
@@ -38,7 +38,7 @@ namespace KinectKids3D.Editor
                 "SPÖKJAKTEN 3D\r\n\r\nStarta Spokjakten3D.exe.\r\n" +
                 "Unity behöver inte vara installerat. Datorn behöver Kinect SDK 1.8 och Kinectens nätadapter.\r\n" +
                 "Stäng Kinect Explorer och Kinect Studio innan spelet startas.\r\n");
-            EditorUtility.RevealInFinder(buildFolder);
+            if (!Application.isBatchMode) EditorUtility.RevealInFinder(buildFolder);
             UnityEngine.Debug.Log("Skolversionen är klar: " + buildFolder);
         }
 

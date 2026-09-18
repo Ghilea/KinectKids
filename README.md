@@ -1,13 +1,16 @@
 # KinectKids – lär och lek med Kinect 360
 
-En svensk, barnvänlig plattform för **Xbox 360 Kinect (Kinect v1)** på Windows 10. Ett eller två barn löser uppgifter och spelar rörelsespel helt utan handkontroll. Pedagogiska poäng låser upp nöjesspel, samtidigt som inga kamera-, ljud- eller skelettdata sparas.
+En svensk, barnvänlig plattform för **Xbox 360 Kinect (Kinect v1)** på Windows 10. Ett eller två barn löser uppgifter och spelar rörelsespel helt utan handkontroll. Alla spel nås från samma meny och inga kamera-, ljud- eller skelettdata sparas.
 
 ## Pedagogisk version 1.3 under utveckling
 
 - **Matematikbanan:** träffa ballongen med rätt svar på addition och subtraktion.
+- **Bokstavsjakten:** hitta begynnelsebokstäver och bokstäver som saknas.
+- **Formverkstan:** känn igen former och antal hörn.
+- **Mönsterjakten:** fortsätt enkla mönster med former, bokstäver och tal.
 - **Simon säger:** händer upp, armar ut, händer tillsammans och ducka.
 - anonym lokal progression för Spelare 1 och Spelare 2
-- Spökjakten 3D låses upp efter sammanlagt 120 mattepoäng
+- Spökjakten 3D är direkt tillgänglig från den gemensamma menyn
 - gemensamt `IGame`-kontrakt och `GameManager` för nya moduler
 - instruktionen för nästa uppgift ligger alltid synlig under träningsspel
 
@@ -50,6 +53,8 @@ Sensorn bör sitta direkt i en USB 2.0-port som har tillräcklig bandbredd. Om a
 
 ## Starta på din dator
 
+När projektet redan är byggt dubbelklickar du på **`STARTA-KINECTKIDS.cmd`** i projektmappen. Därifrån kan även Spökjakten 3D startas utan Unity eller Unity Hub.
+
 Enklast är att högerklicka på `scripts/Run.ps1` och välja **Kör med PowerShell**. Skriptet:
 
 1. kontrollerar att Kinect SDK 1.8 finns,
@@ -64,6 +69,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Run.ps1
 ```
 
 Du kan även öppna `KinectKids.sln` i Visual Studio, välja `Release | x86` och trycka `F5`.
+
+För att bygga om både huvudmenyn och den fristående Spökjakten-versionen utan att öppna Unity Hub kör du:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-All.ps1
+```
 
 ## Kontroller
 

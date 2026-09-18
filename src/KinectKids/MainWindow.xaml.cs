@@ -909,6 +909,10 @@ namespace KinectKids
             string[] candidates =
             {
                 System.IO.Path.Combine(baseDirectory, "KinectKids3D.exe"),
+                System.IO.Path.Combine(baseDirectory, "Spokjakten3D", "Spokjakten3D.exe"),
+                System.IO.Path.Combine(baseDirectory, "Spokjakten3D.exe"),
+                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDirectory, "..", "..", "..", "..",
+                    "unity", "KinectKids3D", "Build", "Spokjakten3D", "Spokjakten3D.exe")),
                 System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDirectory, "..", "..", "..", "..",
                     "unity", "KinectKids3D", "Build", "KinectKids3D.exe"))
             };
