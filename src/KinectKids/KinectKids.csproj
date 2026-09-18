@@ -59,6 +59,9 @@
     <Resource Include="Assets\zombie-tunnel.jpg" />
     <Resource Include="Assets\zombie-scout.png" />
     <Resource Include="Assets\zombie-conductor-boss.png" />
+    <Content Include="Assets\menu-hella-bumps.mp3">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>

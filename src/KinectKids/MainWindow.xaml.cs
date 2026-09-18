@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using KinectKids.Game;
@@ -68,6 +69,15 @@ namespace KinectKids
         private Button dwellButton;
         private DateTime dwellStartedAt;
         private bool dwellTriggered;
+        private Button[] carouselButtons;
+        private int carouselIndex;
+        private Point? previousMenuLeftHand;
+        private Point? previousMenuRightHand;
+        private int activeMenuHand = 1;
+        private double carouselDragDistance;
+        private DateTime lastCarouselMove;
+        private readonly MediaPlayer menuMusic = new MediaPlayer();
+        private bool menuMusicEnabled = true;
 
         public MainWindow()
         {
@@ -81,6 +91,17 @@ namespace KinectKids
             simonGame = new SimonSaysGame();
             moduleManager.GameEvent += OnModuleGameEvent;
             CreateHandCursors();
+            carouselButtons = new[]
+            {
+                MathStartButton, SwedishStartButton, ShapeStartButton, PatternStartButton,
+                SimonStartButton, BalloonStartButton, ZombieStartButton, SpookyAdventureButton
+            };
+            GameCarousel.SizeChanged += (sender, args) => UpdateCarousel(false);
+            menuMusic.MediaEnded += (sender, args) =>
+            {
+                menuMusic.Position = TimeSpan.Zero;
+                if (menuMusicEnabled && HomePanel.Visibility == Visibility.Visible) menuMusic.Play();
+            };
             UpdateProgressionUi();
 
             gameTimer = new DispatcherTimer(DispatcherPriority.Render)
@@ -95,6 +116,8 @@ namespace KinectKids
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             SwitchTracker(new KinectPlayerTracker());
+            UpdateCarousel(false);
+            StartMenuMusic();
         }
 
         private void SwitchTracker(IPlayerTracker next)
@@ -144,48 +167,56 @@ namespace KinectKids
 
         private void StartButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.Balloons;
             ShowCalibration();
         }
 
         private void MathStartButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.Math;
             ShowCalibration();
         }
 
         private void SwedishStartButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.Swedish;
             ShowCalibration();
         }
 
         private void ShapeStartButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.Shapes;
             ShowCalibration();
         }
 
         private void PatternStartButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.Patterns;
             ShowCalibration();
         }
 
         private void SimonStartButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.SimonSays;
             ShowCalibration();
         }
 
         private void ZombieStartButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.ZombieTrain;
             ShowCalibration();
         }
 
         private void SpookyAdventureButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!ConfirmCarouselSelection(sender)) return;
             string executable = FindSpookyAdventureExecutable();
             if (executable == null)
             {
@@ -217,6 +248,7 @@ namespace KinectKids
 
         private void ShowCalibration()
         {
+            menuMusic.Pause();
             StopRound();
             HomePanel.Visibility = Visibility.Collapsed;
             GamePanel.Visibility = Visibility.Collapsed;
@@ -683,6 +715,163 @@ namespace KinectKids
             }
         }
 
+        private bool ConfirmCarouselSelection(object sender)
+        {
+            if (HomePanel.Visibility != Visibility.Visible || !(sender is Button button)) return true;
+            int index = Array.IndexOf(carouselButtons, button);
+            if (index < 0 || index == carouselIndex) return true;
+            carouselIndex = index;
+            UpdateCarousel(true);
+            ResetMenuDwell(false);
+            return false;
+        }
+
+        private void CarouselUpButton_Click(object sender, RoutedEventArgs e) => MoveCarousel(-1);
+        private void CarouselDownButton_Click(object sender, RoutedEventArgs e) => MoveCarousel(1);
+
+        private void HomePanel_MouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            MoveCarousel(e.Delta > 0 ? -1 : 1);
+            e.Handled = true;
+        }
+
+        private void MoveCarousel(int direction)
+        {
+            if (carouselButtons == null || carouselButtons.Length == 0) return;
+            carouselIndex = (carouselIndex + direction + carouselButtons.Length) % carouselButtons.Length;
+            UpdateCarousel(true);
+            ResetMenuDwell(false);
+        }
+
+        private void UpdateCarousel(bool animate)
+        {
+            if (carouselButtons == null) return;
+            double centerY = Math.Max(210, GameCarousel.ActualHeight / 2) - 34;
+            int count = carouselButtons.Length;
+
+            for (int index = 0; index < count; index++)
+            {
+                int offset = index - carouselIndex;
+                if (offset > count / 2) offset -= count;
+                if (offset < -count / 2) offset += count;
+                Button button = carouselButtons[index];
+                int distance = Math.Abs(offset);
+                if (distance > 3)
+                {
+                    button.Visibility = Visibility.Collapsed;
+                    continue;
+                }
+
+                button.Visibility = Visibility.Visible;
+                double targetTop = centerY + offset * 88;
+                double targetLeft = distance == 0 ? 108 : distance == 1 ? 66 : distance == 2 ? 26 : 2;
+                double targetScale = distance == 0 ? 1.0 : distance == 1 ? 0.88 : distance == 2 ? 0.75 : 0.64;
+                double targetOpacity = distance == 0 ? 1.0 : distance == 1 ? 0.72 : distance == 2 ? 0.42 : 0.22;
+                Panel.SetZIndex(button, 10 - distance);
+                button.Effect = distance == 0
+                    ? new System.Windows.Media.Effects.DropShadowEffect
+                    {
+                        BlurRadius = 28,
+                        ShadowDepth = 0,
+                        Opacity = 0.72,
+                        Color = Colors.White
+                    }
+                    : null;
+
+                double oldTop = Canvas.GetTop(button);
+                double oldLeft = Canvas.GetLeft(button);
+                if (double.IsNaN(oldTop)) oldTop = targetTop;
+                if (double.IsNaN(oldLeft)) oldLeft = targetLeft;
+                Canvas.SetTop(button, targetTop);
+                Canvas.SetLeft(button, targetLeft);
+                button.RenderTransformOrigin = new Point(0.5, 0.5);
+                var scale = button.RenderTransform as ScaleTransform;
+                if (scale == null)
+                {
+                    scale = new ScaleTransform(targetScale, targetScale);
+                    button.RenderTransform = scale;
+                }
+
+                if (animate)
+                {
+                    var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+                    button.BeginAnimation(Canvas.TopProperty,
+                        new DoubleAnimation(oldTop, targetTop, TimeSpan.FromMilliseconds(260)) { EasingFunction = ease });
+                    button.BeginAnimation(Canvas.LeftProperty,
+                        new DoubleAnimation(oldLeft, targetLeft, TimeSpan.FromMilliseconds(260)) { EasingFunction = ease });
+                    scale.BeginAnimation(ScaleTransform.ScaleXProperty,
+                        new DoubleAnimation(scale.ScaleX, targetScale, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease });
+                    scale.BeginAnimation(ScaleTransform.ScaleYProperty,
+                        new DoubleAnimation(scale.ScaleY, targetScale, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease });
+                    button.BeginAnimation(OpacityProperty,
+                        new DoubleAnimation(button.Opacity, targetOpacity, TimeSpan.FromMilliseconds(220)));
+                }
+                else
+                {
+                    scale.ScaleX = scale.ScaleY = targetScale;
+                    button.Opacity = targetOpacity;
+                }
+            }
+
+            string[] titles =
+            {
+                "Matematikbanan", "Bokstavsjakten", "Formverkstan", "Mönsterjakten",
+                "Simon säger", "Ballongjakten", "Zombietåget", "Spökjakten 3D"
+            };
+            string[] descriptions =
+            {
+                "Räkna tillsammans och slå på ballongen med rätt svar.",
+                "Hitta begynnelsebokstäver och bokstäver som saknas i svenska ord.",
+                "Känn igen cirklar, trianglar, kvadrater och hur många hörn de har.",
+                "Fortsätt serier med former, bokstäver, storlekar och tal.",
+                "Se rörelsen, lyssna på instruktionen och härma med hela kroppen.",
+                "Rör båda händerna och smäll så många färgglada ballonger ni kan.",
+                "Åk genom stationen och träffa de tokiga zombierna längs rälsen.",
+                "Kliv ombord på spökvagnen, ducka, väj och bekämpa slottets monster."
+            };
+            string[] categories =
+            {
+                "MATEMATIK • 1–2 SPELARE", "SVENSKA • 1–2 SPELARE", "FORMER • 1–2 SPELARE",
+                "LOGIK • 1–2 SPELARE", "RÖRELSE • 1–2 SPELARE", "LEK • 1–2 SPELARE",
+                "ÄVENTYR • 1–2 SPELARE", "3D-ÄVENTYR • 1–2 SPELARE"
+            };
+            string[] glyphs = { "2 + 3", "Å Ä Ö", "● ▲ ■", "● ■ ● ?", "★", "● ● ●", "☠", "☾" };
+            string[] colors = { "#C52A7862", "#C56D294F", "#C57B561D", "#C51D5372", "#C5292D67", "#C5712637", "#C53B225C", "#C51A102F" };
+
+            PreviewTitle.Text = titles[carouselIndex];
+            PreviewDescription.Text = descriptions[carouselIndex];
+            PreviewCategory.Text = categories[carouselIndex];
+            PreviewGlyph.Text = glyphs[carouselIndex];
+            PreviewTint.Background = BrushFrom(colors[carouselIndex]);
+            PreviewImage.Opacity = carouselIndex >= 6 ? 0.5 : 0.08;
+            if (animate)
+                PreviewTitle.BeginAnimation(OpacityProperty,
+                    new DoubleAnimation(0.25, 1, TimeSpan.FromMilliseconds(260)));
+        }
+
+        private Point SelectMenuHand(TrackedPlayer player, out double verticalMovement)
+        {
+            Point left = player.LeftHand;
+            Point right = player.RightHand;
+            bool leftTracked = IsTracked(left);
+            bool rightTracked = IsTracked(right);
+            double leftMove = leftTracked && previousMenuLeftHand.HasValue
+                ? left.Y - previousMenuLeftHand.Value.Y : 0;
+            double rightMove = rightTracked && previousMenuRightHand.HasValue
+                ? right.Y - previousMenuRightHand.Value.Y : 0;
+
+            if (leftTracked && Math.Abs(leftMove) > Math.Abs(rightMove) + 0.012) activeMenuHand = 0;
+            else if (rightTracked && Math.Abs(rightMove) > Math.Abs(leftMove) + 0.012) activeMenuHand = 1;
+            if (activeMenuHand == 0 && !leftTracked) activeMenuHand = 1;
+            if (activeMenuHand == 1 && !rightTracked) activeMenuHand = 0;
+
+            Point selected = activeMenuHand == 0 ? left : right;
+            verticalMovement = activeMenuHand == 0 ? leftMove : rightMove;
+            previousMenuLeftHand = leftTracked ? (Point?)left : null;
+            previousMenuRightHand = rightTracked ? (Point?)right : null;
+            return selected;
+        }
+
         private void UpdateMenuControl()
         {
             bool menuVisible = HomePanel.Visibility == Visibility.Visible
@@ -690,20 +879,58 @@ namespace KinectKids
                                || PauseOverlay.Visibility == Visibility.Visible
                                || ResultOverlay.Visibility == Visibility.Visible;
             var player = players.FirstOrDefault(item => item.IsReady);
-            if (!menuVisible || KinectMenuCanvas.ActualWidth < 1 || player == null || tracker is MousePlayerTracker || !IsTracked(player.RightHand))
+            if (!menuVisible || KinectMenuCanvas.ActualWidth < 1 || player == null || tracker is MousePlayerTracker)
+            {
+                ResetMenuDwell();
+                previousMenuLeftHand = null;
+                previousMenuRightHand = null;
+                return;
+            }
+
+            double verticalMovement = 0;
+            Point hand = HomePanel.Visibility == Visibility.Visible
+                ? SelectMenuHand(player, out verticalMovement)
+                : player.RightHand;
+            if (!IsTracked(hand))
             {
                 ResetMenuDwell();
                 return;
             }
-
-            Point hand = player.RightHand;
             double x = hand.X * KinectMenuCanvas.ActualWidth;
             double y = hand.Y * KinectMenuCanvas.ActualHeight;
             MenuHandIndicator.Visibility = Visibility.Visible;
             Canvas.SetLeft(MenuHandIndicator, x - MenuHandIndicator.Width / 2);
             Canvas.SetTop(MenuHandIndicator, y - 34);
 
+            if (HomePanel.Visibility == Visibility.Visible && hand.X < 0.58)
+            {
+                carouselDragDistance += verticalMovement;
+                if (Math.Abs(carouselDragDistance) >= 0.075 &&
+                    (DateTime.UtcNow - lastCarouselMove).TotalMilliseconds >= 230)
+                {
+                    MoveCarousel(carouselDragDistance < 0 ? 1 : -1);
+                    carouselDragDistance = 0;
+                    lastCarouselMove = DateTime.UtcNow;
+                    return;
+                }
+            }
+            else
+            {
+                carouselDragDistance *= 0.35;
+            }
+
             Button target = FindButtonAt(new Point(x, y));
+            if (HomePanel.Visibility == Visibility.Visible && target != null)
+            {
+                int hoveredIndex = Array.IndexOf(carouselButtons, target);
+                if (hoveredIndex >= 0 && hoveredIndex != carouselIndex)
+                {
+                    carouselIndex = hoveredIndex;
+                    UpdateCarousel(true);
+                    ResetMenuDwell(false);
+                    return;
+                }
+            }
             if (target != dwellButton)
             {
                 dwellButton = target;
@@ -752,9 +979,9 @@ namespace KinectKids
             }
         }
 
-        private void ResetMenuDwell()
+        private void ResetMenuDwell(bool hideIndicator = true)
         {
-            MenuHandIndicator.Visibility = Visibility.Collapsed;
+            if (hideIndicator) MenuHandIndicator.Visibility = Visibility.Collapsed;
             MenuDwellProgress.Width = 0;
             dwellButton = null;
             dwellTriggered = false;
@@ -833,7 +1060,41 @@ namespace KinectKids
             CalibrationPanel.Visibility = Visibility.Collapsed;
             GamePanel.Visibility = Visibility.Collapsed;
             HomePanel.Visibility = Visibility.Visible;
+            if (menuMusicEnabled) menuMusic.Play();
+            UpdateCarousel(false);
             UpdateProgressionUi();
+        }
+
+        private void StartMenuMusic()
+        {
+            try
+            {
+                string musicPath = System.IO.Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory, "Assets", "menu-hella-bumps.mp3");
+                if (!System.IO.File.Exists(musicPath))
+                {
+                    MenuMusicButton.Content = "♫ Musik saknas";
+                    MenuMusicButton.IsEnabled = false;
+                    return;
+                }
+
+                menuMusic.Volume = 0.22;
+                menuMusic.Open(new Uri(musicPath, UriKind.Absolute));
+                menuMusic.Play();
+            }
+            catch (InvalidOperationException)
+            {
+                MenuMusicButton.Content = "♫ Musik saknas";
+                MenuMusicButton.IsEnabled = false;
+            }
+        }
+
+        private void MenuMusicButton_Click(object sender, RoutedEventArgs e)
+        {
+            menuMusicEnabled = !menuMusicEnabled;
+            MenuMusicButton.Content = menuMusicEnabled ? "♫ Musik: på" : "♫ Musik: av";
+            if (menuMusicEnabled && HomePanel.Visibility == Visibility.Visible) menuMusic.Play();
+            else menuMusic.Pause();
         }
 
         private void StopRound()
@@ -868,6 +1129,16 @@ namespace KinectKids
         private void Window_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.F11) ToggleFullscreen();
+            if (HomePanel.Visibility == Visibility.Visible && e.Key == Key.Up)
+            {
+                MoveCarousel(-1);
+                e.Handled = true;
+            }
+            if (HomePanel.Visibility == Visibility.Visible && e.Key == Key.Down)
+            {
+                MoveCarousel(1);
+                e.Handled = true;
+            }
             if (e.Key == Key.Escape)
             {
                 if (isFullscreen) ToggleFullscreen();
@@ -879,6 +1150,7 @@ namespace KinectKids
         private void Window_Closing(object sender, CancelEventArgs e)
         {
             gameTimer.Stop();
+            menuMusic.Close();
             tracker?.Dispose();
         }
 

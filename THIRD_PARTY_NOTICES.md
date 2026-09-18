@@ -11,3 +11,13 @@
   kommersiella och icke-kommersiella projekt och att erkännande inte krävs.
 
 KinectKids anger ändå upphovspersonen för tydlighet och uppskattning.
+
+## Gemensam meny – musik
+
+- **Spår:** `Hella Bumps`
+- **Upphovsperson:** The Cynic Project / pixelsphere.org
+- **Källa:** https://opengameart.org/content/hella-bumps-menu-music
+- **Hämtad:** 2026-09-18
+- **Licens:** CC0 1.0 / public domain
+
+Spåret distribueras som `src/KinectKids/Assets/menu-hella-bumps.mp3`.
