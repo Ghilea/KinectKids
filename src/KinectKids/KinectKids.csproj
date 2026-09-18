@@ -59,11 +59,12 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Resource Include="Assets\zombie-station.jpg" />
-    <Resource Include="Assets\zombie-tunnel.jpg" />
     <Resource Include="Assets\zombie-scout.png" />
     <Resource Include="Assets\zombie-conductor-boss.png" />
     <Content Include="Assets\menu-hella-bumps.mp3">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Voice\*.wav">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Compile Include="App.xaml.cs">
@@ -87,6 +88,7 @@
     <Compile Include="Game\GameManager.cs" />
     <Compile Include="Input\IPlayerTracker.cs" />
     <Compile Include="Input\ActiveHandSelector.cs" />
+    <Compile Include="Input\AutomaticPlayerTracker.cs" />
     <Compile Include="Input\KinectPlayerTracker.cs" Condition=" '$(UseKinectStub)' != 'true' " />
     <Compile Include="Input\KinectPlayerTracker.Stub.cs" Condition=" '$(UseKinectStub)' == 'true' " />
     <Compile Include="Models\BodyJoint.cs" />
@@ -94,6 +96,7 @@
     <Compile Include="Models\LearningQuestion.cs" />
     <Compile Include="Models\TrackedPlayer.cs" />
     <Compile Include="Services\ProgressionService.cs" />
+    <Compile Include="Services\SpokenInstructionService.cs" />
     <Compile Include="Input\MousePlayerTracker.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

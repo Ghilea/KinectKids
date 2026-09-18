@@ -114,7 +114,6 @@
 
             <Border Grid.Column="1" Background="#C5101732" CornerRadius="40" BorderBrush="#45FFFFFF" BorderThickness="1" Margin="0,6,0,6" ClipToBounds="True">
                 <Grid ClipToBounds="True">
-                    <Image x:Name="PreviewImage" Source="/KinectKids;component/Assets/zombie-station.jpg" Stretch="UniformToFill" Opacity="0.12" />
                     <Border x:Name="PreviewTint" Background="#A52A7A64" />
                     <Ellipse Width="540" Height="540" Fill="#16FFFFFF" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-100,0" />
                     <Grid Margin="54,44">
@@ -141,7 +140,6 @@
                                 <TextBlock x:Name="ProgressText" Text="Alla spel är tillgängliga." Foreground="#FFDB75" FontSize="14" FontWeight="SemiBold" />
                                 <TextBlock Text="Menyn loopar automatiskt • båda händerna fungerar" Foreground="#9FC8D8" FontSize="13" Margin="0,6,0,0" />
                             </StackPanel>
-                            <Button x:Name="InputModeButton" Content="Testa med mus" Click="MouseModeButton_Click" Style="{StaticResource SmallButton}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
                         </Grid>
                     </Grid>
                 </Grid>
@@ -179,26 +177,6 @@
         </Grid>
 
         <Grid x:Name="GamePanel" Grid.RowSpan="2" Visibility="Collapsed" Background="#10213D" Panel.ZIndex="30">
-            <Grid x:Name="ZombieBackdrop" Visibility="Collapsed" ClipToBounds="True">
-                <Image x:Name="ZombieStationBackground" Source="/KinectKids;component/Assets/zombie-station.jpg" Stretch="UniformToFill" RenderTransformOrigin="0.5,0.5">
-                    <Image.RenderTransform>
-                        <TransformGroup>
-                            <ScaleTransform x:Name="StationScale" ScaleX="1.04" ScaleY="1.04" />
-                            <TranslateTransform x:Name="StationTranslate" />
-                        </TransformGroup>
-                    </Image.RenderTransform>
-                </Image>
-                <Image x:Name="ZombieTunnelBackground" Source="/KinectKids;component/Assets/zombie-tunnel.jpg" Stretch="UniformToFill" Opacity="0" RenderTransformOrigin="0.5,0.5">
-                    <Image.RenderTransform>
-                        <TransformGroup>
-                            <ScaleTransform x:Name="TunnelScale" ScaleX="1.04" ScaleY="1.04" />
-                            <TranslateTransform x:Name="TunnelTranslate" />
-                        </TransformGroup>
-                    </Image.RenderTransform>
-                </Image>
-                <Border Background="#33031220" />
-                <Border BorderBrush="#552FE4D0" BorderThickness="8" CornerRadius="25" Margin="10" />
-            </Grid>
             <Border x:Name="BalloonBackdrop" Background="#102B46" />
             <Canvas x:Name="GameSkeletonCanvas" Background="Transparent" ClipToBounds="True" IsHitTestVisible="False" Opacity="0.52" />
             <Canvas x:Name="Playfield" Background="Transparent" ClipToBounds="True" />

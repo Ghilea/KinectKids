@@ -12,16 +12,18 @@ namespace KinectKids.Models
 
     public sealed class MathQuestion
     {
-        private MathQuestion(string expression, int correctAnswer, IReadOnlyList<int> options)
+        private MathQuestion(string expression, int correctAnswer, IReadOnlyList<int> options, string voiceKey)
         {
             Expression = expression;
             CorrectAnswer = correctAnswer;
             Options = options;
+            VoiceKey = voiceKey;
         }
 
         public string Expression { get; }
         public int CorrectAnswer { get; }
         public IReadOnlyList<int> Options { get; }
+        public string VoiceKey { get; }
 
         public static MathQuestion Create(Random random, int level)
         {
@@ -61,7 +63,9 @@ namespace KinectKids.Models
                 options.Add(candidate);
             }
 
-            return new MathQuestion(expression, answer, options.OrderBy(item => random.Next()).ToArray());
+            string voiceKey = "math|" + first + "|" +
+                              (operation == MathOperation.Addition ? "plus" : "minus") + "|" + second;
+            return new MathQuestion(expression, answer, options.OrderBy(item => random.Next()).ToArray(), voiceKey);
         }
     }
 }

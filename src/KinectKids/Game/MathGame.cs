@@ -43,6 +43,7 @@ namespace KinectKids.Game
         public string Instruction => question == null
             ? "Gör er redo…"
             : "Träffa rätt svar: " + question.Expression + " = ?";
+        public string VisualPrompt => question == null ? string.Empty : question.Expression + " = ?";
         public int CurrentScore { get; private set; }
         public bool IsActive { get; private set; }
 
@@ -101,16 +102,16 @@ namespace KinectKids.Game
                 int points = 10 + Math.Min(10, answeredQuestions);
                 CurrentScore += points;
                 answeredQuestions++;
-                Raise("Rätt! " + question.Expression + " = " + question.CorrectAnswer, points, playerIndex);
+                Raise("Rätt! " + question.Expression + " = " + question.CorrectAnswer, points, playerIndex, "correct");
                 question = null;
-                nextQuestionDelay = 0.55;
+                nextQuestionDelay = 1.8;
                 ClearBalloons();
                 return points;
             }
 
             hit.Shape.Opacity = 0.28;
             hit.Label.Opacity = 0.35;
-            Raise("Nästan! Prova en annan ballong.", 0, playerIndex);
+            Raise("Nästan! Prova en annan ballong.", 0, playerIndex, "retry");
             return 0;
         }
 
@@ -186,7 +187,7 @@ namespace KinectKids.Game
                 Position(balloon);
             }
 
-            Raise(Instruction, 0, 0);
+            Raise(Instruction, 0, 0, question.VoiceKey);
         }
 
         private void ClearBalloons()
@@ -208,13 +209,14 @@ namespace KinectKids.Game
             Canvas.SetTop(balloon.Label, balloon.Y - balloon.Label.DesiredSize.Height / 2);
         }
 
-        private void Raise(string message, int scoreDelta, int playerIndex)
+        private void Raise(string message, int scoreDelta, int playerIndex, string voiceKey = null)
         {
             GameEvent?.Invoke(this, new GameEventArgs
             {
                 Message = message,
                 ScoreDelta = scoreDelta,
-                PlayerIndex = playerIndex
+                PlayerIndex = playerIndex,
+                VoiceKey = voiceKey
             });
         }
 

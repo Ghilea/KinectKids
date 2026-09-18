@@ -12,6 +12,7 @@ namespace KinectKids3D
     public sealed class LauncherReturnService : MonoBehaviour
     {
         private static string launcherPath;
+        private static bool launcherFullscreen;
         private static bool launcherStarted;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -19,8 +20,12 @@ namespace KinectKids3D
         {
             string[] arguments = Environment.GetCommandLineArgs();
             for (int index = 0; index < arguments.Length - 1; index++)
+            {
                 if (string.Equals(arguments[index], "--launcher", StringComparison.OrdinalIgnoreCase))
                     launcherPath = arguments[index + 1];
+                else if (string.Equals(arguments[index], "--launcher-fullscreen", StringComparison.OrdinalIgnoreCase))
+                    launcherFullscreen = arguments[index + 1] == "1";
+            }
 
             var host = new GameObject("KinectKids Launcher Return");
             DontDestroyOnLoad(host);
@@ -45,6 +50,7 @@ namespace KinectKids3D
                 {
                     FileName = launcherPath,
                     WorkingDirectory = Path.GetDirectoryName(launcherPath),
+                    Arguments = launcherFullscreen ? "--fullscreen" : string.Empty,
                     UseShellExecute = true
                 });
             }

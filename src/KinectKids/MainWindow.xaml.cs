@@ -75,6 +75,7 @@ namespace KinectKids
         private double carouselDragDistance;
         private DateTime lastCarouselMove;
         private readonly MediaPlayer menuMusic = new MediaPlayer();
+        private readonly SpokenInstructionService spokenInstructions = new SpokenInstructionService();
         private bool menuMusicEnabled = true;
 
         public MainWindow()
@@ -113,7 +114,10 @@ namespace KinectKids
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            SwitchTracker(new KinectPlayerTracker());
+            SwitchTracker(new AutomaticPlayerTracker(this));
+            if (Environment.GetCommandLineArgs().Any(argument =>
+                    string.Equals(argument, "--fullscreen", StringComparison.OrdinalIgnoreCase)))
+                SetFullscreen(true);
             UpdateCarousel(false);
             StartMenuMusic();
         }
@@ -131,7 +135,6 @@ namespace KinectKids
             tracker = next;
             tracker.PlayersChanged += OnPlayersChanged;
             tracker.StatusChanged += OnStatusChanged;
-            InputModeButton.Content = tracker is MousePlayerTracker ? "Använd Kinect" : "Testa med mus";
             UpdateSensorStatus(tracker.Status, tracker.IsConnected);
             tracker.Start();
         }
@@ -159,9 +162,8 @@ namespace KinectKids
         private void UpdateSensorStatus(string text, bool connected)
         {
             SensorText.Text = text;
-            bool mouse = tracker is MousePlayerTracker;
             SensorDot.Fill = connected ? BrushFrom("#50E3A4") : BrushFrom("#FFBE47");
-            SensorBadge.Background = mouse ? BrushFrom("#335EAEFF") : connected ? BrushFrom("#3324D49A") : BrushFrom("#44FFBE47");
+            SensorBadge.Background = connected ? BrushFrom("#3324D49A") : BrushFrom("#335EAEFF");
         }
 
         private void StartButton_Click(object sender, RoutedEventArgs e)
@@ -233,17 +235,10 @@ namespace KinectKids
             Process.Start(new ProcessStartInfo(executable)
             {
                 WorkingDirectory = System.IO.Path.GetDirectoryName(executable),
-                Arguments = "--launcher \"" + Process.GetCurrentProcess().MainModule.FileName + "\""
+                Arguments = "--launcher \"" + Process.GetCurrentProcess().MainModule.FileName + "\"" +
+                            (isFullscreen ? " --launcher-fullscreen 1" : string.Empty)
             });
             Close();
-        }
-
-        private void MouseModeButton_Click(object sender, RoutedEventArgs e)
-        {
-            SwitchTracker(tracker is MousePlayerTracker
-                ? (IPlayerTracker)new KinectPlayerTracker()
-                : new MousePlayerTracker(this));
-            ShowCalibration();
         }
 
         private void ShowCalibration()
@@ -369,6 +364,8 @@ namespace KinectKids
             isPlaying = true;
             isPaused = false;
             if (moduleManager.CurrentGame != null) moduleManager.Start();
+            else if (selectedGame == GameMode.Balloons)
+                spokenInstructions.Speak("balloon_instruction");
             roundEndsAt = DateTime.UtcNow.AddSeconds(60);
             instructionHidesAt = DateTime.UtcNow.AddSeconds(selectedGame == GameMode.ZombieTrain ? 11 : 8);
             frameClock.Restart();
@@ -378,8 +375,7 @@ namespace KinectKids
         private void ConfigureGameMode()
         {
             bool zombies = selectedGame == GameMode.ZombieTrain;
-            ZombieBackdrop.Visibility = zombies ? Visibility.Visible : Visibility.Collapsed;
-            BalloonBackdrop.Visibility = zombies ? Visibility.Collapsed : Visibility.Visible;
+            BalloonBackdrop.Visibility = Visibility.Visible;
             BalloonBackdrop.Background = selectedGame == GameMode.Math
                 ? BrushFrom("#173D63")
                 : selectedGame == GameMode.Swedish ? BrushFrom("#512847")
@@ -390,6 +386,9 @@ namespace KinectKids
             GameSkeletonCanvas.Opacity = selectedGame == GameMode.SimonSays ? 0.9 : zombies ? 0.46 : 0.72;
             BossBanner.Visibility = Visibility.Collapsed;
             TimeText.Text = "60";
+            GameInstruction.Visibility = selectedGame == GameMode.Math || selectedGame == GameMode.Patterns
+                ? Visibility.Visible
+                : Visibility.Collapsed;
             switch (selectedGame)
             {
                 case GameMode.Math:
@@ -424,14 +423,12 @@ namespace KinectKids
             if (selectedGame == GameMode.ZombieTrain)
             {
                 zombieGame.Update(elapsed);
-                UpdateRailBackground();
                 BossBanner.Visibility = zombieGame.BossIsActive ? Visibility.Visible : Visibility.Collapsed;
             }
             else if (IsModuleGame(selectedGame))
             {
                 moduleManager.Update(elapsed);
-                if (moduleManager.CurrentGame != null)
-                    GameInstructionText.Text = moduleManager.CurrentGame.Instruction;
+                UpdateVisualQuestion();
             }
             else
             {
@@ -448,18 +445,6 @@ namespace KinectKids
                 return;
             }
             TimeText.Text = Math.Ceiling(remaining.TotalSeconds).ToString("0");
-        }
-
-        private void UpdateRailBackground()
-        {
-            double progress = Math.Max(0, Math.Min(1, 1 - (roundEndsAt - DateTime.UtcNow).TotalSeconds / 60.0));
-            double crossFade = Math.Max(0, Math.Min(1, (progress - 0.44) / 0.16));
-            ZombieStationBackground.Opacity = 1 - crossFade;
-            ZombieTunnelBackground.Opacity = crossFade;
-            StationScale.ScaleX = StationScale.ScaleY = 1.04 + progress * 0.09;
-            TunnelScale.ScaleX = TunnelScale.ScaleY = 1.02 + Math.Max(0, progress - 0.4) * 0.11;
-            StationTranslate.X = Math.Sin(progress * Math.PI * 5) * 9;
-            TunnelTranslate.X = Math.Sin(progress * Math.PI * 6 + 1.2) * 11;
         }
 
         private void UpdateHands()
@@ -842,7 +827,6 @@ namespace KinectKids
             PreviewCategory.Text = categories[carouselIndex];
             PreviewGlyph.Text = glyphs[carouselIndex];
             PreviewTint.Background = BrushFrom(colors[carouselIndex]);
-            PreviewImage.Opacity = carouselIndex == 6 ? 0.5 : 0.08;
             if (animate)
                 PreviewTitle.BeginAnimation(OpacityProperty,
                     new DoubleAnimation(0.25, 1, TimeSpan.FromMilliseconds(260)));
@@ -862,7 +846,7 @@ namespace KinectKids
                                || SessionMenu.IsOpen
                                || ResultOverlay.Visibility == Visibility.Visible;
             var player = players.FirstOrDefault(item => item.IsReady);
-            if (!menuVisible || KinectMenuCanvas.ActualWidth < 1 || player == null || tracker is MousePlayerTracker)
+            if (!menuVisible || KinectMenuCanvas.ActualWidth < 1 || player == null)
             {
                 ResetMenuDwell();
                 return;
@@ -976,8 +960,9 @@ namespace KinectKids
 
         private void OnModuleGameEvent(object sender, GameEventArgs e)
         {
-            if (!string.IsNullOrWhiteSpace(e.Message))
-                GameInstructionText.Text = e.Message;
+            UpdateVisualQuestion();
+            if (!string.IsNullOrWhiteSpace(e.VoiceKey))
+                spokenInstructions.Speak(e.VoiceKey);
 
             if (selectedGame == GameMode.SimonSays && e.ScoreDelta > 0)
             {
@@ -1075,6 +1060,14 @@ namespace KinectKids
             }
         }
 
+        private void UpdateVisualQuestion()
+        {
+            if (selectedGame == GameMode.Math)
+                GameInstructionText.Text = mathGame.VisualPrompt;
+            else if (selectedGame == GameMode.Patterns)
+                GameInstructionText.Text = patternGame.VisualPrompt;
+        }
+
         private void MenuMusicButton_Click(object sender, RoutedEventArgs e)
         {
             menuMusicEnabled = !menuMusicEnabled;
@@ -1085,6 +1078,7 @@ namespace KinectKids
 
         private void StopRound()
         {
+            spokenInstructions.Stop();
             isPlaying = false;
             isPaused = false;
             gameTimer.Stop();
@@ -1106,7 +1100,12 @@ namespace KinectKids
 
         private void ToggleFullscreen()
         {
-            isFullscreen = !isFullscreen;
+            SetFullscreen(!isFullscreen);
+        }
+
+        private void SetFullscreen(bool enabled)
+        {
+            isFullscreen = enabled;
             WindowStyle = isFullscreen ? WindowStyle.None : WindowStyle.SingleBorderWindow;
             WindowState = isFullscreen ? WindowState.Maximized : WindowState.Normal;
             FullscreenButton.Content = isFullscreen ? "Fönster" : "Helskärm";
@@ -1154,6 +1153,7 @@ namespace KinectKids
         {
             gameTimer.Stop();
             menuMusic.Close();
+            spokenInstructions.Dispose();
             tracker?.Dispose();
         }
 

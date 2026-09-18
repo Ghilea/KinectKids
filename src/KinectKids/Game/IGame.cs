@@ -41,5 +41,6 @@ namespace KinectKids.Game
         public int ScoreDelta { get; set; }
         public int PlayerIndex { get; set; }
         public bool RoundCompleted { get; set; }
+        public string VoiceKey { get; set; }
     }
 }

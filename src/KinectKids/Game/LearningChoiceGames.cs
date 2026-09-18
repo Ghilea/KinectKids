@@ -41,6 +41,7 @@ namespace KinectKids.Game
         protected abstract LearningQuestion CreateLearningQuestion(Random source, int level);
 
         public string Instruction => question == null ? ReadyInstruction : question.Prompt;
+        public string VisualPrompt => question?.VisualPrompt ?? string.Empty;
         public int CurrentScore { get; private set; }
         public bool IsActive { get; private set; }
 
@@ -96,16 +97,16 @@ namespace KinectKids.Game
                 int points = 10 + Math.Min(10, answeredQuestions);
                 CurrentScore += points;
                 answeredQuestions++;
-                Raise(question.SuccessMessage, points, playerIndex);
+                Raise(question.SuccessMessage, points, playerIndex, "correct");
                 question = null;
-                nextQuestionDelay = 0.6;
+                nextQuestionDelay = 1.8;
                 ClearCards();
                 return points;
             }
 
             hit.IsEnabled = false;
             hit.Container.Opacity = 0.25;
-            Raise("Bra försök! Prova ett annat svar.", 0, playerIndex);
+            Raise("Bra försök! Prova ett annat svar.", 0, playerIndex, "retry");
             return 0;
         }
 
@@ -177,7 +178,7 @@ namespace KinectKids.Game
                 Position(card);
             }
 
-            Raise(Instruction, 0, 0);
+            Raise(Instruction, 0, 0, question.VoiceKey);
         }
 
         private void ClearCards()
@@ -199,13 +200,14 @@ namespace KinectKids.Game
             return Math.Sqrt(dx * dx + dy * dy);
         }
 
-        private void Raise(string message, int scoreDelta, int playerIndex)
+        private void Raise(string message, int scoreDelta, int playerIndex, string voiceKey = null)
         {
             GameEvent?.Invoke(this, new GameEventArgs
             {
                 Message = message,
                 ScoreDelta = scoreDelta,
-                PlayerIndex = playerIndex
+                PlayerIndex = playerIndex,
+                VoiceKey = voiceKey
             });
         }
 
@@ -250,23 +252,28 @@ namespace KinectKids.Game
                 string correct = word.Substring(0, 1);
                 string[] alphabet = { "A", "B", "D", "F", "H", "K", "M", "S", "T", "Å", "Ä", "Ö" };
                 return MakeQuestion(source, "Vilken bokstav börjar " + word + " med?", correct,
-                    alphabet.Where(item => item != correct), "Rätt! " + word + " börjar med " + correct + ".");
+                    alphabet.Where(item => item != correct), "Rätt! " + word + " börjar med " + correct + ".",
+                    "starts|" + WordKey(word));
             }
 
             string shown = word.Substring(0, word.Length - 1) + " _";
             string finalLetter = word.Substring(word.Length - 1, 1);
             string[] endings = { "A", "E", "I", "L", "N", "R", "S", "T", "Å" };
             return MakeQuestion(source, "Vilken bokstav saknas?  " + shown, finalLetter,
-                endings.Where(item => item != finalLetter), "Precis! Ordet är " + word + ".");
+                endings.Where(item => item != finalLetter), "Precis! Ordet är " + word + ".",
+                "missing|" + WordKey(word));
         }
 
         private static LearningQuestion MakeQuestion(Random source, string prompt, string correct,
-            IEnumerable<string> distractors, string success)
+            IEnumerable<string> distractors, string success, string voiceKey)
         {
             var options = distractors.OrderBy(item => source.Next()).Take(3).Concat(new[] { correct })
                 .OrderBy(item => source.Next()).ToArray();
-            return new LearningQuestion(prompt, correct, options, success);
+            return new LearningQuestion(prompt, correct, options, success, voiceKey);
         }
+
+        private static string WordKey(string word) => word.ToLowerInvariant()
+            .Replace("å", "a").Replace("ä", "a").Replace("ö", "o");
     }
 
     public sealed class ShapeGame : LearningChoiceGame
@@ -287,7 +294,8 @@ namespace KinectKids.Game
                 : string.Empty;
             return new LearningQuestion("Hitta " + Names[index].ToLowerInvariant() + "." + extra,
                 Shapes[index], Shapes.OrderBy(item => source.Next()).ToArray(),
-                "Ja! Det är " + Names[index].ToLowerInvariant() + ".");
+                "Ja! Det är " + Names[index].ToLowerInvariant() + ".",
+                "shape|" + new[] { "circle", "triangle", "square", "star" }[index]);
         }
     }
 
@@ -311,13 +319,13 @@ namespace KinectKids.Game
         protected override LearningQuestion CreateLearningQuestion(Random source, int level)
         {
             int maximum = level < 2 ? 3 : Patterns.Length;
-            string[] selected = Patterns[source.Next(maximum)];
+            int patternIndex = source.Next(maximum);
+            string[] selected = Patterns[patternIndex];
             string[] pool = { "●", "■", "▲", "★", "A", "B", "3", "5", "9", "10", "LITEN", "STOR" };
             var options = pool.Where(item => item != selected[1]).OrderBy(item => source.Next()).Take(3)
                 .Concat(new[] { selected[1] }).OrderBy(item => source.Next()).ToArray();
             return new LearningQuestion("Vad kommer sedan?  " + selected[0], selected[1], options,
-                "Rätt! Du hittade mönstret.");
+                "Rätt! Du hittade mönstret.", "pattern|" + patternIndex, selected[0]);
         }
     }
 }
-

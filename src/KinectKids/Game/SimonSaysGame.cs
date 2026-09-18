@@ -78,7 +78,7 @@ namespace KinectKids.Game
                     const int points = 15;
                     CurrentScore += points;
                     Raise("Snyggt! Nästa rörelse…", points, matchingPlayer);
-                    NextCommand();
+                    NextCommand("great_next");
                     return;
                 }
             }
@@ -90,7 +90,7 @@ namespace KinectKids.Game
             if (commandRemaining <= 0)
             {
                 Raise("Nästan! Vi tar en ny rörelse.", 0, 0);
-                NextCommand();
+                NextCommand("new_movement");
             }
         }
 
@@ -146,7 +146,7 @@ namespace KinectKids.Game
             }
         }
 
-        private void NextCommand()
+        private void NextCommand(string introduction = null)
         {
             GestureType previous = currentCommand;
             do
@@ -158,17 +158,32 @@ namespace KinectKids.Game
             commandRemaining = 5.5;
             poseHold = 0;
             lastPlayerIndex = -1;
-            Raise(Instruction, 0, 0);
+            string voice = "simon|" + CommandKey(currentCommand);
+            if (!string.IsNullOrWhiteSpace(introduction)) voice = introduction + ";" + voice;
+            Raise(Instruction, 0, 0, voice);
         }
 
-        private void Raise(string message, int scoreDelta, int playerIndex)
+        private void Raise(string message, int scoreDelta, int playerIndex, string voiceKey = null)
         {
             GameEvent?.Invoke(this, new GameEventArgs
             {
                 Message = message,
                 ScoreDelta = scoreDelta,
-                PlayerIndex = playerIndex
+                PlayerIndex = playerIndex,
+                VoiceKey = voiceKey
             });
+        }
+
+        private static string CommandKey(GestureType command)
+        {
+            switch (command)
+            {
+                case GestureType.HandsUp: return "hands_up";
+                case GestureType.ArmsOut: return "arms_out";
+                case GestureType.HandsTogether: return "hands_together";
+                case GestureType.Duck: return "duck";
+                default: return "ready";
+            }
         }
 
         private static string CommandText(GestureType command)
