@@ -55,6 +55,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\GameSessionMenu.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Resource Include="Assets\zombie-station.jpg" />
     <Resource Include="Assets\zombie-tunnel.jpg" />
     <Resource Include="Assets\zombie-scout.png" />
@@ -68,6 +72,9 @@
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\GameSessionMenu.xaml.cs">
+      <DependentUpon>GameSessionMenu.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Game\Balloon.cs" />
     <Compile Include="Game\GameEngine.cs" />
     <Compile Include="Game\ZombieAimResult.cs" />
@@ -79,6 +86,7 @@
     <Compile Include="Game\SimonSaysGame.cs" />
     <Compile Include="Game\GameManager.cs" />
     <Compile Include="Input\IPlayerTracker.cs" />
+    <Compile Include="Input\ActiveHandSelector.cs" />
     <Compile Include="Input\KinectPlayerTracker.cs" Condition=" '$(UseKinectStub)' != 'true' " />
     <Compile Include="Input\KinectPlayerTracker.Stub.cs" Condition=" '$(UseKinectStub)' == 'true' " />
     <Compile Include="Models\BodyJoint.cs" />

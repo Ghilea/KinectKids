@@ -1,6 +1,7 @@
 <Window x:Class="KinectKids.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:KinectKids.Controls"
         Title="Rörelselek för Kinect" MinWidth="960" MinHeight="640"
         Width="1280" Height="800" WindowStartupLocation="CenterScreen"
         FontFamily="{StaticResource AppFont}" Background="#14213D"
@@ -102,7 +103,6 @@
                         <Button x:Name="PatternStartButton" Content="◉  Mönsterjakten" Click="PatternStartButton_Click" Style="{StaticResource CarouselButton}" Background="#3184C6" />
                         <Button x:Name="SimonStartButton" Content="★  Simon säger" Click="SimonStartButton_Click" Style="{StaticResource CarouselButton}" Background="#3978D4" />
                         <Button x:Name="BalloonStartButton" Content="●  Ballongjakten" Click="StartButton_Click" Style="{StaticResource CarouselButton}" Background="#E85768" />
-                        <Button x:Name="ZombieStartButton" Content="☠  Zombietåget" Click="ZombieStartButton_Click" Style="{StaticResource CarouselButton}" Background="#8B55D9" />
                         <Button x:Name="SpookyAdventureButton" Content="☾  Spökjakten 3D" Click="SpookyAdventureButton_Click" Style="{StaticResource CarouselButton}" Background="#6741A5" />
                     </Canvas>
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -239,18 +239,8 @@
                 </Border>
             </Grid>
 
-            <Button x:Name="PauseButton" Content="Paus" Style="{StaticResource SmallButton}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,25,22" Click="PauseButton_Click" />
-
             <Border x:Name="CountdownOverlay" Background="#D914213D" Visibility="Collapsed">
                 <TextBlock x:Name="CountdownText" Text="3" Foreground="White" FontSize="160" FontWeight="Black" HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
-
-            <Border x:Name="PauseOverlay" Background="#D914213D" Visibility="Collapsed">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="Paus" Foreground="White" FontSize="58" FontWeight="Black" HorizontalAlignment="Center" Margin="0,0,0,28" />
-                    <Button Content="Fortsätt" Click="PauseButton_Click" Margin="0,0,0,14" />
-                    <Button Content="Avsluta rundan" Click="HomeButton_Click" Style="{StaticResource SecondaryButton}" />
-                </StackPanel>
             </Border>
 
             <Border x:Name="ResultOverlay" Background="#EB14213D" Visibility="Collapsed">
@@ -261,6 +251,12 @@
                     <Button Content="Till startsidan" Click="HomeButton_Click" Style="{StaticResource SecondaryButton}" />
                 </StackPanel>
             </Border>
+
+            <controls:GameSessionMenu x:Name="SessionMenu" Panel.ZIndex="1800"
+                                      Opened="SessionMenu_Opened"
+                                      ContinueRequested="SessionMenu_ContinueRequested"
+                                      RestartRequested="SessionMenu_RestartRequested"
+                                      HomeRequested="SessionMenu_HomeRequested" />
         </Grid>
 
         <Canvas x:Name="KinectMenuCanvas" Grid.RowSpan="2" Background="Transparent" IsHitTestVisible="False" Panel.ZIndex="200">

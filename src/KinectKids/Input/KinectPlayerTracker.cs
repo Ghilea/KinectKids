@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Kinect;
 using KinectKids.Models;
 
@@ -12,6 +13,7 @@ namespace KinectKids.Input
         private KinectSensor sensor;
         private Skeleton[] skeletons;
         private readonly Dictionary<long, CandidateState> candidates = new Dictionary<long, CandidateState>();
+        private readonly DispatcherTimer reconnectTimer;
         private string status = "Letar efter Kinect…";
 
         public event EventHandler<IReadOnlyList<TrackedPlayer>> PlayersChanged;
@@ -20,14 +22,25 @@ namespace KinectKids.Input
         public bool IsConnected => sensor != null && sensor.Status == KinectStatus.Connected;
         public string Status => status;
 
+        public KinectPlayerTracker()
+        {
+            reconnectTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            reconnectTimer.Tick += (sender, args) =>
+            {
+                if (!IsConnected) TryConnect();
+            };
+        }
+
         public void Start()
         {
             KinectSensor.KinectSensors.StatusChanged += OnSensorStatusChanged;
+            reconnectTimer.Start();
             TryConnect();
         }
 
         public void Stop()
         {
+            reconnectTimer.Stop();
             KinectSensor.KinectSensors.StatusChanged -= OnSensorStatusChanged;
             Disconnect();
         }

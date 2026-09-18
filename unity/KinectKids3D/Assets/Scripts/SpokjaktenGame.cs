@@ -52,6 +52,7 @@ namespace KinectKids3D
         private readonly Dictionary<int, ReticleState> reticles = new Dictionary<int, ReticleState>();
         private readonly Dictionary<int, Light> reticleLights = new Dictionary<int, Light>();
         private readonly Dictionary<int, HandFilterState> handFilters = new Dictionary<int, HandFilterState>();
+        private readonly ActiveHandSelector activeHandSelector = new ActiveHandSelector();
         private readonly Dictionary<long, PoseCalibration> poseCalibrations = new Dictionary<long, PoseCalibration>();
         private readonly Dictionary<int, PoseState> currentPoses = new Dictionary<int, PoseState>();
         private readonly int[] scores = new int[2];
@@ -167,6 +168,8 @@ namespace KinectKids3D
         private bool calibrationTrackingStable;
         private string interfaceDwellAction;
         private float interfaceDwellStartedAt;
+        private string sessionDwellAction;
+        private float sessionDwellStartedAt;
         private const int TotalRelics = 6;
 
         private void Awake()
@@ -509,7 +512,8 @@ namespace KinectKids3D
             }
 
             if (Input.GetKeyDown(KeyCode.F2)) JumpToNextCheckpoint();
-            if (Input.GetKeyDown(KeyCode.P) || Input.GetKeyDown(KeyCode.Space)) paused = !paused;
+            if (!finished && (Input.GetKeyDown(KeyCode.P) || Input.GetKeyDown(KeyCode.Space)
+                || Input.GetKeyDown(KeyCode.Escape))) paused = !paused;
             if (finished && Input.GetKeyDown(KeyCode.R)) ReloadRide();
             if (Input.GetKeyDown(KeyCode.B) && !bossDefeated)
             {
@@ -518,6 +522,8 @@ namespace KinectKids3D
             }
             if (paused || finished || gameOver)
             {
+                UpdateSessionAim();
+                UpdateSessionDwell();
                 if (finished) SaveRecord();
                 return;
             }
@@ -550,6 +556,7 @@ namespace KinectKids3D
             UpdateZoneStory();
             UpdateGhostAudio();
             UpdateAim();
+            UpdateSessionDwell();
             UpdateBossBattle();
             if (bossDefeated && rideDistance >= DarkRideWorld.TrackLength - 3f)
             {
@@ -561,6 +568,7 @@ namespace KinectKids3D
 
         private void BeginCalibration()
         {
+            activeHandSelector.Reset();
             poseCalibrations.Clear();
             currentPoses.Clear();
             reticles.Clear();
@@ -679,7 +687,8 @@ namespace KinectKids3D
             float statusY = y + height - 176f;
             if (automatic != null && !automatic.KinectConnected
                 && new Rect(x + 245f, statusY + 54f, 190f, 26f).Contains(point)) return "retry-kinect";
-            if (new Rect(x + 145f, y + height - 92f, width - 290f, 58f).Contains(point)) return "calibrate";
+            if (new Rect(x + 45f, y + height - 92f, 170f, 58f).Contains(point)) return "launcher";
+            if (new Rect(x + 225f, y + height - 92f, width - 270f, 58f).Contains(point)) return "calibrate";
             return null;
         }
 
@@ -713,6 +722,11 @@ namespace KinectKids3D
             else if (action == "calibrate")
             {
                 BeginCalibration();
+                return;
+            }
+            else if (action == "launcher")
+            {
+                LauncherReturnService.ReturnToLauncher();
                 return;
             }
             SavePreferences();
@@ -802,6 +816,7 @@ namespace KinectKids3D
 
         private void CompleteCalibration()
         {
+            activeHandSelector.Reset();
             SetDifficulty(easyMode);
             gameTime = 0f;
             paused = false;
@@ -1443,7 +1458,7 @@ namespace KinectKids3D
             reticles.Clear();
             foreach (Light reticleLight in reticleLights.Values)
                 if (reticleLight != null) reticleLight.enabled = false;
-            foreach (AimSample rawSample in samples)
+            foreach (AimSample rawSample in activeHandSelector.Select(samples, requestedPlayers))
             {
                 int player = Mathf.Clamp(rawSample.PlayerIndex, 0, 1);
                 if (player >= requestedPlayers) continue;
@@ -1582,6 +1597,80 @@ namespace KinectKids3D
                     IsRightHand = sample.HandId % 2 == 1
                 };
             }
+        }
+
+        private void UpdateSessionAim()
+        {
+            IReadOnlyList<AimSample> samples = aimProvider.GetAimSamples();
+            reticles.Clear();
+            foreach (Light reticleLight in reticleLights.Values)
+                if (reticleLight != null) reticleLight.enabled = false;
+            foreach (AimSample rawSample in activeHandSelector.Select(samples, requestedPlayers))
+            {
+                AimSample sample = SmoothHand(rawSample);
+                reticles[sample.HandId] = new ReticleState
+                {
+                    PlayerIndex = Mathf.Clamp(sample.PlayerIndex, 0, 1),
+                    Position = sample.Position,
+                    IsRightHand = sample.HandId % 2 == 1
+                };
+            }
+        }
+
+        private void UpdateSessionDwell()
+        {
+            string hovered = null;
+            foreach (ReticleState reticle in reticles.Values)
+            {
+                string action = SessionActionAt(reticle.Position);
+                if (string.IsNullOrEmpty(action)) continue;
+                hovered = action;
+                break;
+            }
+
+            if (string.IsNullOrEmpty(hovered) && string.IsNullOrEmpty(sessionDwellAction)) return;
+
+            if (hovered != sessionDwellAction)
+            {
+                sessionDwellAction = hovered;
+                sessionDwellStartedAt = Time.unscaledTime;
+            }
+            float progress = string.IsNullOrEmpty(hovered)
+                ? 0f : Mathf.Clamp01((Time.unscaledTime - sessionDwellStartedAt) / 0.9f);
+            foreach (int key in reticles.Keys.ToArray())
+            {
+                ReticleState state = reticles[key];
+                state.Progress = SessionActionAt(state.Position) == hovered ? progress : 0f;
+                reticles[key] = state;
+            }
+            if (progress < 1f) return;
+
+            sessionDwellAction = null;
+            sessionDwellStartedAt = Time.unscaledTime;
+            ExecuteSessionAction(hovered);
+        }
+
+        private string SessionActionAt(Vector2 normalizedPosition)
+        {
+            Vector2 point = new Vector2(normalizedPosition.x * Screen.width,
+                normalizedPosition.y * Screen.height);
+            if (!paused && !finished && !gameOver)
+                return new Rect(Screen.width - 170f, 150f, 150f, 44f).Contains(point) ? "open" : null;
+
+            float x = Screen.width * 0.5f - 175f;
+            float y = paused ? Screen.height * 0.5f - 55f : Screen.height * 0.5f + 85f;
+            if (new Rect(x, y, 350f, 56f).Contains(point)) return paused ? "continue" : "restart";
+            if (new Rect(x, y + 70f, 350f, 56f).Contains(point)) return paused ? "restart" : "home";
+            if (paused && new Rect(x, y + 140f, 350f, 56f).Contains(point)) return "home";
+            return null;
+        }
+
+        private void ExecuteSessionAction(string action)
+        {
+            if (action == "open") paused = true;
+            else if (action == "continue") paused = false;
+            else if (action == "restart") ReloadRide();
+            else if (action == "home") LauncherReturnService.ReturnToLauncher();
         }
 
         private AimSample SmoothHand(AimSample sample)
@@ -1833,6 +1922,9 @@ namespace KinectKids3D
                 ? "SLUTBOSS – VAGNEN STÅR STILL"
                 : "FÄRD   " + Mathf.RoundToInt(rideDistance / DarkRideWorld.TrackLength * 100f) + " %", smallStyle);
             GUI.Label(new Rect(Screen.width - 145, Screen.height - 30, 130, 22), "F11  HELSKÄRM", smallStyle);
+            if (!paused && !finished && !gameOver
+                && GUI.Button(new Rect(Screen.width - 170f, 150f, 150f, 44f), "☰ SPELMENY"))
+                paused = true;
             if (requestedPlayers > 1)
                 GUI.Label(new Rect(Screen.width - 298, 83, 280, 26), "SPELARE 2   " + scores[1], smallStyle);
             GUI.Label(new Rect(Screen.width - 298, 105, 280, 25), easyMode
@@ -1941,17 +2033,28 @@ namespace KinectKids3D
 
             if (paused)
             {
-                GUI.Box(new Rect(Screen.width * 0.5f - 180, Screen.height * 0.5f - 60, 360, 120), string.Empty);
-                GUI.Label(new Rect(Screen.width * 0.5f - 150, Screen.height * 0.5f - 36, 300, 72),
-                    "PAUS\nMellanslag för att fortsätta", centerStyle);
+                float menuX = Screen.width * 0.5f - 260f;
+                float menuY = Screen.height * 0.5f - 205f;
+                float buttonX = Screen.width * 0.5f - 175f;
+                float buttonY = Screen.height * 0.5f - 55f;
+                GUI.Box(new Rect(menuX, menuY, 520f, 410f), string.Empty);
+                GUI.Label(new Rect(menuX + 30f, menuY + 24f, 460f, 92f),
+                    "SPELMENY\nVad vill ni göra?", centerStyle);
+                if (GUI.Button(new Rect(buttonX, buttonY, 350f, 56f), "FORTSÄTT SPELA"))
+                    ExecuteSessionAction("continue");
+                if (GUI.Button(new Rect(buttonX, buttonY + 70f, 350f, 56f), "STARTA OM SPELET"))
+                    ExecuteSessionAction("restart");
+                if (GUI.Button(new Rect(buttonX, buttonY + 140f, 350f, 56f), "TILL GEMENSAMMA MENYN"))
+                    ExecuteSessionAction("home");
+                DrawInterfaceReticles();
             }
             else if (finished)
             {
                 int totalShots = shots[0] + shots[1];
                 int totalHits = hits[0] + hits[1];
                 int accuracy = totalShots > 0 ? Mathf.RoundToInt(totalHits * 100f / totalShots) : 0;
-                GUI.Box(new Rect(Screen.width * 0.5f - 330, Screen.height * 0.5f - 195, 660, 390), string.Empty);
-                GUI.Label(new Rect(Screen.width * 0.5f - 305, Screen.height * 0.5f - 178, 610, 350),
+                GUI.Box(new Rect(Screen.width * 0.5f - 330, Screen.height * 0.5f - 250, 660, 500), string.Empty);
+                GUI.Label(new Rect(Screen.width * 0.5f - 305, Screen.height * 0.5f - 232, 610, 310),
                     (gameOver ? "VAGNEN GICK SÖNDER" : "BRA JAGAT!")
                     + "\nBETYG: " + FinalGrade(accuracy)
                     + "\nPoäng: " + (scores[0] + scores[1])
@@ -1967,7 +2070,14 @@ namespace KinectKids3D
                     + "   Extra skräckhändelser: " + directorEvents
                     + "\nMEDALJER: " + MedalText(accuracy)
                     + "\nBästa antal medaljer: " + PlayerPrefs.GetInt("SpokjaktenBestMedals", 0)
-                    + "\nTryck R för att gå tillbaka till startmenyn", centerStyle);
+                    + "\nVälj vad ni vill göra här nedanför", centerStyle);
+                float endButtonX = Screen.width * 0.5f - 175f;
+                float endButtonY = Screen.height * 0.5f + 85f;
+                if (GUI.Button(new Rect(endButtonX, endButtonY, 350f, 56f), "STARTA OM SPELET"))
+                    ExecuteSessionAction("restart");
+                if (GUI.Button(new Rect(endButtonX, endButtonY + 70f, 350f, 56f), "TILL GEMENSAMMA MENYN"))
+                    ExecuteSessionAction("home");
+                DrawInterfaceReticles();
             }
         }
 
@@ -2035,7 +2145,9 @@ namespace KinectKids3D
             if (automatic != null && !automatic.KinectConnected
                 && GUI.Button(new Rect(x + 245f, statusY + 54f, 190f, 26f), "FÖRSÖK KINECT IGEN"))
                 automatic.RetryNow();
-            if (GUI.Button(new Rect(x + 145f, y + height - 92f, width - 290f, 58f), "KALIBRERA OCH STARTA"))
+            if (GUI.Button(new Rect(x + 45f, y + height - 92f, 170f, 58f), "HUVUDMENY"))
+                LauncherReturnService.ReturnToLauncher();
+            if (GUI.Button(new Rect(x + 225f, y + height - 92f, width - 270f, 58f), "KALIBRERA OCH STARTA"))
                 BeginCalibration();
             DrawInterfaceReticles();
         }

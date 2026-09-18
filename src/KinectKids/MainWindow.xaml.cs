@@ -58,6 +58,7 @@ namespace KinectKids
         private SimonSaysGame simonGame;
         private readonly GameManager moduleManager = new GameManager();
         private readonly ProgressionService progression = new ProgressionService();
+        private readonly ActiveHandSelector activeHandSelector = new ActiveHandSelector();
         private IReadOnlyList<TrackedPlayer> players = Array.Empty<TrackedPlayer>();
         private GameMode selectedGame = GameMode.Balloons;
         private DateTime roundEndsAt;
@@ -71,9 +72,6 @@ namespace KinectKids
         private bool dwellTriggered;
         private Button[] carouselButtons;
         private int carouselIndex;
-        private Point? previousMenuLeftHand;
-        private Point? previousMenuRightHand;
-        private int activeMenuHand = 1;
         private double carouselDragDistance;
         private DateTime lastCarouselMove;
         private readonly MediaPlayer menuMusic = new MediaPlayer();
@@ -94,7 +92,7 @@ namespace KinectKids
             carouselButtons = new[]
             {
                 MathStartButton, SwedishStartButton, ShapeStartButton, PatternStartButton,
-                SimonStartButton, BalloonStartButton, ZombieStartButton, SpookyAdventureButton
+                SimonStartButton, BalloonStartButton, SpookyAdventureButton
             };
             GameCarousel.SizeChanged += (sender, args) => UpdateCarousel(false);
             menuMusic.MediaEnded += (sender, args) =>
@@ -122,6 +120,7 @@ namespace KinectKids
 
         private void SwitchTracker(IPlayerTracker next)
         {
+            activeHandSelector.Reset();
             if (tracker != null)
             {
                 tracker.PlayersChanged -= OnPlayersChanged;
@@ -233,7 +232,8 @@ namespace KinectKids
             tracker?.Stop();
             Process.Start(new ProcessStartInfo(executable)
             {
-                WorkingDirectory = System.IO.Path.GetDirectoryName(executable)
+                WorkingDirectory = System.IO.Path.GetDirectoryName(executable),
+                Arguments = "--launcher \"" + Process.GetCurrentProcess().MainModule.FileName + "\""
             });
             Close();
         }
@@ -331,9 +331,8 @@ namespace KinectKids
             CalibrationPanel.Visibility = Visibility.Collapsed;
             HomePanel.Visibility = Visibility.Collapsed;
             GamePanel.Visibility = Visibility.Visible;
-            PauseOverlay.Visibility = Visibility.Collapsed;
             ResultOverlay.Visibility = Visibility.Collapsed;
-            PauseButton.Visibility = Visibility.Visible;
+            SessionMenu.ShowButton();
             GameInstruction.Visibility = Visibility.Visible;
             game.Reset();
             zombieGame.Reset();
@@ -477,8 +476,9 @@ namespace KinectKids
 
             for (int playerIndex = 0; playerIndex < activePlayers.Length; playerIndex++)
             {
-                ShowHand(playerIndex * 2, activePlayers[playerIndex].LeftHand, playerIndex);
-                ShowHand(playerIndex * 2 + 1, activePlayers[playerIndex].RightHand, playerIndex);
+                ActiveHandSelection selection = activeHandSelector.Select(activePlayers[playerIndex], DateTime.UtcNow);
+                int cursorIndex = playerIndex * 2 + (selection.IsRightHand ? 1 : 0);
+                ShowHand(cursorIndex, selection.Position, playerIndex);
             }
 
             if (selectedGame == GameMode.ZombieTrain)
@@ -816,7 +816,7 @@ namespace KinectKids
             string[] titles =
             {
                 "Matematikbanan", "Bokstavsjakten", "Formverkstan", "Mönsterjakten",
-                "Simon säger", "Ballongjakten", "Zombietåget", "Spökjakten 3D"
+                "Simon säger", "Ballongjakten", "Spökjakten 3D"
             };
             string[] descriptions =
             {
@@ -825,25 +825,24 @@ namespace KinectKids
                 "Känn igen cirklar, trianglar, kvadrater och hur många hörn de har.",
                 "Fortsätt serier med former, bokstäver, storlekar och tal.",
                 "Se rörelsen, lyssna på instruktionen och härma med hela kroppen.",
-                "Rör båda händerna och smäll så många färgglada ballonger ni kan.",
-                "Åk genom stationen och träffa de tokiga zombierna längs rälsen.",
+                "Rör den hand du vill använda och smäll så många färgglada ballonger du kan.",
                 "Kliv ombord på spökvagnen, ducka, väj och bekämpa slottets monster."
             };
             string[] categories =
             {
                 "MATEMATIK • 1–2 SPELARE", "SVENSKA • 1–2 SPELARE", "FORMER • 1–2 SPELARE",
                 "LOGIK • 1–2 SPELARE", "RÖRELSE • 1–2 SPELARE", "LEK • 1–2 SPELARE",
-                "ÄVENTYR • 1–2 SPELARE", "3D-ÄVENTYR • 1–2 SPELARE"
+                "3D-ÄVENTYR • 1–2 SPELARE"
             };
-            string[] glyphs = { "2 + 3", "Å Ä Ö", "● ▲ ■", "● ■ ● ?", "★", "● ● ●", "☠", "☾" };
-            string[] colors = { "#C52A7862", "#C56D294F", "#C57B561D", "#C51D5372", "#C5292D67", "#C5712637", "#C53B225C", "#C51A102F" };
+            string[] glyphs = { "2 + 3", "Å Ä Ö", "● ▲ ■", "● ■ ● ?", "★", "● ● ●", "☾" };
+            string[] colors = { "#C52A7862", "#C56D294F", "#C57B561D", "#C51D5372", "#C5292D67", "#C5712637", "#C51A102F" };
 
             PreviewTitle.Text = titles[carouselIndex];
             PreviewDescription.Text = descriptions[carouselIndex];
             PreviewCategory.Text = categories[carouselIndex];
             PreviewGlyph.Text = glyphs[carouselIndex];
             PreviewTint.Background = BrushFrom(colors[carouselIndex]);
-            PreviewImage.Opacity = carouselIndex >= 6 ? 0.5 : 0.08;
+            PreviewImage.Opacity = carouselIndex == 6 ? 0.5 : 0.08;
             if (animate)
                 PreviewTitle.BeginAnimation(OpacityProperty,
                     new DoubleAnimation(0.25, 1, TimeSpan.FromMilliseconds(260)));
@@ -851,46 +850,26 @@ namespace KinectKids
 
         private Point SelectMenuHand(TrackedPlayer player, out double verticalMovement)
         {
-            Point left = player.LeftHand;
-            Point right = player.RightHand;
-            bool leftTracked = IsTracked(left);
-            bool rightTracked = IsTracked(right);
-            double leftMove = leftTracked && previousMenuLeftHand.HasValue
-                ? left.Y - previousMenuLeftHand.Value.Y : 0;
-            double rightMove = rightTracked && previousMenuRightHand.HasValue
-                ? right.Y - previousMenuRightHand.Value.Y : 0;
-
-            if (leftTracked && Math.Abs(leftMove) > Math.Abs(rightMove) + 0.012) activeMenuHand = 0;
-            else if (rightTracked && Math.Abs(rightMove) > Math.Abs(leftMove) + 0.012) activeMenuHand = 1;
-            if (activeMenuHand == 0 && !leftTracked) activeMenuHand = 1;
-            if (activeMenuHand == 1 && !rightTracked) activeMenuHand = 0;
-
-            Point selected = activeMenuHand == 0 ? left : right;
-            verticalMovement = activeMenuHand == 0 ? leftMove : rightMove;
-            previousMenuLeftHand = leftTracked ? (Point?)left : null;
-            previousMenuRightHand = rightTracked ? (Point?)right : null;
-            return selected;
+            ActiveHandSelection selection = activeHandSelector.Select(player, DateTime.UtcNow);
+            verticalMovement = selection.VerticalDelta;
+            return selection.Position;
         }
 
         private void UpdateMenuControl()
         {
             bool menuVisible = HomePanel.Visibility == Visibility.Visible
                                || CalibrationPanel.Visibility == Visibility.Visible
-                               || PauseOverlay.Visibility == Visibility.Visible
+                               || SessionMenu.IsOpen
                                || ResultOverlay.Visibility == Visibility.Visible;
             var player = players.FirstOrDefault(item => item.IsReady);
             if (!menuVisible || KinectMenuCanvas.ActualWidth < 1 || player == null || tracker is MousePlayerTracker)
             {
                 ResetMenuDwell();
-                previousMenuLeftHand = null;
-                previousMenuRightHand = null;
                 return;
             }
 
             double verticalMovement = 0;
-            Point hand = HomePanel.Visibility == Visibility.Visible
-                ? SelectMenuHand(player, out verticalMovement)
-                : player.RightHand;
+            Point hand = SelectMenuHand(player, out verticalMovement);
             if (!IsTracked(hand))
             {
                 ResetMenuDwell();
@@ -1015,7 +994,7 @@ namespace KinectKids
             isPlaying = false;
             gameTimer.Stop();
             moduleManager.Stop();
-            PauseButton.Visibility = Visibility.Collapsed;
+            SessionMenu.HideAll();
             ResultOverlay.Visibility = Visibility.Visible;
             string scoreText = PlayerTwoScoreBox.Visibility == Visibility.Visible
                 ? $"Spelare 1: {scores[0]}  •  Spelare 2: {scores[1]}"
@@ -1034,24 +1013,31 @@ namespace KinectKids
             ResultText.Text = scoreText;
         }
 
-        private void PauseButton_Click(object sender, RoutedEventArgs e)
+        private void SessionMenu_Opened(object sender, EventArgs e)
+        {
+            if (!isPlaying || isPaused) return;
+            isPaused = true;
+            pausedRemaining = roundEndsAt - DateTime.UtcNow;
+        }
+
+        private void SessionMenu_ContinueRequested(object sender, EventArgs e)
         {
             if (!isPlaying) return;
-            if (!isPaused)
-            {
-                isPaused = true;
-                pausedRemaining = roundEndsAt - DateTime.UtcNow;
-                PauseOverlay.Visibility = Visibility.Visible;
-                PauseButton.Content = "Fortsätt";
-            }
-            else
-            {
-                isPaused = false;
-                roundEndsAt = DateTime.UtcNow + pausedRemaining;
-                frameClock.Restart();
-                PauseOverlay.Visibility = Visibility.Collapsed;
-                PauseButton.Content = "Paus";
-            }
+            isPaused = false;
+            roundEndsAt = DateTime.UtcNow + pausedRemaining;
+            frameClock.Restart();
+            SessionMenu.Close();
+        }
+
+        private async void SessionMenu_RestartRequested(object sender, EventArgs e)
+        {
+            SessionMenu.Close();
+            await BeginRoundAsync();
+        }
+
+        private void SessionMenu_HomeRequested(object sender, EventArgs e)
+        {
+            HomeButton_Click(sender, new RoutedEventArgs());
         }
 
         private void HomeButton_Click(object sender, RoutedEventArgs e)
@@ -1110,7 +1096,7 @@ namespace KinectKids
             shapeGame.Reset();
             patternGame.Reset();
             simonGame.Reset();
-            PauseOverlay.Visibility = Visibility.Collapsed;
+            SessionMenu.HideAll();
             ResultOverlay.Visibility = Visibility.Collapsed;
             CountdownOverlay.Visibility = Visibility.Collapsed;
             BossBanner.Visibility = Visibility.Collapsed;
@@ -1142,9 +1128,26 @@ namespace KinectKids
             if (e.Key == Key.Escape)
             {
                 if (isFullscreen) ToggleFullscreen();
+                else if (GamePanel.Visibility == Visibility.Visible && isPlaying)
+                {
+                    if (SessionMenu.IsOpen) SessionMenu_ContinueRequested(sender, EventArgs.Empty);
+                    else
+                    {
+                        SessionMenu.Open();
+                        SessionMenu_Opened(sender, EventArgs.Empty);
+                    }
+                }
                 else if (HomePanel.Visibility != Visibility.Visible) HomeButton_Click(sender, e);
             }
-            if (e.Key == Key.Space && isPlaying) PauseButton_Click(sender, e);
+            if (e.Key == Key.Space && isPlaying)
+            {
+                if (SessionMenu.IsOpen) SessionMenu_ContinueRequested(sender, EventArgs.Empty);
+                else
+                {
+                    SessionMenu.Open();
+                    SessionMenu_Opened(sender, EventArgs.Empty);
+                }
+            }
         }
 
         private void Window_Closing(object sender, CancelEventArgs e)
