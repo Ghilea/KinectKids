@@ -210,11 +210,11 @@ namespace KinectKids3D
                 bool handIsReady = handY > shoulderY - 0.42f && handZ > shoulderZ - 0.16f;
                 if (handIsReady) gesture.Armed = true;
                 if (gesture.Armed && now >= gesture.CooldownUntil
-                    && forwardSpeed > 0.42f && handZ < shoulderZ - 0.10f)
+                    && forwardSpeed > 0.36f && handZ < shoulderZ - 0.085f)
                 {
                     fire = true;
                     gesture.Armed = false;
-                    gesture.CooldownUntil = now.AddMilliseconds(360);
+                    gesture.CooldownUntil = now.AddMilliseconds(340);
                 }
             }
 

@@ -26,7 +26,6 @@ namespace KinectKids3D
         private const float QuickEventActionDistance = 4.15f;
         private const float QuickEventPassedDistance = -0.30f;
         private const float TargetGraceSeconds = 0.48f;
-        private const float DwellShotSeconds = 0.58f;
         private static readonly float[] ScareDistances =
         {
             26f, 48f, 68f, 91f, 111f, 132f, 151f, 171f, 188f, 218f, 242f, 270f, 299f, 326f, 338f
@@ -52,7 +51,6 @@ namespace KinectKids3D
         private readonly Dictionary<int, AimLock> aimLocks = new Dictionary<int, AimLock>();
         private readonly Dictionary<int, ReticleState> reticles = new Dictionary<int, ReticleState>();
         private readonly Dictionary<int, Light> reticleLights = new Dictionary<int, Light>();
-        private readonly Dictionary<int, ActiveHandState> activeHands = new Dictionary<int, ActiveHandState>();
         private readonly Dictionary<int, HandFilterState> handFilters = new Dictionary<int, HandFilterState>();
         private readonly Dictionary<long, PoseCalibration> poseCalibrations = new Dictionary<long, PoseCalibration>();
         private readonly Dictionary<int, PoseState> currentPoses = new Dictionary<int, PoseState>();
@@ -146,15 +144,17 @@ namespace KinectKids3D
         private int requestedPlayers = 1;
         private float calibrationStableSeconds;
         private readonly bool[] calibrationCastPassed = new bool[2];
+        private readonly bool[] calibrationLeftCastPassed = new bool[2];
+        private readonly bool[] calibrationRightCastPassed = new bool[2];
         private readonly bool[] calibrationDuckPassed = new bool[2];
         private readonly bool[] calibrationLeanPassed = new bool[2];
-        private readonly bool[] calibrationHandSwitchPassed = new bool[2];
-        private readonly float[] calibrationHandSwitchTime = new float[2];
         private readonly float[] calibrationDuckTime = new float[2];
         private readonly float[] calibrationLeanTime = new float[2];
         private readonly int[] calibrationVisibleHands = new int[2];
         private float calibrationUnstableSeconds;
         private bool calibrationTrackingStable;
+        private string interfaceDwellAction;
+        private float interfaceDwellStartedAt;
         private const int TotalRelics = 6;
 
         private void Awake()
@@ -202,7 +202,7 @@ namespace KinectKids3D
             {
                 aimProvider = kinect;
                 inputStatus = kinect.Status
-                    + " – en hand siktar, den andra kastar; håll den nya sikthanden högre för att byta";
+                    + " – båda händerna har varsitt sikte och kastar framåt";
             }
             else
             {
@@ -365,7 +365,6 @@ namespace KinectKids3D
             hazards.Clear();
             aimLocks.Clear();
             reticles.Clear();
-            activeHands.Clear();
             handFilters.Clear();
             poseCalibrations.Clear();
             currentPoses.Clear();
@@ -454,6 +453,7 @@ namespace KinectKids3D
             if (flow == GameFlow.Menu)
             {
                 PositionCamera(0f);
+                UpdateMenuAim();
                 if (Input.GetKeyDown(KeyCode.Return)) BeginCalibration();
                 return;
             }
@@ -462,6 +462,7 @@ namespace KinectKids3D
             {
                 UpdateCalibration();
                 PositionCamera(0f);
+                UpdateCalibrationDwell();
                 if (calibrationTrackingStable && Input.GetKeyDown(KeyCode.Return)) CompleteCalibration();
                 if (Input.GetKeyDown(KeyCode.Escape)) flow = GameFlow.Menu;
                 return;
@@ -527,17 +528,143 @@ namespace KinectKids3D
             calibrationStableSeconds = 0f;
             calibrationUnstableSeconds = 0f;
             calibrationTrackingStable = false;
+            interfaceDwellAction = null;
+            interfaceDwellStartedAt = 0f;
             for (int player = 0; player < 2; player++)
             {
                 calibrationCastPassed[player] = false;
+                calibrationLeftCastPassed[player] = false;
+                calibrationRightCastPassed[player] = false;
                 calibrationDuckPassed[player] = false;
                 calibrationLeanPassed[player] = false;
-                calibrationHandSwitchPassed[player] = false;
-                calibrationHandSwitchTime[player] = 0f;
                 calibrationDuckTime[player] = 0f;
                 calibrationLeanTime[player] = 0f;
             }
             flow = GameFlow.Calibration;
+            SavePreferences();
+        }
+
+        private void UpdateMenuAim()
+        {
+            IReadOnlyList<AimSample> samples = aimProvider.GetAimSamples();
+            reticles.Clear();
+            foreach (Light reticleLight in reticleLights.Values)
+                if (reticleLight != null) reticleLight.enabled = false;
+            foreach (AimSample rawSample in samples)
+            {
+                int player = Mathf.Clamp(rawSample.PlayerIndex, 0, 1);
+                if (player >= requestedPlayers) continue;
+                AimSample sample = SmoothHand(rawSample);
+                Ray ray = rideCamera.ViewportPointToRay(
+                    new Vector3(sample.Position.x, 1f - sample.Position.y, 0f));
+                UpdateReticleLight(sample.HandId, player, ray);
+                reticles[sample.HandId] = new ReticleState
+                {
+                    PlayerIndex = player,
+                    Position = sample.Position,
+                    IsRightHand = sample.HandId % 2 == 1,
+                };
+            }
+            UpdateInterfaceDwell(false);
+        }
+
+        private void UpdateCalibrationDwell()
+        {
+            UpdateInterfaceDwell(true);
+        }
+
+        private void UpdateInterfaceDwell(bool calibration)
+        {
+            string hovered = null;
+            foreach (ReticleState reticle in reticles.Values)
+            {
+                string action = calibration
+                    ? CalibrationActionAt(reticle.Position)
+                    : MenuActionAt(reticle.Position);
+                if (!string.IsNullOrEmpty(action))
+                {
+                    hovered = action;
+                    break;
+                }
+            }
+
+            if (hovered != interfaceDwellAction)
+            {
+                interfaceDwellAction = hovered;
+                interfaceDwellStartedAt = Time.time;
+            }
+            float progress = string.IsNullOrEmpty(hovered)
+                ? 0f : Mathf.Clamp01((Time.time - interfaceDwellStartedAt) / 0.85f);
+            foreach (int key in reticles.Keys.ToArray())
+            {
+                ReticleState state = reticles[key];
+                string action = calibration
+                    ? CalibrationActionAt(state.Position)
+                    : MenuActionAt(state.Position);
+                state.Progress = action == hovered ? progress : 0f;
+                reticles[key] = state;
+            }
+            if (progress < 1f) return;
+
+            interfaceDwellAction = null;
+            interfaceDwellStartedAt = Time.time;
+            if (calibration)
+            {
+                if (hovered == "back") flow = GameFlow.Menu;
+                else if (hovered == "start" && calibrationTrackingStable) CompleteCalibration();
+            }
+            else
+            {
+                ExecuteMenuAction(hovered);
+            }
+        }
+
+        private string MenuActionAt(Vector2 normalizedPosition)
+        {
+            float width = Mathf.Min(680f, Screen.width - 60f);
+            float height = Mathf.Min(720f, Screen.height - 50f);
+            float x = (Screen.width - width) * 0.5f;
+            float y = (Screen.height - height) * 0.5f;
+            float rowY = y + 128f;
+            Vector2 point = new Vector2(normalizedPosition.x * Screen.width,
+                normalizedPosition.y * Screen.height);
+            if (new Rect(x + 240f, rowY, 170f, 38f).Contains(point)) return "easy";
+            if (new Rect(x + 420f, rowY, 170f, 38f).Contains(point)) return "normal";
+            rowY += 55f;
+            if (new Rect(x + 240f, rowY, 170f, 38f).Contains(point)) return "one";
+            if (new Rect(x + 420f, rowY, 170f, 38f).Contains(point)) return "two";
+            rowY = y + 440f;
+            if (new Rect(x + 185f, rowY, 310f, 40f).Contains(point)) return "fullscreen";
+            if (new Rect(x + 145f, y + height - 92f, width - 290f, 58f).Contains(point)) return "calibrate";
+            return null;
+        }
+
+        private string CalibrationActionAt(Vector2 normalizedPosition)
+        {
+            float width = Mathf.Min(760f, Screen.width - 50f);
+            float height = Mathf.Min(650f, Screen.height - 40f);
+            float x = (Screen.width - width) * 0.5f;
+            float y = (Screen.height - height) * 0.5f;
+            Vector2 point = new Vector2(normalizedPosition.x * Screen.width,
+                normalizedPosition.y * Screen.height);
+            if (new Rect(x + 45f, y + height - 72f, 150f, 42f).Contains(point)) return "back";
+            if (calibrationTrackingStable
+                && new Rect(x + width - 315f, y + height - 78f, 270f, 52f).Contains(point)) return "start";
+            return null;
+        }
+
+        private void ExecuteMenuAction(string action)
+        {
+            if (action == "easy") easyMode = true;
+            else if (action == "normal") easyMode = false;
+            else if (action == "one") requestedPlayers = 1;
+            else if (action == "two") requestedPlayers = 2;
+            else if (action == "fullscreen") Screen.fullScreen = !Screen.fullScreen;
+            else if (action == "calibrate")
+            {
+                BeginCalibration();
+                return;
+            }
             SavePreferences();
         }
 
@@ -550,27 +677,29 @@ namespace KinectKids3D
                 if (reticleLight != null) reticleLight.enabled = false;
 
             int[] handCounts = new int[2];
-            var calibrationHands = new[] { new List<AimSample>(2), new List<AimSample>(2) };
             foreach (AimSample rawSample in samples)
             {
                 AimSample sample = SmoothHand(rawSample);
                 int player = Mathf.Clamp(sample.PlayerIndex, 0, 1);
                 if (player >= requestedPlayers) continue;
                 handCounts[player]++;
-                calibrationHands[player].Add(sample);
-                if (sample.Fire) calibrationCastPassed[player] = true;
-                if (!reticles.ContainsKey(player))
+                if (sample.Fire)
+                {
+                    calibrationCastPassed[player] = true;
+                    if (sample.HandId % 2 == 1) calibrationRightCastPassed[player] = true;
+                    else calibrationLeftCastPassed[player] = true;
+                }
+                if (!reticles.ContainsKey(sample.HandId))
                 {
                     Ray ray = rideCamera.ViewportPointToRay(
                         new Vector3(sample.Position.x, 1f - sample.Position.y, 0f));
-                    UpdateReticleLight(player, ray);
-                    reticles[player] = new ReticleState
+                    UpdateReticleLight(sample.HandId, player, ray);
+                    reticles[sample.HandId] = new ReticleState
                     {
                         PlayerIndex = player,
                         Position = sample.Position,
                         Progress = sample.GestureProgress,
                         IsRightHand = sample.HandId % 2 == 1,
-                        DualHand = false
                     };
                 }
             }
@@ -601,22 +730,6 @@ namespace KinectKids3D
                 if (pose.DuckAmount > 0.08f || Mathf.Abs(pose.LeanAmount) > 0.11f)
                     neutralPose = false;
                 if (handCounts[player] < (kinectInput ? 2 : 1)) handsFound = false;
-                if (!kinectInput)
-                {
-                    calibrationHandSwitchPassed[player] = true;
-                }
-                else if (calibrationHands[player].Count >= 2
-                    && Mathf.Abs(calibrationHands[player][0].Position.y
-                        - calibrationHands[player][1].Position.y) >= 0.10f)
-                {
-                    calibrationHandSwitchTime[player] += Time.deltaTime;
-                    if (calibrationHandSwitchTime[player] >= 0.55f)
-                        calibrationHandSwitchPassed[player] = true;
-                }
-                else
-                {
-                    calibrationHandSwitchTime[player] = 0f;
-                }
             }
 
             if (!calibrationTrackingStable)
@@ -866,7 +979,8 @@ namespace KinectKids3D
         private void TryRescueTeammate(int rescuer)
         {
             int teammate = rescuer == 0 ? 1 : 0;
-            if (lives[teammate] > 0 || (!currentPoses.ContainsKey(teammate) && !activeHands.ContainsKey(teammate))) return;
+            if (lives[teammate] > 0 || (!currentPoses.ContainsKey(teammate)
+                && !reticles.Values.Any(item => item.PlayerIndex == teammate))) return;
             rescueProgress[teammate]++;
             if (rescueProgress[teammate] < 3)
             {
@@ -952,8 +1066,8 @@ namespace KinectKids3D
             }
 
             if (rideDistance < DarkRideWorld.BranchSplitStart - 1.2f) return;
-            ReticleState reticle;
-            int automaticRoute = reticles.TryGetValue(0, out reticle)
+            ReticleState reticle = reticles.Values.FirstOrDefault(item => item.PlayerIndex == 0);
+            int automaticRoute = reticles.Values.Any(item => item.PlayerIndex == 0)
                 ? (reticle.Position.x < 0.5f ? -1 : 1)
                 : (UnityEngine.Random.value < 0.5f ? -1 : 1);
             SelectRoute(automaticRoute);
@@ -1132,31 +1246,23 @@ namespace KinectKids3D
             reticles.Clear();
             foreach (Light reticleLight in reticleLights.Values)
                 if (reticleLight != null) reticleLight.enabled = false;
-            foreach (IGrouping<int, AimSample> group in samples.GroupBy(item => item.PlayerIndex))
+            foreach (AimSample rawSample in samples)
             {
-                int player = Mathf.Clamp(group.Key, 0, 1);
+                int player = Mathf.Clamp(rawSample.PlayerIndex, 0, 1);
                 if (player >= requestedPlayers) continue;
-                List<AimSample> playerHands = group.ToList();
-                for (int i = 0; i < playerHands.Count; i++) playerHands[i] = SmoothHand(playerHands[i]);
-                AimSample sample = SelectActiveHand(player, playerHands);
-                bool dualHand = playerHands.Count >= 2;
-                AimSample castHand = dualHand
-                    ? playerHands.First(item => item.HandId != sample.HandId)
-                    : sample;
-                ActiveHandState handState = activeHands[player];
-
+                AimSample sample = SmoothHand(rawSample);
                 Ray ray = rideCamera.ViewportPointToRay(new Vector3(sample.Position.x, 1f - sample.Position.y, 0));
-                UpdateReticleLight(player, ray);
+                UpdateReticleLight(sample.HandId, player, ray);
                 GhostTarget target = FindAimTarget(ray, sample.Position);
                 PoseState playerPose;
                 bool attackBlocked = currentPoses.TryGetValue(player, out playerPose)
                     && playerPose.DuckAmount >= 0.15f;
 
                 AimLock aimLock;
-                if (!aimLocks.TryGetValue(player, out aimLock))
+                if (!aimLocks.TryGetValue(sample.HandId, out aimLock))
                 {
                     aimLock = new AimLock();
-                    aimLocks[player] = aimLock;
+                    aimLocks[sample.HandId] = aimLock;
                 }
                 if (target != null && !attackBlocked)
                 {
@@ -1169,34 +1275,23 @@ namespace KinectKids3D
                     // En duckning är en ren undanmanöver: ingen gammal dwell-
                     // laddning eller mållåsning får ge ett skott på vägen upp.
                     aimLock.RecentTarget = null;
-                    aimLock.ChargeTarget = null;
-                    aimLock.Charge = 0f;
-                }
-                else if (target != null && target == aimLock.ChargeTarget)
-                    aimLock.Charge += Time.deltaTime;
-                else
-                {
-                    aimLock.ChargeTarget = target;
-                    aimLock.Charge = 0f;
                 }
 
-                // Med två spårade händer är rollerna fasta: sikthanden flyttar
-                // siktet och den andra handen avfyrar med ett framåtkast. Dwell-
-                // skottet finns bara kvar som tillgänglighetsreserv vid en hand/mus.
-                bool chargedShot = !attackBlocked && !dualHand && target != null
-                    && aimLock.Charge >= DwellShotSeconds;
-                bool castGesture = dualHand ? castHand.Fire : sample.Fire;
-                if (!attackBlocked && (castGesture || chargedShot) && !handState.SwitchGestureActive
+                // Varje hand siktar och kastar självständigt. Kinect kräver
+                // ett riktigt framåtkast; att bara hålla siktet på ett monster
+                // avfyrar aldrig automatiskt.
+                if (!attackBlocked && sample.Fire
                     && Time.time >= aimLock.CooldownUntil)
                 {
                     GhostTarget firedTarget = target;
                     if (firedTarget == null && Time.time - aimLock.LastTargetAt <= TargetGraceSeconds)
                         firedTarget = aimLock.RecentTarget;
 
-                    Color boltColor = player == 1 ? new Color(1f, 0.28f, 0.62f) : new Color(0.22f, 0.75f, 1f);
-                    Ray castRay = rideCamera.ViewportPointToRay(new Vector3(
-                        castHand.Position.x, 1f - castHand.Position.y, 0f));
-                    Vector3 boltStart = castRay.origin + castRay.direction * 0.78f;
+                    bool rightHand = sample.HandId % 2 == 1;
+                    Color boltColor = player == 1
+                        ? (rightHand ? new Color(1f, 0.25f, 0.58f) : new Color(1f, 0.50f, 0.20f))
+                        : (rightHand ? new Color(0.20f, 0.68f, 1f) : new Color(0.18f, 1f, 0.78f));
+                    Vector3 boltStart = ray.origin + ray.direction * 0.78f;
                     Vector3 boltEnd = firedTarget != null
                         ? firedTarget.transform.position + Vector3.up
                         : ray.GetPoint(18f);
@@ -1252,23 +1347,17 @@ namespace KinectKids3D
                     }
                     else combos[player] = 0;
                     aimLock.RecentTarget = null;
-                    aimLock.ChargeTarget = null;
-                    aimLock.Charge = 0f;
                     aimLock.CooldownUntil = Time.time + 0.32f;
                 }
 
-                reticles[player] = new ReticleState
+                reticles[sample.HandId] = new ReticleState
                 {
                     PlayerIndex = player,
                     Position = sample.Position,
-                    Progress = attackBlocked ? 0f : dualHand
-                        ? castHand.GestureProgress
-                        : Mathf.Max(sample.GestureProgress, aimLock.Charge / DwellShotSeconds),
+                    Progress = attackBlocked ? 0f : sample.GestureProgress,
                     OnTarget = target != null,
                     AttackBlocked = attackBlocked,
-                    IsRightHand = sample.HandId % 2 == 1,
-                    CastHandIsRight = castHand.HandId % 2 == 1,
-                    DualHand = dualHand
+                    IsRightHand = sample.HandId % 2 == 1
                 };
             }
         }
@@ -1336,10 +1425,10 @@ namespace KinectKids3D
             return best;
         }
 
-        private void UpdateReticleLight(int player, Ray ray)
+        private void UpdateReticleLight(int lightKey, int player, Ray ray)
         {
             Light flashlight;
-            if (!reticleLights.TryGetValue(player, out flashlight) || flashlight == null)
+            if (!reticleLights.TryGetValue(lightKey, out flashlight) || flashlight == null)
             {
                 GameObject lightObject = new GameObject("Siktesficklampa spelare " + (player + 1));
                 lightObject.transform.SetParent(rideCamera.transform, false);
@@ -1353,79 +1442,12 @@ namespace KinectKids3D
                 flashlight.spotAngle = 38f;
                 flashlight.innerSpotAngle = 22f;
                 flashlight.shadows = LightShadows.None;
-                reticleLights[player] = flashlight;
+                reticleLights[lightKey] = flashlight;
             }
 
             flashlight.enabled = true;
             flashlight.transform.position = ray.origin + rideCamera.transform.forward * 0.16f;
             flashlight.transform.rotation = Quaternion.LookRotation(ray.direction, rideCamera.transform.up);
-        }
-
-        private AimSample SelectActiveHand(int player, List<AimSample> hands)
-        {
-            ActiveHandState state;
-            if (!activeHands.TryGetValue(player, out state))
-            {
-                int preferredIndex = hands.FindIndex(item => item.HandId % 2 == 1);
-                AimSample preferred = preferredIndex >= 0 ? hands[preferredIndex] : hands[0];
-                state = new ActiveHandState { ActiveHandId = preferred.HandId };
-                activeHands[player] = state;
-            }
-
-            AimSample active = hands.FirstOrDefault(item => item.HandId == state.ActiveHandId);
-            if (!hands.Any(item => item.HandId == state.ActiveHandId))
-            {
-                active = hands[0];
-                state.ActiveHandId = active.HandId;
-            }
-
-            state.SwitchGestureActive = false;
-            if (hands.Count >= 2)
-            {
-                // Handbyte: lyft handen som ska bli den nya sikthanden tydligt
-                // högre än den nuvarande. Det är enklare och stabilare än att
-                // kräva att båda händerna ska vara över huvudet samtidigt.
-                AimSample other = hands.First(item => item.HandId != active.HandId);
-                bool switchRequested = other.Position.y <= active.Position.y - 0.10f;
-                bool neutralHands = Mathf.Abs(other.Position.y - active.Position.y) < 0.055f;
-                state.SwitchGestureActive = switchRequested;
-                if (neutralHands)
-                {
-                    state.SwitchStartedAt = -1f;
-                    state.CanSwitch = true;
-                }
-                else if (!switchRequested)
-                {
-                    state.SwitchStartedAt = -1f;
-                }
-                else if (state.CanSwitch)
-                {
-                    if (state.SwitchStartedAt < 0f) state.SwitchStartedAt = Time.time;
-                    if (Time.time - state.SwitchStartedAt >= 0.55f)
-                    {
-                        state.ActiveHandId = other.HandId;
-                        active = other;
-                        state.CanSwitch = false;
-                        actionMessage = (active.HandId % 2 == 1 ? "HÖGER" : "VÄNSTER")
-                            + " HAND SIKTAR – DEN ANDRA KASTAR";
-                        actionMessageUntil = Time.time + 1.8f;
-                        PlayRandom(effects, movementSuccessSounds, 0.62f);
-                    }
-                }
-            }
-
-            if (player == 0 && (Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.Q))
-                && hands.Count >= 2)
-            {
-                AimSample other = hands.First(item => item.HandId != active.HandId);
-                state.ActiveHandId = other.HandId;
-                active = other;
-                state.CanSwitch = false;
-                actionMessage = "HAND BYTE – " + (active.HandId % 2 == 1 ? "HÖGER" : "VÄNSTER") + " HAND SIKTAR";
-                actionMessageUntil = Time.time + 1.5f;
-            }
-
-            return active;
         }
 
         private void UpdateBossBattle()
@@ -1605,9 +1627,9 @@ namespace KinectKids3D
                 GUI.color = previous;
                 GUI.DrawTexture(new Rect(x - 34, y + 39, 68, 9), whiteTexture);
                 GUI.DrawTexture(new Rect(x - 32, y + 41, 64 * reticle.Progress, 5), goldTexture);
-                string handLabel = reticle.IsRightHand ? "SIKTE: HÖGER" : "SIKTE: VÄNSTER";
-                if (reticle.DualHand)
-                    handLabel += reticle.CastHandIsRight ? "  KAST: HÖGER" : "  KAST: VÄNSTER";
+                string handLabel = reticle.IsRightHand
+                    ? "HÖGER HAND – KASTA FRAMÅT"
+                    : "VÄNSTER HAND – KASTA FRAMÅT";
                 if (reticle.AttackBlocked) handLabel = "DUCKAR – ATTACK LÅST";
                 GUI.Label(new Rect(x - 105, y + 51, 210, 22), handLabel, smallStyle);
             }
@@ -1669,7 +1691,7 @@ namespace KinectKids3D
             {
                 GUI.Box(new Rect(Screen.width * 0.5f - 330, 112, 660, 68), string.Empty);
                 GUI.Label(new Rect(Screen.width * 0.5f - 315, 118, 630, 54),
-                    "Håll siktet kort på spökena – ducka och väj när något kommer!", centerStyle);
+                    "Sikta med valfri hand och kasta framåt – ducka och väj när pilarna visas!", centerStyle);
             }
 
             if (paused)
@@ -1762,6 +1784,7 @@ namespace KinectKids3D
             GUI.Label(new Rect(x + 45f, statusY, width - 90f, 58f), MenuInputStatus(), centeredSmallStyle);
             if (GUI.Button(new Rect(x + 145f, y + height - 92f, width - 290f, 58f), "KALIBRERA OCH STARTA"))
                 BeginCalibration();
+            DrawInterfaceReticles();
         }
 
         private string MenuInputStatus()
@@ -1800,7 +1823,7 @@ namespace KinectKids3D
             GUI.Box(new Rect(x, y, width, height), string.Empty);
             GUI.Label(new Rect(x + 30f, y + 18f, width - 60f, 48f), "KINECT-KALIBRERING", centerStyle);
             GUI.Label(new Rect(x + 45f, y + 68f, width - 90f, 58f),
-                "Stå rakt och stilla tills mätaren är full. Testa sedan kast, duckning, sidoväjning och lyft den nya sikthanden högre.", centerStyle);
+                "Stå rakt och stilla tills mätaren är full. Testa sedan att sikta och kasta med båda händerna, ducka och sidoväja.", centerStyle);
 
             float progress = Mathf.Clamp01(calibrationStableSeconds / 1.6f);
             GUI.DrawTexture(new Rect(x + 110f, y + 132f, width - 220f, 18f), whiteTexture);
@@ -1817,16 +1840,10 @@ namespace KinectKids3D
                 DrawCalibrationCard(player, new Rect(cardX, y + 195f, cardWidth, 245f));
             }
 
-            foreach (ReticleState reticle in reticles.Values)
-            {
-                float rx = reticle.Position.x * Screen.width;
-                float ry = reticle.Position.y * Screen.height;
-                GUI.DrawTexture(new Rect(rx - 25f, ry - 25f, 50f, 50f),
-                    reticle.PlayerIndex == 1 ? playerTwoRing : playerOneRing);
-            }
+            DrawInterfaceReticles();
 
             GUI.Label(new Rect(x + 45f, y + 448f, width - 90f, 44f),
-                "HANDBYTE: håll handen du vill sikta med tydligt högre i en halv sekund.", centeredSmallStyle);
+                "BÅDA HÄNDER: sikta var för sig och kasta respektive hand framåt.", centeredSmallStyle);
             if (GUI.Button(new Rect(x + 45f, y + height - 72f, 150f, 42f), "TILLBAKA"))
                 flow = GameFlow.Menu;
             GUI.enabled = calibrationTrackingStable;
@@ -1842,16 +1859,32 @@ namespace KinectKids3D
             bool body = currentPoses.ContainsKey(player);
             bool kinectInput = aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider;
             bool hands = calibrationVisibleHands[player] >= (kinectInput ? 2 : 1);
+            string attackTests = kinectInput
+                ? CalibrationMark(calibrationLeftCastPassed[player]) + " Vänster kast testat\n"
+                    + CalibrationMark(calibrationRightCastPassed[player]) + " Höger kast testat\n"
+                : CalibrationMark(calibrationCastPassed[player]) + " Musklick testat\n";
             GUI.Label(new Rect(card.x + 16f, card.y + 12f, card.width - 32f, 32f),
                 "SPELARE " + (player + 1), hudStyle);
             GUI.Label(new Rect(card.x + 18f, card.y + 55f, card.width - 36f, 170f),
                 CalibrationMark(body) + " Kropp hittad\n"
                 + CalibrationMark(hands) + " Händer och sikte\n"
-                + CalibrationMark(calibrationCastPassed[player]) + " Kast testat\n"
-                + CalibrationMark(calibrationHandSwitchPassed[player]) + " Handbyte testat\n"
+                + attackTests
                 + CalibrationMark(calibrationDuckPassed[player]) + " Duckning testad\n"
                 + CalibrationMark(calibrationLeanPassed[player]) + " Sidoväjning testad",
                 centerStyle);
+        }
+
+        private void DrawInterfaceReticles()
+        {
+            foreach (ReticleState reticle in reticles.Values)
+            {
+                float x = reticle.Position.x * Screen.width;
+                float y = reticle.Position.y * Screen.height;
+                GUI.DrawTexture(new Rect(x - 27f, y - 27f, 54f, 54f),
+                    reticle.PlayerIndex == 1 ? playerTwoRing : playerOneRing);
+                GUI.DrawTexture(new Rect(x - 28f, y + 32f, 56f, 8f), whiteTexture);
+                GUI.DrawTexture(new Rect(x - 26f, y + 34f, 52f * reticle.Progress, 4f), goldTexture);
+            }
         }
 
         private string CalibrationProgressText()
@@ -2266,14 +2299,6 @@ namespace KinectKids3D
             public float Charge;
         }
 
-        private sealed class ActiveHandState
-        {
-            public int ActiveHandId;
-            public float SwitchStartedAt = -1f;
-            public bool CanSwitch = true;
-            public bool SwitchGestureActive;
-        }
-
         private sealed class PoseCalibration
         {
             public float CenterX;
@@ -2293,8 +2318,6 @@ namespace KinectKids3D
             public float Progress;
             public bool OnTarget;
             public bool IsRightHand;
-            public bool CastHandIsRight;
-            public bool DualHand;
             public bool AttackBlocked;
         }
 
