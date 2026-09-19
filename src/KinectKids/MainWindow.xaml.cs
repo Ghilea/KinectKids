@@ -74,6 +74,7 @@ namespace KinectKids
         private int carouselIndex;
         private int announcedCarouselIndex = -1;
         private double carouselDragDistance;
+        private bool carouselSwipeLatched;
         private DateTime lastCarouselMove;
         private readonly MediaPlayer menuMusic = new MediaPlayer();
         private readonly SpokenInstructionService spokenInstructions = new SpokenInstructionService();
@@ -883,32 +884,45 @@ namespace KinectKids
 
             if (HomePanel.Visibility == Visibility.Visible && hand.X < 0.58)
             {
-                carouselDragDistance += verticalMovement;
-                if (Math.Abs(carouselDragDistance) >= 0.075 &&
+                double stableMovement = Math.Abs(verticalMovement) < 0.003
+                    ? 0
+                    : Math.Max(-0.035, Math.Min(0.035, verticalMovement));
+                if (carouselSwipeLatched)
+                {
+                    if (stableMovement == 0)
+                    {
+                        carouselSwipeLatched = false;
+                        carouselDragDistance = 0;
+                    }
+                }
+                else
+                {
+                    carouselDragDistance += stableMovement;
+                }
+
+                if (!carouselSwipeLatched && Math.Abs(carouselDragDistance) >= 0.075 &&
                     (DateTime.UtcNow - lastCarouselMove).TotalMilliseconds >= 230)
                 {
-                    MoveCarousel(carouselDragDistance < 0 ? 1 : -1);
+                    int direction = carouselDragDistance < 0 ? 1 : -1;
                     carouselDragDistance = 0;
+                    carouselSwipeLatched = true;
                     lastCarouselMove = DateTime.UtcNow;
+                    MoveCarousel(direction);
                     return;
                 }
             }
             else
             {
                 carouselDragDistance *= 0.35;
+                carouselSwipeLatched = false;
             }
 
             Button target = FindButtonAt(new Point(x, y));
             if (HomePanel.Visibility == Visibility.Visible && target != null)
             {
-                int hoveredIndex = Array.IndexOf(carouselButtons, target);
-                if (hoveredIndex >= 0 && hoveredIndex != carouselIndex)
-                {
-                    carouselIndex = hoveredIndex;
-                    UpdateCarousel(true);
-                    ResetMenuDwell(false);
-                    return;
-                }
+                int carouselButtonIndex = Array.IndexOf(carouselButtons, target);
+                if (carouselButtonIndex >= 0 && carouselButtonIndex != carouselIndex)
+                    target = null;
             }
             if (target != dwellButton)
             {
