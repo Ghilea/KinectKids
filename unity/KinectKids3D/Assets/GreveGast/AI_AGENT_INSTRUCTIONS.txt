@@ -1,0 +1,17 @@
+Use the Greve Gast Unity prototype package already placed under Assets/GreveGast.
+
+1. Let Unity compile it.
+2. Run Tools > Greve Gast > Build Character.
+3. Use Assets/GreveGast/Generated/Prefabs/GreveGast.prefab as the enemy model in the musical chase.
+4. Do not rewrite the builder unless there is a compile error. Fix only compatibility issues required by the current Unity/render-pipeline version.
+5. Integrate GreveGastAnimationDriver with the ChaseTimeline:
+   - Run during active chase
+   - Reach when Greve Gast nearly catches the player
+   - Stumble for comic misses/environment crashes
+   - Dance during selected musical breaks
+   - Catch when the player loses
+6. Greve Gast should remain behind the player most of the time. Adjust distance using the chase-meter system rather than animation root motion.
+7. Keep all song timing based on the master WAV clock.
+8. Add a debug panel where the developer can manually test all Greve Gast animation states.
+9. Do not remove the generated concept/reference art or textures.
+10. After integration, run the scene and fix all console errors.

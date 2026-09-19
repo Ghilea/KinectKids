@@ -47,6 +47,8 @@ namespace KinectKids3D.Editor
         {
             string root = FindProjectRoot();
             if (root == null) throw new InvalidOperationException("KinectKids.sln hittades inte ovanfor Unity-projektet.");
+            global::GreveGast.Editor.GreveGastBuilder.BuildCharacter();
+            EnsureGreveGastRuntimePrefab();
             ConfigureGreveGastMusic();
             PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
             PlayerSettings.defaultIsFullScreen = true;
@@ -75,6 +77,20 @@ namespace KinectKids3D.Editor
                 "Tangentbordstest: W spring, mellanslag hoppa, S ducka, A/D sidsteg.\r\n");
             if (!Application.isBatchMode) EditorUtility.RevealInFinder(buildFolder);
             UnityEngine.Debug.Log("Greve Gasts Jakt ar klar: " + buildFolder);
+        }
+
+        private static void EnsureGreveGastRuntimePrefab()
+        {
+            const string source = "Assets/GreveGast/Generated/Prefabs/GreveGast.prefab";
+            const string folder = "Assets/Resources/GreveGastCharacter";
+            const string target = folder + "/GreveGast.prefab";
+            if (!AssetDatabase.IsValidFolder(folder))
+                AssetDatabase.CreateFolder("Assets/Resources", "GreveGastCharacter");
+            AssetDatabase.DeleteAsset(target);
+            if (!AssetDatabase.CopyAsset(source, target))
+                throw new InvalidOperationException("Greve Gast-prefaben kunde inte kopieras till Resources.");
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
         }
 
         private static void ConfigureGreveGastMusic()

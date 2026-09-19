@@ -30,22 +30,36 @@ namespace KinectKids3D
         private Transform playerRightArm;
         private Transform playerLeftLeg;
         private Transform playerRightLeg;
+        private GameObject playerAvatarVisual;
+        private GameObject playerSkeletonVisual;
+        private Transform skeletonLeftArm;
+        private Transform skeletonRightArm;
+        private Transform skeletonLeftLeg;
+        private Transform skeletonRightLeg;
         private Transform greve;
+        private global::GreveGast.GreveGastAnimationDriver greveAnimation;
         private Light moon;
         private AudioSource effects;
+        private AudioSource ambience;
         private AudioClip warningTone;
         private Material stone;
         private Material floor;
         private Material purple;
         private Material danger;
+        private Material pit;
         private string warningSymbol;
         private float warningUntil;
         private float feedbackUntil;
         private string feedback;
         private Color feedbackColor;
         private float chase = 0.5f;
+        private float scriptedApproachUntil;
         private bool paused;
         private bool debug;
+        private bool skeletonMode;
+        private GreveGastAction previousBodyAction;
+        private float jumpStartedAt = -10f;
+        private int jumpObstacleCounter;
         private string section = "Intro";
         private GUIStyle hugeStyle;
         private GUIStyle titleStyle;
@@ -53,10 +67,14 @@ namespace KinectKids3D
         private const float CorridorSpeed = 7f;
         // Hindren borjar i forgrunden, mellan kameran och spelaren, och aker
         // fran nederkanten upp mot spelarfiguren.
-        private const float ObstacleStartZ = 14.5f;
+        private const float ObstacleStartZ = 18.5f;
         private const float PlayerZ = 0f;
-        private const float CameraZ = 18f;
-        private const float LaneSpacing = 4.4f;
+        private const float CameraZ = 22f;
+        private const float LaneSpacing = 7.5f;
+        private const float JumpVisualDuration = 0.82f;
+        // Greven sager "spring" forsta gangen har. Fore denna punkt ar det
+        // bara presentation och ingen varning eller nagot fysiskt hinder.
+        private const float GameplayStartTime = 13.75f;
 
         private void Start()
         {
@@ -99,66 +117,122 @@ namespace KinectKids3D
         {
             foreach (Camera oldCamera in FindObjectsByType<Camera>(FindObjectsSortMode.None))
                 Destroy(oldCamera.gameObject);
-            RenderSettings.ambientLight = new Color(0.09f, 0.075f, 0.13f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.026f;
-            RenderSettings.fogColor = new Color(0.025f, 0.018f, 0.055f);
+            RenderSettings.fogDensity = 0.018f;
+            RenderSettings.fogColor = new Color(0.008f, 0.010f, 0.018f);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(0.040f, 0.047f, 0.067f);
+            RenderSettings.ambientEquatorColor = new Color(0.022f, 0.027f, 0.040f);
+            RenderSettings.ambientGroundColor = new Color(0.009f, 0.011f, 0.018f);
+            RenderSettings.ambientIntensity = 0.48f;
+            RenderSettings.reflectionIntensity = 0f;
 
-            stone = MakeMaterial(new Color(0.105f, 0.09f, 0.15f));
-            floor = MakeMaterial(new Color(0.17f, 0.105f, 0.075f));
+            Texture2D castleStone = Resources.Load<Texture2D>("Textures/CastleStone");
+            Texture2D castleRoad = Resources.Load<Texture2D>("Textures/CastleRoad");
+            if (castleStone == null)
+                castleStone = HauntedTextureFactory.DampStone(31,
+                    new Color(0.16f, 0.18f, 0.20f), new Color(0.012f, 0.018f, 0.025f));
+            if (castleRoad == null)
+                castleRoad = HauntedTextureFactory.DampStone(51,
+                    new Color(0.22f, 0.20f, 0.18f), new Color(0.025f, 0.026f, 0.030f));
+            castleStone.wrapMode = TextureWrapMode.Repeat;
+            castleRoad.wrapMode = TextureWrapMode.Repeat;
+            stone = DarkRideWorld.TexturedMaterial(new Color(0.32f, 0.35f, 0.39f), castleStone, 0.05f);
+            floor = DarkRideWorld.TexturedMaterial(new Color(0.39f, 0.31f, 0.25f), castleRoad, 0.03f);
+            stone.mainTextureScale = new Vector2(4f, 2f);
+            floor.mainTextureScale = new Vector2(3f, 5f);
             purple = MakeMaterial(new Color(0.42f, 0.08f, 0.63f), new Color(0.22f, 0.02f, 0.42f));
             danger = MakeMaterial(new Color(0.75f, 0.1f, 0.16f), new Color(0.45f, 0.02f, 0.04f));
+            pit = MakeMaterial(new Color(0.006f, 0.004f, 0.012f));
 
             var cameraObject = new GameObject("Musikalisk foljkamera");
             Camera camera = cameraObject.AddComponent<Camera>();
             cameraObject.AddComponent<AudioListener>();
             // Bred jaktkamera: spelaren ar liten i bild och hinder syns langt
             // innan de kommer fram, som i musikjaktsreferensen.
-            camera.transform.position = new Vector3(0f, 6f, CameraZ);
+            camera.transform.position = new Vector3(0f, 7.5f, CameraZ);
             camera.transform.LookAt(new Vector3(0f, 1.25f, PlayerZ), Vector3.up);
-            camera.fieldOfView = 74f;
+            camera.fieldOfView = 76f;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = RenderSettings.fogColor;
 
             moon = cameraObject.AddComponent<Light>();
             moon.type = LightType.Spot;
-            moon.range = 34f;
+            moon.range = 52f;
             moon.spotAngle = 66f;
-            moon.intensity = 2.0f;
+            moon.intensity = 3.2f;
             moon.color = new Color(0.55f, 0.66f, 1f);
+
+            GameObject ceilingFillObject = new GameObject("Svagt kallt takljus");
+            ceilingFillObject.transform.SetParent(transform, false);
+            ceilingFillObject.transform.position = new Vector3(0f, 10.5f, 10f);
+            Light ceilingFill = ceilingFillObject.AddComponent<Light>();
+            ceilingFill.type = LightType.Point;
+            ceilingFill.range = 42f;
+            ceilingFill.intensity = 0.72f;
+            ceilingFill.color = new Color(0.20f, 0.25f, 0.42f);
+            ceilingFill.shadows = LightShadows.None;
 
             for (int i = 0; i < 16; i++)
             {
                 GameObject segment = new GameObject("Slottsdel " + i);
-                segment.transform.position = new Vector3(0f, 0f, 12f - i * 12f);
+                segment.transform.position = new Vector3(0f, 0f, 18f - i * 12f);
                 corridor.Add(segment.transform);
+                // En sammanhangande grund under de tre vagarna tar bort de
+                // svarta springorna och gor korridoren till ett riktigt rum.
+                Cube("Sammanhangande stengolv", segment.transform, new Vector3(0f, -0.48f, 0f),
+                    new Vector3(29.35f, 0.42f, 12f), stone);
                 for (int lane = -1; lane <= 1; lane++)
                 {
                     float laneX = lane * LaneSpacing;
                     Cube("Vag " + lane, segment.transform, new Vector3(laneX, -0.25f, 0),
-                        new Vector3(3.7f, 0.5f, 12f), floor);
+                        new Vector3(6.5f, 0.5f, 12f), floor);
                     Cube("Vagskarv " + lane, segment.transform, new Vector3(laneX, 0.015f, 0),
-                        new Vector3(3.7f, 0.035f, 0.15f), stone);
+                        new Vector3(6.5f, 0.035f, 0.15f), stone);
                 }
-                Cube("Vanster vagg", segment.transform, new Vector3(-7.5f, 5.4f, 0), new Vector3(0.5f, 11.5f, 12f), stone);
-                Cube("Hoger vagg", segment.transform, new Vector3(7.5f, 5.4f, 0), new Vector3(0.5f, 11.5f, 12f), stone);
-                Cube("Takbjalk", segment.transform, new Vector3(0, 10.2f, -4.5f), new Vector3(15.5f, 0.5f, 0.6f), floor);
-                AddTorch(segment.transform, -7.05f, i % 2 == 0 ? 3f : -3f);
-                AddTorch(segment.transform, 7.05f, i % 2 == 0 ? -3f : 3f);
+                Cube("Vanster vagg", segment.transform, new Vector3(-14.5f, 8.5f, 0), new Vector3(0.65f, 18f, 12f), stone);
+                Cube("Hoger vagg", segment.transform, new Vector3(14.5f, 8.5f, 0), new Vector3(0.65f, 18f, 12f), stone);
+                Cube("Stentak", segment.transform, new Vector3(0f, 16.35f, 0f),
+                    new Vector3(29.35f, 0.42f, 12f), stone);
+                Cube("Takbjalk", segment.transform, new Vector3(0, 16f, -4.5f), new Vector3(29.5f, 0.65f, 0.75f), floor);
+                AddTorch(segment.transform, -14.05f, i % 2 == 0 ? 3f : -3f);
+                AddTorch(segment.transform, 14.05f, i % 2 == 0 ? -3f : 3f);
+                AddHauntedDecoration(segment.transform, i);
             }
+
+            // Kameran star ovanfor den rorliga banans framkant. En fast
+            // forgrundsdel gor att golvet alltid fortsatter under kameran och
+            // anda ned till bildkanten medan segmenten ateranvands.
+            for (int lane = -1; lane <= 1; lane++)
+                Cube("Vag under kameran " + lane, transform,
+                    new Vector3(lane * LaneSpacing, -0.27f, 28f),
+                    new Vector3(6.5f, 0.48f, 20f), floor);
+            Cube("Stengolv under kameran", transform, new Vector3(0f, -0.50f, 28f),
+                new Vector3(29.35f, 0.42f, 20f), stone);
+            Cube("Stentak over kameran", transform, new Vector3(0f, 16.35f, 28f),
+                new Vector3(29.35f, 0.42f, 20f), stone);
 
             BuildPlayerCharacter();
 
-            GameObject imported = ImportedModelFactory.Create("Models/CuteMonsters/Ghost", transform,
-                "Greve Gast", new Vector3(1.35f, 1.55f, -8f), 2.7f,
-                Quaternion.identity, "Fly", "Idle", "Walk");
-            if (imported != null) greve = imported.transform;
+            GameObject grevePrefab = Resources.Load<GameObject>("GreveGastCharacter/GreveGast");
+            GameObject imported = grevePrefab != null ? Instantiate(grevePrefab, transform, false) : null;
+            if (imported != null)
+            {
+                imported.name = "Greve Gast - animerad prototyp";
+                greve = imported.transform;
+                greve.position = new Vector3(0f, -0.8f, -38f);
+                greve.rotation = Quaternion.identity;
+                greve.localScale = Vector3.one * 5.2f;
+                greveAnimation = imported.GetComponent<global::GreveGast.GreveGastAnimationDriver>();
+                if (greveAnimation != null) greveAnimation.SetRun(true);
+            }
             else
             {
                 greve = GameObject.CreatePrimitive(PrimitiveType.Sphere).transform;
                 greve.name = "Greve Gast";
-                greve.position = new Vector3(1.35f, 1.55f, -8f);
+                greve.position = new Vector3(0f, -0.8f, -38f);
+                greve.localScale = Vector3.one * 7f;
                 greve.GetComponent<Renderer>().material = purple;
             }
 
@@ -166,6 +240,17 @@ namespace KinectKids3D
             effects.spatialBlend = 0f;
             effects.volume = 0.45f;
             warningTone = CreateTone();
+            AudioClip ambienceClip = Resources.Load<AudioClip>("Audio/SFX/Ambience/ambient_horror");
+            if (ambienceClip != null)
+            {
+                ambience = gameObject.AddComponent<AudioSource>();
+                ambience.clip = ambienceClip;
+                ambience.loop = true;
+                ambience.playOnAwake = false;
+                ambience.spatialBlend = 0f;
+                ambience.volume = 0.11f;
+                ambience.Play();
+            }
         }
 
         private void Update()
@@ -177,6 +262,7 @@ namespace KinectKids3D
                 Screen.fullScreen = !Screen.fullScreen;
             }
             if (Input.GetKeyDown(KeyCode.F2)) debug = !debug;
+            if (Input.GetKeyDown(KeyCode.F4)) TogglePlayerView();
             if (Input.GetKeyDown(KeyCode.F3) && song != null) song.Seek(58f);
             if (Input.GetKeyDown(KeyCode.F6) && song != null) song.TogglePause();
             if (Input.GetKeyDown(KeyCode.PageDown) && song != null)
@@ -187,12 +273,15 @@ namespace KinectKids3D
             if (paused || body == null || song == null) return;
 
             body.Update();
+            if (body.Current == GreveGastAction.Jump && previousBodyAction != GreveGastAction.Jump)
+                jumpStartedAt = Time.time;
+            previousBodyAction = body.Current;
             lastActions[(int)body.Current] = song.SongTime;
             AnimateCharacters();
             ScrollCorridor();
             UpdateObstacles();
             ResolveActions();
-            moon.intensity = 1.75f + Mathf.Sin(song.SongTime * 2.3f) * 0.18f;
+            moon.intensity = 2.9f + Mathf.Sin(song.SongTime * 2.3f) * 0.24f;
         }
 
         private void AnimateCharacters()
@@ -203,7 +292,10 @@ namespace KinectKids3D
             float targetX = -lane * LaneSpacing;
             float runBob = body.Current == GreveGastAction.Run
                 ? Mathf.Abs(Mathf.Sin(song.SongTime * 10f)) * 0.09f : 0f;
-            float targetY = body.Current == GreveGastAction.Jump ? 0.9f
+            float jumpProgress = (Time.time - jumpStartedAt) / JumpVisualDuration;
+            float jumpHeight = jumpProgress >= 0f && jumpProgress <= 1f
+                ? Mathf.Sin(jumpProgress * Mathf.PI) * 2.65f : 0f;
+            float targetY = jumpHeight > 0f ? jumpHeight
                 : body.Current == GreveGastAction.Duck ? 0.08f : runBob;
             player.position = Vector3.Lerp(player.position, new Vector3(targetX, targetY, PlayerZ),
                 1f - Mathf.Exp(-8f * Time.deltaTime));
@@ -215,18 +307,27 @@ namespace KinectKids3D
             playerRightArm.localRotation = Quaternion.Euler(-stride, 0f, 0f);
             playerLeftLeg.localRotation = Quaternion.Euler(-stride * 0.72f, 0f, 0f);
             playerRightLeg.localRotation = Quaternion.Euler(stride * 0.72f, 0f, 0f);
+            if (skeletonLeftArm != null)
+            {
+                skeletonLeftArm.localRotation = playerLeftArm.localRotation;
+                skeletonRightArm.localRotation = playerRightArm.localRotation;
+                skeletonLeftLeg.localRotation = playerLeftLeg.localRotation;
+                skeletonRightLeg.localRotation = playerRightLeg.localRotation;
+            }
 
             // Spelaren springer mot kameran. Greve Gast jagar bakifran och far
             // aldrig lagga sig mellan kameran och spelarfiguren.
-            float greveZ = Mathf.Lerp(-9f, -3.4f, chase);
-            Vector3 target = new Vector3(1.25f + Mathf.Sin(song.SongTime * 2f) * 0.55f,
-                1.55f + Mathf.Sin(song.SongTime * 3.1f) * 0.13f, greveZ);
+            float lyricApproach = song.SongTime < scriptedApproachUntil ? 10f : 0f;
+            float greveZ = Mathf.Lerp(-42f, -25f, chase) + lyricApproach;
+            Vector3 target = new Vector3(Mathf.Sin(song.SongTime * 1.4f) * 1.3f,
+                -0.8f + Mathf.Sin(song.SongTime * 2.2f) * 0.30f, greveZ);
             greve.position = Vector3.Lerp(greve.position, target, 1f - Mathf.Exp(-3f * Time.deltaTime));
         }
 
         private void ScrollCorridor()
         {
             float corridorLength = corridor.Count * 12f;
+            float backLimit = 18f - (corridor.Count - 1) * 12f;
             for (int i = 0; i < corridor.Count; i++)
             {
                 Transform segment = corridor[i];
@@ -235,7 +336,7 @@ namespace KinectKids3D
                 segment.position += Vector3.back * (CorridorSpeed * Time.deltaTime);
                 // Ateranvand delen tillrackligt langt bakom kameran sa att de
                 // tre vagarna alltid fortsatter hela vagen ned till bildkanten.
-                if (segment.position.z < PlayerZ - corridorLength + 24f)
+                if (segment.position.z < backLimit)
                     segment.position += Vector3.forward * corridorLength;
             }
         }
@@ -245,10 +346,12 @@ namespace KinectKids3D
             GreveGastAction action = ParseAction(cue.action);
             if (action != GreveGastAction.None)
             {
+                if (cue.time < GameplayStartTime || song.SongTime < GameplayStartTime) return;
                 warningSymbol = Symbol(action);
                 warningUntil = cue.time + cue.duration;
                 effects.PlayOneShot(warningTone);
                 SpawnObstacle(cue, action);
+                if (greveAnimation != null && chase > 0.68f) greveAnimation.PlayReach();
             }
             else if (cue.kind == "scare")
             {
@@ -260,14 +363,45 @@ namespace KinectKids3D
         private void OnCue(GreveGastCue cue)
         {
             GreveGastAction action = ParseAction(cue.action);
-            if (action != GreveGastAction.None)
+            if (action != GreveGastAction.None && cue.time >= GameplayStartTime)
                 pending.Add(new PendingAction { Cue = cue });
+            if (greveAnimation != null)
+            {
+                switch (cue.kind)
+                {
+                    case "gast_run":
+                        greveAnimation.SetRun(true);
+                        break;
+                    case "gast_closer":
+                        greveAnimation.SetRun(true);
+                        scriptedApproachUntil = song.SongTime + Mathf.Max(2f, cue.duration);
+                        break;
+                    case "gast_stumble":
+                        greveAnimation.PlayStumble();
+                        break;
+                    case "gast_dance":
+                        greveAnimation.PlayDance();
+                        break;
+                    case "gast_reach":
+                        greveAnimation.PlayReach();
+                        break;
+                    case "gast_catch":
+                        greveAnimation.PlayCatch();
+                        break;
+                }
+            }
             if (cue.kind == "reveal" || cue.kind == "scare")
             {
                 chase = Mathf.Clamp01(chase + 0.07f);
                 feedback = "BU!";
                 feedbackColor = new Color(0.9f, 0.35f, 1f);
                 feedbackUntil = song.SongTime + 0.65f;
+                if (greveAnimation != null)
+                {
+                    if (cue.kind == "reveal") greveAnimation.PlayDance();
+                    else greveAnimation.PlayStumble();
+                }
+                if (cue.kind == "scare") SpawnAtmosphereScare(cue);
             }
         }
 
@@ -286,6 +420,7 @@ namespace KinectKids3D
                     feedback = "★";
                     feedbackColor = new Color(0.35f, 1f, 0.66f);
                     feedbackUntil = now + 0.75f;
+                    if (greveAnimation != null) greveAnimation.PlayStumble();
                 }
                 else if (now > item.Cue.time + item.Cue.duration)
                 {
@@ -294,6 +429,11 @@ namespace KinectKids3D
                     feedback = "!";
                     feedbackColor = new Color(1f, 0.34f, 0.28f);
                     feedbackUntil = now + 0.75f;
+                    if (greveAnimation != null)
+                    {
+                        if (chase > 0.9f) greveAnimation.PlayCatch();
+                        else greveAnimation.PlayReach();
+                    }
                 }
             }
         }
@@ -302,13 +442,23 @@ namespace KinectKids3D
         {
             GameObject root = new GameObject("Hinder " + cue.id);
             if (action == GreveGastAction.Jump)
-                Cube("Lagt hinder", root.transform, new Vector3(0, 0.35f, 0), new Vector3(13.8f, 0.7f, 0.7f), danger);
+            {
+                jumpObstacleCounter++;
+                if ((jumpObstacleCounter & 1) == 0)
+                {
+                    Cube("Golvgrop", root.transform, new Vector3(0, 0.035f, 0), new Vector3(23.5f, 0.06f, 4.2f), pit);
+                    Cube("Framre kant", root.transform, new Vector3(0, 0.075f, 2.08f), new Vector3(23.5f, 0.12f, 0.16f), danger);
+                    Cube("Bakre kant", root.transform, new Vector3(0, 0.075f, -2.08f), new Vector3(23.5f, 0.12f, 0.16f), danger);
+                }
+                else
+                    Cube("Lagt hinder", root.transform, new Vector3(0, 0.45f, 0), new Vector3(23.5f, 0.9f, 0.8f), danger);
+            }
             else if (action == GreveGastAction.Duck)
-                Cube("Hog bjalk", root.transform, new Vector3(0, 2.05f, 0), new Vector3(13.8f, 0.75f, 0.8f), danger);
+                Cube("Hog bjalk", root.transform, new Vector3(0, 2.05f, 0), new Vector3(23.5f, 0.75f, 0.8f), danger);
             else if (action == GreveGastAction.Left)
-                Cube("Blockering mitten och hoger", root.transform, new Vector3(-2.2f, 1.2f, 0), new Vector3(8.1f, 2.4f, 0.8f), danger);
+                Cube("Blockering mitten och hoger", root.transform, new Vector3(-3.75f, 1.2f, 0), new Vector3(14f, 2.4f, 0.8f), danger);
             else if (action == GreveGastAction.Right)
-                Cube("Blockering vanster och mitten", root.transform, new Vector3(2.2f, 1.2f, 0), new Vector3(8.1f, 2.4f, 0.8f), danger);
+                Cube("Blockering vanster och mitten", root.transform, new Vector3(3.75f, 1.2f, 0), new Vector3(14f, 2.4f, 0.8f), danger);
             else
                 return;
             root.transform.position = new Vector3(0f, 0f, ObstacleStartZ);
@@ -343,6 +493,10 @@ namespace KinectKids3D
         {
             paused = !paused;
             if (song != null) song.TogglePause();
+            if (ambience != null)
+            {
+                if (paused) ambience.Pause(); else ambience.UnPause();
+            }
         }
 
         private void OnGUI()
@@ -376,7 +530,7 @@ namespace KinectKids3D
 
         private void DrawDebug(float now)
         {
-            GUI.Box(new Rect(20, 64, 380, 205), "TIDSLINJEDEBUG (F2)");
+            GUI.Box(new Rect(20, 64, 430, 270), "TIDSLINJEDEBUG (F2)");
             GUI.Label(new Rect(35, 92, 350, 90),
                 "Tid: " + now.ToString("0.00") + " / " + (song?.Source?.clip?.length ?? 0f).ToString("0.00") +
                 "\nSektion: " + section + "\nKropp: " + body.Current +
@@ -392,11 +546,20 @@ namespace KinectKids3D
                 if (next != null) song.Seek(Mathf.Max(0, next.time - next.warning - 0.3f));
             }
             GUI.Label(new Rect(35, 226, 340, 35), "F3 = forsta refrangen  |  PgDn = nasta handelse");
+            if (greveAnimation != null)
+            {
+                if (GUI.Button(new Rect(35, 270, 58, 30), "Idle")) greveAnimation.SetRun(false);
+                if (GUI.Button(new Rect(97, 270, 58, 30), "Run")) greveAnimation.SetRun(true);
+                if (GUI.Button(new Rect(159, 270, 62, 30), "Reach")) greveAnimation.PlayReach();
+                if (GUI.Button(new Rect(225, 270, 72, 30), "Stumble")) greveAnimation.PlayStumble();
+                if (GUI.Button(new Rect(301, 270, 62, 30), "Dance")) greveAnimation.PlayDance();
+                if (GUI.Button(new Rect(367, 270, 62, 30), "Catch")) greveAnimation.PlayCatch();
+            }
         }
 
         private void DrawPause()
         {
-            float w = 420f, h = 270f;
+            float w = 420f, h = 335f;
             Rect rect = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
             GUI.Box(rect, "PAUS");
             if (GUI.Button(new Rect(rect.x + 60, rect.y + 60, 300, 48), "FORTSATT")) TogglePause();
@@ -406,8 +569,102 @@ namespace KinectKids3D
                 chase = 0.5f;
                 TogglePause();
             }
-            if (GUI.Button(new Rect(rect.x + 60, rect.y + 180, 300, 48), "TILL GEMENSAM MENY"))
+            string playerView = skeletonMode ? "SPELARE: SKELETT" : "SPELARE: FIGUR";
+            if (GUI.Button(new Rect(rect.x + 60, rect.y + 180, 300, 48), playerView))
+                TogglePlayerView();
+            if (GUI.Button(new Rect(rect.x + 60, rect.y + 240, 300, 48), "TILL GEMENSAM MENY"))
                 LauncherReturnService.ReturnToLauncher();
+        }
+
+        private void AddHauntedDecoration(Transform segment, int index)
+        {
+            int side = (index & 1) == 0 ? -1 : 1;
+            float x = side * 11.6f;
+
+            // Pelare, nischer och trasiga ramar fran Spokjaktens slottsmiljo.
+            Cube("Fuktig stenpelare", segment, new Vector3(side * 13.75f, 4.6f, 0f),
+                new Vector3(0.85f, 8.8f, 1.15f), stone);
+            if (index % 3 == 0)
+            {
+                Material oldWood = DarkRideWorld.TexturedMaterial(new Color(0.28f, 0.13f, 0.055f),
+                    HauntedTextureFactory.OldWood(90 + index), 0f);
+                Cube("Gammal tavla", segment, new Vector3(side * 14.05f, 6.1f, 0.3f),
+                    new Vector3(0.18f, 2.6f, 2.1f), oldWood);
+                Cube("Morkt portratt", segment, new Vector3(side * 13.93f, 6.1f, 0.3f),
+                    new Vector3(0.10f, 1.95f, 1.5f), purple);
+            }
+
+            if (index % 4 == 0)
+            {
+                GameObject armorRoot = new GameObject("Hemsokt riddarrustning");
+                armorRoot.transform.SetParent(segment, false);
+                ImportedModelFactory.Create("Models/QuaterniusKnight/KnightCharacter", armorRoot.transform,
+                    "Animerad rustning", new Vector3(x, 1.65f, 0f), 3.3f,
+                    Quaternion.Euler(0f, 180f, 0f), "idle", "stand");
+                HauntedProp.Attach(armorRoot, HauntedMotion.Bob, 0.035f, 0.75f);
+            }
+            else if (index % 4 == 1)
+            {
+                string[] graves =
+                {
+                    "Models/KenneyGraveyard/gravestone-broken",
+                    "Models/KenneyGraveyard/gravestone-cross-large",
+                    "Models/KenneyGraveyard/gravestone-decorative"
+                };
+                ImportedModelFactory.Create(graves[index % graves.Length], segment, "Gammal gravsten",
+                    new Vector3(x, 1.05f, 0f), 2.5f, Quaternion.Euler(0f, 180f, side * 4f));
+            }
+            else if (index % 4 == 2)
+            {
+                GameObject swarm = new GameObject("Fladdermoss i taket");
+                swarm.transform.SetParent(segment, false);
+                for (int batIndex = 0; batIndex < 3; batIndex++)
+                {
+                    GameObject batRoot = new GameObject("Fladdermus " + batIndex);
+                    batRoot.transform.SetParent(swarm.transform, false);
+                    ImportedModelFactory.Create("Models/Quaternius/Bat", batRoot.transform,
+                        "Animerad fladdermus", new Vector3(x + batIndex * -side * 0.75f,
+                            11.5f + batIndex * 0.45f, batIndex * 0.5f), 1.25f,
+                        Quaternion.Euler(0f, 180f, 0f), "fly", "flying", "idle");
+                    HauntedProp.Attach(batRoot, HauntedMotion.Flutter, 0.30f, 2.4f + batIndex * 0.35f);
+                }
+            }
+            else
+            {
+                GameObject ghostRoot = new GameObject("Spoke i slottsgangen");
+                ghostRoot.transform.SetParent(segment, false);
+                ImportedModelFactory.Create("Models/Quaternius/Ghost", ghostRoot.transform,
+                    "Smygande spoke", new Vector3(x, 3.0f, 0f), 3.1f,
+                    Quaternion.Euler(0f, 180f, 0f), "fly", "idle");
+                HauntedProp.Attach(ghostRoot, HauntedMotion.Bob, 0.32f, 1.35f);
+            }
+
+            if (index % 5 == 3)
+            {
+                GameObject spiderRoot = new GameObject("Takspindel");
+                spiderRoot.transform.SetParent(segment, false);
+                ImportedModelFactory.Create("Models/Quaternius/Spider", spiderRoot.transform,
+                    "Animerad takspindel", new Vector3(side * 5.5f, 14.7f, -2f), 2.4f,
+                    Quaternion.Euler(180f, 0f, 0f), "walk", "attack", "idle");
+                HauntedProp.Attach(spiderRoot, HauntedMotion.Flutter, 0.12f, 1.8f);
+            }
+        }
+
+        private void SpawnAtmosphereScare(GreveGastCue cue)
+        {
+            GameObject scare = new GameObject("Tidsstyrd skramsel - " + cue.id);
+            scare.transform.SetParent(transform, false);
+            float side = cue.id != null && cue.id.IndexOf("left", StringComparison.OrdinalIgnoreCase) >= 0 ? -1f : 1f;
+            GameObject ghost = ImportedModelFactory.Create("Models/Quaternius/Ghost", scare.transform,
+                "Spoke som kastar sig fram", new Vector3(side * 8.5f, 3.2f, -1.5f), 4.2f,
+                Quaternion.Euler(0f, 180f, 0f), "fly", "attack", "idle");
+            if (ghost == null)
+                ghost = Cube("Spokskugga", scare.transform, new Vector3(side * 8.5f, 3.2f, -1.5f),
+                    new Vector3(2.2f, 4.4f, 0.4f), purple);
+            HauntedProp.Attach(scare, HauntedMotion.Flutter, 0.85f, 3.8f);
+            AudioClip moan = Resources.Load<AudioClip>("Audio/SFX/Creatures/ghost_moan_03");
+            if (moan != null) effects.PlayOneShot(moan, 0.65f);
+            Destroy(scare, Mathf.Max(2.2f, cue.duration + 1.1f));
         }
 
         private void AddTorch(Transform parent, float x, float z)
@@ -421,9 +678,10 @@ namespace KinectKids3D
             flame.GetComponent<Renderer>().material = MakeMaterial(new Color(1f, 0.38f, 0.04f), new Color(1f, 0.18f, 0.01f));
             Light light = flame.AddComponent<Light>();
             light.type = LightType.Point;
-            light.range = 8f;
-            light.intensity = 2.6f;
+            light.range = 17f;
+            light.intensity = 4.25f;
             light.color = new Color(1f, 0.38f, 0.12f);
+            HauntedProp.Attach(flame, HauntedMotion.Flicker, 0f, UnityEngine.Random.Range(7f, 11f));
         }
 
         private void BuildPlayerCharacter()
@@ -436,9 +694,11 @@ namespace KinectKids3D
             player = new GameObject("Spelaren - springer mot kameran").transform;
             player.position = new Vector3(0f, 0f, PlayerZ);
             player.rotation = Quaternion.Euler(0f, 180f, 0f);
+            playerAvatarVisual = new GameObject("Figur");
+            playerAvatarVisual.transform.SetParent(player, false);
             GameObject bodyObject = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             bodyObject.name = "Kropp";
-            bodyObject.transform.SetParent(player, false);
+            bodyObject.transform.SetParent(playerAvatarVisual.transform, false);
             bodyObject.transform.localPosition = new Vector3(0f, 1.02f, 0f);
             bodyObject.transform.localScale = new Vector3(0.62f, 0.68f, 0.44f);
             bodyObject.GetComponent<Renderer>().material = clothes;
@@ -446,7 +706,7 @@ namespace KinectKids3D
 
             GameObject head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             head.name = "Huvud med ansikte mot kameran";
-            head.transform.SetParent(player, false);
+            head.transform.SetParent(playerAvatarVisual.transform, false);
             head.transform.localPosition = new Vector3(0f, 2.08f, -0.02f);
             head.transform.localScale = new Vector3(0.84f, 0.9f, 0.78f);
             head.GetComponent<Renderer>().material = skin;
@@ -455,10 +715,52 @@ namespace KinectKids3D
             FacePart("Hoger oga", head.transform, new Vector3(0.19f, 0.10f, -0.47f), new Vector3(0.16f, 0.20f, 0.07f), dark);
             FacePart("Leende", head.transform, new Vector3(0f, -0.20f, -0.49f), new Vector3(0.31f, 0.07f, 0.06f), dark);
 
-            playerLeftArm = Limb("Vanster arm", player, new Vector3(-0.56f, 1.45f, 0f), 0.72f, skin, false);
-            playerRightArm = Limb("Hoger arm", player, new Vector3(0.56f, 1.45f, 0f), 0.72f, skin, false);
-            playerLeftLeg = Limb("Vanster ben", player, new Vector3(-0.24f, 0.58f, 0f), 0.82f, shoes, true);
-            playerRightLeg = Limb("Hoger ben", player, new Vector3(0.24f, 0.58f, 0f), 0.82f, shoes, true);
+            playerLeftArm = Limb("Vanster arm", playerAvatarVisual.transform, new Vector3(-0.56f, 1.45f, 0f), 0.72f, skin, false);
+            playerRightArm = Limb("Hoger arm", playerAvatarVisual.transform, new Vector3(0.56f, 1.45f, 0f), 0.72f, skin, false);
+            playerLeftLeg = Limb("Vanster ben", playerAvatarVisual.transform, new Vector3(-0.24f, 0.58f, 0f), 0.82f, shoes, true);
+            playerRightLeg = Limb("Hoger ben", playerAvatarVisual.transform, new Vector3(0.24f, 0.58f, 0f), 0.82f, shoes, true);
+
+            BuildSkeletonCharacter();
+            skeletonMode = PlayerPrefs.GetInt("GreveGastPlayerView", 0) == 1;
+            ApplyPlayerView();
+        }
+
+        private void BuildSkeletonCharacter()
+        {
+            Material bones = MakeMaterial(new Color(0.32f, 0.9f, 1f), new Color(0.08f, 0.42f, 0.62f));
+            playerSkeletonVisual = new GameObject("Skelett");
+            playerSkeletonVisual.transform.SetParent(player, false);
+            FacePart("Huvud", playerSkeletonVisual.transform, new Vector3(0f, 2.08f, 0f), new Vector3(0.58f, 0.62f, 0.40f), bones);
+            Cube("Ryggrad", playerSkeletonVisual.transform, new Vector3(0f, 1.22f, 0f), new Vector3(0.13f, 1.15f, 0.13f), bones);
+            Cube("Axlar", playerSkeletonVisual.transform, new Vector3(0f, 1.62f, 0f), new Vector3(1.15f, 0.12f, 0.12f), bones);
+            Cube("Hoft", playerSkeletonVisual.transform, new Vector3(0f, 0.68f, 0f), new Vector3(0.58f, 0.12f, 0.12f), bones);
+            skeletonLeftArm = ThinLimb("Vanster skelettarm", playerSkeletonVisual.transform, new Vector3(-0.56f, 1.58f, 0f), 0.82f, bones);
+            skeletonRightArm = ThinLimb("Hoger skelettarm", playerSkeletonVisual.transform, new Vector3(0.56f, 1.58f, 0f), 0.82f, bones);
+            skeletonLeftLeg = ThinLimb("Vanster skelettben", playerSkeletonVisual.transform, new Vector3(-0.20f, 0.68f, 0f), 0.88f, bones);
+            skeletonRightLeg = ThinLimb("Hoger skelettben", playerSkeletonVisual.transform, new Vector3(0.20f, 0.68f, 0f), 0.88f, bones);
+        }
+
+        private static Transform ThinLimb(string limbName, Transform parent, Vector3 joint, float length, Material material)
+        {
+            Transform pivot = new GameObject(limbName + " led").transform;
+            pivot.SetParent(parent, false);
+            pivot.localPosition = joint;
+            Cube(limbName, pivot, new Vector3(0f, -length * 0.5f, 0f), new Vector3(0.11f, length, 0.11f), material);
+            return pivot;
+        }
+
+        private void TogglePlayerView()
+        {
+            skeletonMode = !skeletonMode;
+            PlayerPrefs.SetInt("GreveGastPlayerView", skeletonMode ? 1 : 0);
+            PlayerPrefs.Save();
+            ApplyPlayerView();
+        }
+
+        private void ApplyPlayerView()
+        {
+            if (playerAvatarVisual != null) playerAvatarVisual.SetActive(!skeletonMode);
+            if (playerSkeletonVisual != null) playerSkeletonVisual.SetActive(skeletonMode);
         }
 
         private static Transform Limb(string limbName, Transform parent, Vector3 joint, float length,
