@@ -2,7 +2,7 @@ using SherpaOnnx;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: SupertonicVoiceGenerator <model-directory> <output-directory> [speaker-id] [--all-prompts|--menu-prompts]");
+    Console.Error.WriteLine("Usage: SupertonicVoiceGenerator <model-directory> <output-directory> [speaker-id] [--all-prompts|--menu-prompts|--feedback-prompts|--number-prompts|--pronunciation-fixes]");
     return 2;
 }
 
@@ -27,6 +27,9 @@ int lastSpeaker = args.Length >= 3 ? firstSpeaker : tts.NumSpeakers - 1;
 const string sampleText = "Välkommen till Kinect Kids! Vilken bokstav börjar ordet äpple med?";
 bool generateAllPrompts = args.Any(item => item == "--all-prompts");
 bool generateMenuPrompts = args.Any(item => item == "--menu-prompts");
+bool generateFeedbackPrompts = args.Any(item => item == "--feedback-prompts");
+bool generateNumberPrompts = args.Any(item => item == "--number-prompts");
+bool generatePronunciationFixes = args.Any(item => item == "--pronunciation-fixes");
 
 Console.WriteLine($"Supertonic-röster: {tts.NumSpeakers}");
 for (int speaker = firstSpeaker; speaker <= lastSpeaker; speaker++)
@@ -38,9 +41,15 @@ for (int speaker = firstSpeaker; speaker <= lastSpeaker; speaker++)
         Speed = 1.16f
     };
     generation.Extra["lang"] = "sv";
-    if (generateAllPrompts || generateMenuPrompts)
+    if (generateAllPrompts || generateMenuPrompts || generateFeedbackPrompts || generateNumberPrompts || generatePronunciationFixes)
     {
-        var prompts = generateMenuPrompts ? CreateMenuPrompts() : CreatePrompts();
+        var prompts = generateMenuPrompts
+            ? CreateMenuPrompts()
+            : generateFeedbackPrompts
+                ? CreateFeedbackPrompts()
+                : generateNumberPrompts ? CreatePrompts().Where(item => item.Key.StartsWith("number_")).ToDictionary(item => item.Key, item => item.Value)
+                : generatePronunciationFixes ? CreatePronunciationFixes()
+                : CreatePrompts();
         foreach (var prompt in prompts)
             Generate(tts, generation, prompt.Value, Path.Combine(outputDirectory, prompt.Key + ".wav"));
     }
@@ -71,9 +80,9 @@ static IReadOnlyDictionary<string, string> CreatePrompts()
         ["shape_circle"] = "Hitta cirkeln!",
         ["shape_triangle"] = "Hitta triangeln!",
         ["shape_square"] = "Hitta kvadraten!",
-        ["shape_star"] = "Hitta stjärnan!",
+        ["shape_star"] = "Hitta skärnan!",
         ["pattern_0"] = "Cirkel, kvadrat, cirkel, kvadrat. Vad kommer sedan?",
-        ["pattern_1"] = "Triangel, triangel, stjärna, triangel, triangel. Vad kommer sedan?",
+        ["pattern_1"] = "Triangel, triangel, skärna, triangel, triangel. Vad kommer sedan?",
         ["pattern_2"] = "Ett, två, tre, fyra. Vad kommer sedan?",
         ["pattern_3"] = "Två, fyra, sex, åtta. Vad kommer sedan?",
         ["pattern_4"] = "A, B, A, B. Vad kommer sedan?",
@@ -84,14 +93,15 @@ static IReadOnlyDictionary<string, string> CreatePrompts()
         ["simon_duck"] = "Simon säger: ducka!",
         ["simon_ready"] = "Gör dig redo!",
         ["correct"] = "Rätt! Bra jobbat.",
-        ["retry"] = "Bra försök! Prova ett annat svar!",
+        ["retry"] = "Fel svar! Tre poäng bort. Försök igen!",
+        ["missed_answer"] = "Oj, det rätta svaret åkte förbi! Det kommer tillbaka senare!",
         ["great_next"] = "Snyggt! Nästa rörelse!",
         ["new_movement"] = "Nästan! Vi tar en ny rörelse!",
         ["balloon_instruction"] = "Rör en handring in i ballongerna för att smälla dem!"
     };
 
     for (int number = 0; number <= 20; number++)
-        prompts["number_" + number] = number.ToString();
+        prompts["number_" + number] = NumberWord(number) + ".";
 
     var words = new Dictionary<string, string>
     {
@@ -117,4 +127,25 @@ static Dictionary<string, string> CreateMenuPrompts() => new Dictionary<string, 
     ["menu_simon"] = "Simon säger!",
     ["menu_balloons"] = "Ballongjakten!",
     ["menu_spooky"] = "Spökjakten!"
+};
+
+static string NumberWord(int number)
+{
+    string words = "noll|ett|två|tre|fyra|fem|sex|sju|åtta|nio|tio";
+    words += "|elva|tolv|tretton|fjorton|femton|sexton|sjutton|arton|nitton|tjugo";
+    return words.Split('|')[number];
+}
+
+static Dictionary<string, string> CreateFeedbackPrompts() => new Dictionary<string, string>
+{
+    ["retry"] = "Fel svar! Tre poäng bort. Försök igen!",
+    ["missed_answer"] = "Oj, det rätta svaret åkte förbi! Det kommer tillbaka senare!"
+};
+
+// Supertonic läser den fonetiska stavningen "skärna" med det svenska
+// sj-ljud som ordet "stjärna" ska ha. Filnamnen och texten i spelet är oförändrade.
+static Dictionary<string, string> CreatePronunciationFixes() => new Dictionary<string, string>
+{
+    ["shape_star"] = "Hitta skärnan!",
+    ["pattern_1"] = "Triangel, triangel, skärna, triangel, triangel. Vad kommer sedan?"
 };

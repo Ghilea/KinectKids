@@ -74,6 +74,7 @@
                         <TextBlock x:Name="SensorText" Text="Letar efter Kinect…" Foreground="White" FontSize="14" FontWeight="SemiBold" />
                     </StackPanel>
                 </Border>
+                <Button x:Name="CameraModeButton" Content="Bild: kamera" Style="{StaticResource SmallButton}" Click="CameraModeButton_Click" Margin="0,0,10,0" />
                 <Button x:Name="MenuMusicButton" Content="♫ Musik: på" Style="{StaticResource SmallButton}" Click="MenuMusicButton_Click" Margin="0,0,10,0" />
                 <Button x:Name="FullscreenButton" Content="Helskärm" Style="{StaticResource SmallButton}" Click="FullscreenButton_Click" />
             </StackPanel>
@@ -160,6 +161,7 @@
                         <TextBlock Text="De stora färgade ringarna är dina händer." Foreground="#FFCF5A" FontSize="16" FontWeight="SemiBold" Margin="0,7,0,0" HorizontalAlignment="Center" />
                     </StackPanel>
                     <Grid Grid.Row="1" Margin="10" ClipToBounds="True">
+                        <Image x:Name="CalibrationCameraImage" Stretch="UniformToFill" Opacity="0.78" Visibility="Collapsed" />
                         <Canvas x:Name="CalibrationSkeletonCanvas" Background="Transparent" />
                         <Canvas x:Name="CalibrationCanvas" Background="Transparent">
                             <Ellipse x:Name="PlayerOneLeftHand" Width="72" Height="72" Fill="#CC5EAEFF" Stroke="#FFFFFF" StrokeThickness="5" Visibility="Collapsed" />
@@ -177,7 +179,14 @@
         </Grid>
 
         <Grid x:Name="GamePanel" Grid.RowSpan="2" Visibility="Collapsed" Background="#10213D" Panel.ZIndex="30">
-            <Border x:Name="BalloonBackdrop" Background="#102B46" />
+            <Border x:Name="BalloonBackdrop" Background="#102B46">
+                <Grid>
+                    <Image x:Name="GameBackgroundImage" Source="Assets/learning-game-background.png" Stretch="UniformToFill" />
+                    <Border x:Name="GameThemeTint" Background="#66102B46" />
+                    <Border Background="#28071324" />
+                </Grid>
+            </Border>
+            <Image x:Name="PlayerCameraImage" Stretch="UniformToFill" Opacity="0.72" Visibility="Collapsed" IsHitTestVisible="False" />
             <Canvas x:Name="GameSkeletonCanvas" Background="Transparent" ClipToBounds="True" IsHitTestVisible="False" Opacity="0.52" />
             <Canvas x:Name="Playfield" Background="Transparent" ClipToBounds="True" />
 

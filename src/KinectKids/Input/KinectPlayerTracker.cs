@@ -12,12 +12,14 @@ namespace KinectKids.Input
     {
         private KinectSensor sensor;
         private Skeleton[] skeletons;
+        private int colorFrameNumber;
         private readonly Dictionary<long, CandidateState> candidates = new Dictionary<long, CandidateState>();
         private readonly DispatcherTimer reconnectTimer;
         private string status = "Letar efter Kinect…";
 
         public event EventHandler<IReadOnlyList<TrackedPlayer>> PlayersChanged;
         public event EventHandler<string> StatusChanged;
+        public event EventHandler<ColorFrameEventArgs> ColorFrameReady;
 
         public bool IsConnected => sensor != null && sensor.Status == KinectStatus.Connected;
         public string Status => status;
@@ -59,6 +61,7 @@ namespace KinectKids.Input
             {
                 sensor = available;
                 sensor.DepthStream.Enable(DepthImageFormat.Resolution320x240Fps30);
+                sensor.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
                 sensor.SkeletonStream.Enable(new TransformSmoothParameters
                 {
                     Smoothing = 0.55f,
@@ -69,6 +72,7 @@ namespace KinectKids.Input
                 });
                 skeletons = new Skeleton[sensor.SkeletonStream.FrameSkeletonArrayLength];
                 sensor.SkeletonFrameReady += OnSkeletonFrameReady;
+                sensor.ColorFrameReady += OnColorFrameReady;
                 sensor.Start();
                 SetStatus("Kinect ansluten");
             }
@@ -85,6 +89,7 @@ namespace KinectKids.Input
             try
             {
                 sensor.SkeletonFrameReady -= OnSkeletonFrameReady;
+                sensor.ColorFrameReady -= OnColorFrameReady;
                 if (sensor.IsRunning) sensor.Stop();
             }
             catch (InvalidOperationException)
@@ -94,6 +99,21 @@ namespace KinectKids.Input
             sensor = null;
             skeletons = null;
             candidates.Clear();
+            colorFrameNumber = 0;
+        }
+
+        private void OnColorFrameReady(object sender, ColorImageFrameReadyEventArgs e)
+        {
+            // Tio bilder per sekund räcker för spelvyn och håller UI-tråden lätt.
+            colorFrameNumber++;
+            if (colorFrameNumber % 3 != 0) return;
+            using (var frame = e.OpenColorImageFrame())
+            {
+                if (frame == null) return;
+                var pixels = new byte[frame.PixelDataLength];
+                frame.CopyPixelDataTo(pixels);
+                ColorFrameReady?.Invoke(this, new ColorFrameEventArgs(pixels, frame.Width, frame.Height));
+            }
         }
 
         private void OnSensorStatusChanged(object sender, StatusChangedEventArgs e)

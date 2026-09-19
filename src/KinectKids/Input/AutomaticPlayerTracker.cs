@@ -21,6 +21,7 @@ namespace KinectKids.Input
 
         public event EventHandler<IReadOnlyList<TrackedPlayer>> PlayersChanged;
         public event EventHandler<string> StatusChanged;
+        public event EventHandler<ColorFrameEventArgs> ColorFrameReady;
 
         public bool IsConnected => kinect.IsConnected;
         public string Status => kinect.IsConnected
@@ -31,6 +32,7 @@ namespace KinectKids.Input
         {
             kinect.PlayersChanged += OnKinectPlayersChanged;
             kinect.StatusChanged += OnKinectStatusChanged;
+            kinect.ColorFrameReady += OnColorFrameReady;
             mouse.PlayersChanged += OnMousePlayersChanged;
             kinect.Start();
             mouse.Start();
@@ -43,6 +45,7 @@ namespace KinectKids.Input
             mouse.Stop();
             kinect.PlayersChanged -= OnKinectPlayersChanged;
             kinect.StatusChanged -= OnKinectStatusChanged;
+            kinect.ColorFrameReady -= OnColorFrameReady;
             mouse.PlayersChanged -= OnMousePlayersChanged;
         }
 
@@ -59,6 +62,11 @@ namespace KinectKids.Input
         private void OnKinectStatusChanged(object sender, string status)
         {
             StatusChanged?.Invoke(this, Status);
+        }
+
+        private void OnColorFrameReady(object sender, ColorFrameEventArgs frame)
+        {
+            ColorFrameReady?.Invoke(this, frame);
         }
 
         public void Dispose() => Stop();

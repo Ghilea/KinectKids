@@ -10,8 +10,8 @@ using KinectKids.Models;
 namespace KinectKids.Game
 {
     /// <summary>
-    /// Gemensam spelplan för korta pedagogiska valspel. Barnet slår på ett
-    /// stort svarskort med valfri hand. Fel svar ger aldrig minuspoäng.
+    /// Gemensam spelplan för korta pedagogiska valspel. Barnet fångar ett
+    /// fallande svarskort med valfri hand. Fel svar ger minuspoäng.
     /// </summary>
     public abstract class LearningChoiceGame : IGame
     {
@@ -24,9 +24,13 @@ namespace KinectKids.Game
         private readonly Canvas canvas;
         private readonly Random random = new Random();
         private readonly List<ChoiceCard> cards = new List<ChoiceCard>();
+        private readonly Queue<LearningQuestion> missedQuestions = new Queue<LearningQuestion>();
+        private readonly Dictionary<int, Point> lockedHands = new Dictionary<int, Point>();
         private LearningQuestion question;
         private double nextQuestionDelay;
         private int answeredQuestions;
+        private int freshQuestionsBeforeRetry;
+        private DateTime inputArmedAt;
 
         protected LearningChoiceGame(Canvas canvas)
         {
@@ -59,7 +63,10 @@ namespace KinectKids.Game
             CurrentScore = 0;
             answeredQuestions = 0;
             nextQuestionDelay = 0;
+            freshQuestionsBeforeRetry = 0;
             question = null;
+            missedQuestions.Clear();
+            lockedHands.Clear();
             ClearCards();
         }
 
@@ -77,20 +84,37 @@ namespace KinectKids.Game
             for (int index = 0; index < cards.Count; index++)
             {
                 ChoiceCard card = cards[index];
-                card.Y = card.BaseY + Math.Sin(time * 1.45 + index * 0.8) * 7;
+                card.Y += card.Speed * elapsedSeconds;
+                card.X = card.BaseX + Math.Sin(time * card.SwayRate + card.SwayPhase) * card.SwayAmplitude;
                 Position(card);
             }
+
+            ChoiceCard correct = cards.FirstOrDefault(item =>
+                string.Equals(item.Answer, question.CorrectAnswer, StringComparison.Ordinal));
+            if (correct != null && correct.Y - correct.Height / 2 > canvas.ActualHeight)
+                MissQuestion();
         }
 
         public int PopAt(Point point, double hitRadius, int playerIndex)
         {
-            if (!IsActive || question == null) return 0;
+            if (!IsActive) return 0;
+            Point lockedAt;
+            if (lockedHands.TryGetValue(playerIndex, out lockedAt))
+            {
+                if (Distance(point, lockedAt) < 55) return 0;
+                lockedHands.Remove(playerIndex);
+            }
+            if (question == null) return 0;
+            if (DateTime.UtcNow < inputArmedAt) return 0;
 
             ChoiceCard hit = cards
                 .Where(item => item.IsEnabled)
                 .OrderBy(item => Distance(point, item))
                 .FirstOrDefault(item => Distance(point, item) <= item.HitRadius + hitRadius);
             if (hit == null) return 0;
+            // Kortet kan väljas direkt när det kommit helt in på spelplanen.
+            if (hit.Y - hit.Height / 2 < 4) return 0;
+            lockedHands[playerIndex] = point;
 
             if (string.Equals(hit.Answer, question.CorrectAnswer, StringComparison.Ordinal))
             {
@@ -104,10 +128,10 @@ namespace KinectKids.Game
                 return points;
             }
 
-            hit.IsEnabled = false;
-            hit.Container.Opacity = 0.25;
-            Raise("Bra försök! Prova ett annat svar.", 0, playerIndex, "retry");
-            return 0;
+            CurrentScore = Math.Max(0, CurrentScore - 3);
+            RemoveCard(hit);
+            Raise("Fel svar. Tre poäng bort.", -3, playerIndex, "retry");
+            return -3;
         }
 
         public void Render(DrawingContext context) { }
@@ -122,11 +146,21 @@ namespace KinectKids.Game
             }
 
             ClearCards();
-            question = CreateLearningQuestion(random, 1 + answeredQuestions / 4);
+            if (missedQuestions.Count > 0 && freshQuestionsBeforeRetry <= 0)
+            {
+                question = missedQuestions.Dequeue();
+                freshQuestionsBeforeRetry = missedQuestions.Count > 0 ? random.Next(1, 3) : 0;
+            }
+            else
+            {
+                question = CreateLearningQuestion(random, 1 + answeredQuestions / 4);
+                if (missedQuestions.Count > 0) freshQuestionsBeforeRetry--;
+            }
             double width = Math.Max(145, Math.Min(205, canvas.ActualWidth * 0.18));
             double height = Math.Max(120, Math.Min(165, canvas.ActualHeight * 0.22));
-            double top = Math.Max(210, canvas.ActualHeight * 0.35);
-            double lower = Math.Min(canvas.ActualHeight - height / 2 - 45, top + height * 1.05);
+            double[] lanes = { 0.16, 0.38, 0.62, 0.84 };
+            lanes = lanes.OrderBy(item => random.Next()).ToArray();
+            double baseSpeed = 73 + Math.Min(28, answeredQuestions * 1.35);
 
             for (int index = 0; index < question.Options.Count; index++)
             {
@@ -162,13 +196,19 @@ namespace KinectKids.Game
                         Color = Colors.Black
                     }
                 };
+                double x = canvas.ActualWidth * lanes[index] + random.Next(-9, 10);
+                x = Math.Max(width / 2 + 8, Math.Min(canvas.ActualWidth - width / 2 - 8, x));
                 var card = new ChoiceCard
                 {
                     Container = border,
                     Answer = answer,
-                    X = canvas.ActualWidth * (0.17 + index * 0.22),
-                    Y = index % 2 == 0 ? top : lower,
-                    BaseY = index % 2 == 0 ? top : lower,
+                    X = x,
+                    BaseX = x,
+                    Y = -height / 2 - random.Next(0, 65),
+                    Speed = baseSpeed + random.NextDouble() * 8 - 4,
+                    SwayAmplitude = random.Next(5, 16),
+                    SwayRate = 0.9 + random.NextDouble() * 0.8,
+                    SwayPhase = random.NextDouble() * Math.PI * 2,
                     Width = width,
                     Height = height,
                     IsEnabled = true
@@ -178,7 +218,24 @@ namespace KinectKids.Game
                 Position(card);
             }
 
+            inputArmedAt = DateTime.UtcNow.AddMilliseconds(650);
             Raise(Instruction, 0, 0, question.VoiceKey);
+        }
+
+        private void MissQuestion()
+        {
+            missedQuestions.Enqueue(question);
+            if (missedQuestions.Count == 1) freshQuestionsBeforeRetry = random.Next(2, 4);
+            Raise("Det rätta svaret missades och kommer tillbaka senare.", 0, 0, "missed_answer");
+            question = null;
+            nextQuestionDelay = 1.4;
+            ClearCards();
+        }
+
+        private void RemoveCard(ChoiceCard card)
+        {
+            cards.Remove(card);
+            canvas.Children.Remove(card.Container);
         }
 
         private void ClearCards()
@@ -197,6 +254,13 @@ namespace KinectKids.Game
         {
             double dx = point.X - card.X;
             double dy = point.Y - card.Y;
+            return Math.Sqrt(dx * dx + dy * dy);
+        }
+
+        private static double Distance(Point first, Point second)
+        {
+            double dx = first.X - second.X;
+            double dy = first.Y - second.Y;
             return Math.Sqrt(dx * dx + dy * dy);
         }
 
@@ -219,8 +283,12 @@ namespace KinectKids.Game
             public Border Container { get; set; }
             public string Answer { get; set; }
             public double X { get; set; }
+            public double BaseX { get; set; }
             public double Y { get; set; }
-            public double BaseY { get; set; }
+            public double Speed { get; set; }
+            public double SwayAmplitude { get; set; }
+            public double SwayRate { get; set; }
+            public double SwayPhase { get; set; }
             public double Width { get; set; }
             public double Height { get; set; }
             public bool IsEnabled { get; set; }

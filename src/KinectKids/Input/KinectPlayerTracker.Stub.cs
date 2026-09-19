@@ -11,6 +11,7 @@ namespace KinectKids.Input
     {
         public event EventHandler<IReadOnlyList<TrackedPlayer>> PlayersChanged;
         public event EventHandler<string> StatusChanged;
+        public event EventHandler<ColorFrameEventArgs> ColorFrameReady { add { } remove { } }
 
         public bool IsConnected => false;
         public string Status => "Kinect SDK-simulator";

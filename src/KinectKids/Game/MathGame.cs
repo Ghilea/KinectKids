@@ -27,9 +27,13 @@ namespace KinectKids.Game
         private readonly Canvas canvas;
         private readonly Random random = new Random();
         private readonly List<MathBalloon> balloons = new List<MathBalloon>();
+        private readonly Queue<MathQuestion> missedQuestions = new Queue<MathQuestion>();
+        private readonly Dictionary<int, Point> lockedHands = new Dictionary<int, Point>();
         private MathQuestion question;
         private double nextQuestionDelay;
         private int answeredQuestions;
+        private int freshQuestionsBeforeRetry;
+        private DateTime inputArmedAt;
 
         public MathGame(Canvas canvas)
         {
@@ -64,7 +68,10 @@ namespace KinectKids.Game
             CurrentScore = 0;
             answeredQuestions = 0;
             nextQuestionDelay = 0;
+            freshQuestionsBeforeRetry = 0;
             question = null;
+            missedQuestions.Clear();
+            lockedHands.Clear();
             ClearBalloons();
         }
 
@@ -83,19 +90,35 @@ namespace KinectKids.Game
             for (int index = 0; index < balloons.Count; index++)
             {
                 MathBalloon balloon = balloons[index];
-                balloon.Y = balloon.BaseY + Math.Sin(time * 1.7 + index * 0.9) * 10;
+                balloon.Y += balloon.Speed * elapsedSeconds;
+                balloon.X = balloon.BaseX + Math.Sin(time * balloon.SwayRate + balloon.SwayPhase) * balloon.SwayAmplitude;
                 Position(balloon);
             }
+
+            MathBalloon correct = balloons.FirstOrDefault(item => item.Answer == question.CorrectAnswer);
+            if (correct != null && correct.Y - correct.Radius > canvas.ActualHeight)
+                MissQuestion();
         }
 
         public int PopAt(Point point, double hitRadius, int playerIndex)
         {
-            if (!IsActive || question == null) return 0;
+            if (!IsActive) return 0;
+            Point lockedAt;
+            if (lockedHands.TryGetValue(playerIndex, out lockedAt))
+            {
+                if (Distance(point.X, point.Y, lockedAt.X, lockedAt.Y) < 55) return 0;
+                lockedHands.Remove(playerIndex);
+            }
+            if (question == null) return 0;
+            if (DateTime.UtcNow < inputArmedAt) return 0;
 
             MathBalloon hit = balloons
                 .OrderBy(item => Distance(point.X, point.Y, item.X, item.Y))
                 .FirstOrDefault(item => Distance(point.X, point.Y, item.X, item.Y) <= item.Radius + hitRadius);
             if (hit == null) return 0;
+            // Valet blir aktivt så snart hela ballongen syns, inte först halvvägs ned.
+            if (hit.Y - hit.Radius < 4) return 0;
+            lockedHands[playerIndex] = point;
 
             if (hit.Answer == question.CorrectAnswer)
             {
@@ -109,10 +132,10 @@ namespace KinectKids.Game
                 return points;
             }
 
-            hit.Shape.Opacity = 0.28;
-            hit.Label.Opacity = 0.35;
-            Raise("Nästan! Prova en annan ballong.", 0, playerIndex, "retry");
-            return 0;
+            CurrentScore = Math.Max(0, CurrentScore - 3);
+            RemoveBalloon(hit);
+            Raise("Fel svar. Tre poäng bort.", -3, playerIndex, "retry");
+            return -3;
         }
 
         public void Render(DrawingContext context)
@@ -136,15 +159,25 @@ namespace KinectKids.Game
 
             ClearBalloons();
             int level = 1 + answeredQuestions / 4;
-            question = MathQuestion.Create(random, level);
+            if (missedQuestions.Count > 0 && freshQuestionsBeforeRetry <= 0)
+            {
+                question = missedQuestions.Dequeue();
+                freshQuestionsBeforeRetry = missedQuestions.Count > 0 ? random.Next(1, 3) : 0;
+            }
+            else
+            {
+                question = MathQuestion.Create(random, level);
+                if (missedQuestions.Count > 0) freshQuestionsBeforeRetry--;
+            }
 
-            double usableTop = Math.Max(190, canvas.ActualHeight * 0.31);
-            double usableHeight = Math.Max(120, canvas.ActualHeight - usableTop - 80);
+            double[] lanes = { 0.16, 0.38, 0.62, 0.84 };
+            lanes = lanes.OrderBy(item => random.Next()).ToArray();
+            double baseSpeed = 78 + Math.Min(30, answeredQuestions * 1.5);
             for (int index = 0; index < question.Options.Count; index++)
             {
-                double x = canvas.ActualWidth * (0.17 + 0.22 * index);
-                double baseY = usableTop + usableHeight * (index % 2 == 0 ? 0.28 : 0.7);
                 double radius = Math.Max(48, Math.Min(67, canvas.ActualWidth / 18));
+                double x = canvas.ActualWidth * lanes[index] + random.Next(-10, 11);
+                x = Math.Max(radius + 8, Math.Min(canvas.ActualWidth - radius - 8, x));
                 var ellipse = new Ellipse
                 {
                     Width = radius * 2,
@@ -175,8 +208,12 @@ namespace KinectKids.Game
                     Label = label,
                     Radius = radius,
                     X = x,
-                    Y = baseY,
-                    BaseY = baseY,
+                    Y = -radius - random.Next(0, 70),
+                    BaseX = x,
+                    Speed = baseSpeed + random.NextDouble() * 8 - 4,
+                    SwayAmplitude = random.Next(6, 19),
+                    SwayRate = 1.0 + random.NextDouble() * 0.9,
+                    SwayPhase = random.NextDouble() * Math.PI * 2,
                     Answer = question.Options[index],
                     Color = BalloonColors[index]
                 };
@@ -187,7 +224,25 @@ namespace KinectKids.Game
                 Position(balloon);
             }
 
+            inputArmedAt = DateTime.UtcNow.AddMilliseconds(650);
             Raise(Instruction, 0, 0, question.VoiceKey);
+        }
+
+        private void MissQuestion()
+        {
+            missedQuestions.Enqueue(question);
+            if (missedQuestions.Count == 1) freshQuestionsBeforeRetry = random.Next(2, 4);
+            Raise("Det rätta svaret missades och kommer tillbaka senare.", 0, 0, "missed_answer");
+            question = null;
+            nextQuestionDelay = 1.4;
+            ClearBalloons();
+        }
+
+        private void RemoveBalloon(MathBalloon balloon)
+        {
+            balloons.Remove(balloon);
+            canvas.Children.Remove(balloon.Shape);
+            canvas.Children.Remove(balloon.Label);
         }
 
         private void ClearBalloons()

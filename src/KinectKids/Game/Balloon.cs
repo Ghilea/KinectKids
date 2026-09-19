@@ -21,6 +21,9 @@ namespace KinectKids.Game
     {
         public System.Windows.Controls.TextBlock Label { get; set; }
         public int Answer { get; set; }
-        public double BaseY { get; set; }
+        public double BaseX { get; set; }
+        public double SwayAmplitude { get; set; }
+        public double SwayRate { get; set; }
+        public double SwayPhase { get; set; }
     }
 }

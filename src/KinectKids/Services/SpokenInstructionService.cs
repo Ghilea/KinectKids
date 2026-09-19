@@ -10,6 +10,7 @@ namespace KinectKids.Services
     {
         private readonly MediaPlayer player = new MediaPlayer();
         private readonly Queue<string> queue = new Queue<string>();
+        private bool isPlaying;
         private readonly string voiceDirectory = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "Assets", "Voice");
 
@@ -23,7 +24,11 @@ namespace KinectKids.Services
 
         public void Speak(string voiceKey)
         {
-            Stop();
+            // Spelnamn i karusellen ska kunna ersätta varandra direkt. Allt tal
+            // inne i ett spel köas däremot, så att feedback aldrig kapar nästa fråga.
+            if ((voiceKey ?? string.Empty).StartsWith("menu_", StringComparison.OrdinalIgnoreCase))
+                Stop();
+
             foreach (string part in (voiceKey ?? string.Empty).Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 foreach (string file in Resolve(part))
@@ -32,7 +37,17 @@ namespace KinectKids.Services
                     if (File.Exists(path)) queue.Enqueue(path);
                 }
             }
-            PlayNext();
+            if (!isPlaying) PlayNext();
+        }
+
+        /// <summary>
+        /// Används när spelaren just har gjort ett nytt val. Den nya reaktionen
+        /// ersätter gammal feedback så att ljudet alltid motsvarar senaste svaret.
+        /// </summary>
+        public void SpeakNow(string voiceKey)
+        {
+            Stop();
+            Speak(voiceKey);
         }
 
         public void Stop()
@@ -40,17 +55,30 @@ namespace KinectKids.Services
             queue.Clear();
             player.Stop();
             player.Close();
+            isPlaying = false;
         }
 
         private void PlayNext()
         {
-            if (queue.Count == 0) return;
+            if (queue.Count == 0)
+            {
+                isPlaying = false;
+                return;
+            }
+            isPlaying = true;
             player.Open(new Uri(queue.Dequeue(), UriKind.Absolute));
         }
 
         private void OnMediaOpened(object sender, EventArgs e) => player.Play();
-        private void OnMediaEnded(object sender, EventArgs e) => PlayNext();
-        private void OnMediaFailed(object sender, ExceptionEventArgs e) => PlayNext();
+        private void OnMediaEnded(object sender, EventArgs e) => CompleteCurrent();
+        private void OnMediaFailed(object sender, ExceptionEventArgs e) => CompleteCurrent();
+
+        private void CompleteCurrent()
+        {
+            player.Close();
+            isPlaying = false;
+            PlayNext();
+        }
 
         private static IEnumerable<string> Resolve(string key)
         {

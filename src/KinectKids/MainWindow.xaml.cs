@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using KinectKids.Game;
@@ -79,6 +80,8 @@ namespace KinectKids
         private readonly MediaPlayer menuMusic = new MediaPlayer();
         private readonly SpokenInstructionService spokenInstructions = new SpokenInstructionService();
         private bool menuMusicEnabled = true;
+        private bool showCamera = true;
+        private WriteableBitmap cameraBitmap;
 
         public MainWindow()
         {
@@ -131,12 +134,14 @@ namespace KinectKids
             {
                 tracker.PlayersChanged -= OnPlayersChanged;
                 tracker.StatusChanged -= OnStatusChanged;
+                tracker.ColorFrameReady -= OnColorFrameReady;
                 tracker.Dispose();
             }
 
             tracker = next;
             tracker.PlayersChanged += OnPlayersChanged;
             tracker.StatusChanged += OnStatusChanged;
+            tracker.ColorFrameReady += OnColorFrameReady;
             UpdateSensorStatus(tracker.Status, tracker.IsConnected);
             tracker.Start();
         }
@@ -144,6 +149,23 @@ namespace KinectKids
         private void OnStatusChanged(object sender, string status)
         {
             Dispatcher.BeginInvoke(new Action(() => UpdateSensorStatus(status, tracker != null && tracker.IsConnected)));
+        }
+
+        private void OnColorFrameReady(object sender, ColorFrameEventArgs frame)
+        {
+            if (frame?.Pixels == null) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (cameraBitmap == null || cameraBitmap.PixelWidth != frame.Width || cameraBitmap.PixelHeight != frame.Height)
+                {
+                    cameraBitmap = new WriteableBitmap(frame.Width, frame.Height, 96, 96, PixelFormats.Bgr32, null);
+                    PlayerCameraImage.Source = cameraBitmap;
+                    CalibrationCameraImage.Source = cameraBitmap;
+                }
+                cameraBitmap.WritePixels(new Int32Rect(0, 0, frame.Width, frame.Height),
+                    frame.Pixels, frame.Stride, 0);
+                UpdatePlayerViewMode();
+            }), DispatcherPriority.Render);
         }
 
         private void OnPlayersChanged(object sender, IReadOnlyList<TrackedPlayer> updatedPlayers)
@@ -166,55 +188,65 @@ namespace KinectKids
             SensorText.Text = text;
             SensorDot.Fill = connected ? BrushFrom("#50E3A4") : BrushFrom("#FFBE47");
             SensorBadge.Background = connected ? BrushFrom("#3324D49A") : BrushFrom("#335EAEFF");
+            UpdatePlayerViewMode();
         }
 
-        private void StartButton_Click(object sender, RoutedEventArgs e)
+        private void UpdatePlayerViewMode()
+        {
+            bool cameraVisible = showCamera && cameraBitmap != null && tracker != null && tracker.IsConnected;
+            PlayerCameraImage.Visibility = cameraVisible ? Visibility.Visible : Visibility.Collapsed;
+            CalibrationCameraImage.Visibility = cameraVisible ? Visibility.Visible : Visibility.Collapsed;
+            GameSkeletonCanvas.Visibility = cameraVisible ? Visibility.Collapsed : Visibility.Visible;
+            CalibrationSkeletonCanvas.Visibility = cameraVisible ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private async void StartButton_Click(object sender, RoutedEventArgs e)
         {
             if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.Balloons;
-            ShowCalibration();
+            await BeginRoundAsync();
         }
 
-        private void MathStartButton_Click(object sender, RoutedEventArgs e)
+        private async void MathStartButton_Click(object sender, RoutedEventArgs e)
         {
             if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.Math;
-            ShowCalibration();
+            await BeginRoundAsync();
         }
 
-        private void SwedishStartButton_Click(object sender, RoutedEventArgs e)
+        private async void SwedishStartButton_Click(object sender, RoutedEventArgs e)
         {
             if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.Swedish;
-            ShowCalibration();
+            await BeginRoundAsync();
         }
 
-        private void ShapeStartButton_Click(object sender, RoutedEventArgs e)
+        private async void ShapeStartButton_Click(object sender, RoutedEventArgs e)
         {
             if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.Shapes;
-            ShowCalibration();
+            await BeginRoundAsync();
         }
 
-        private void PatternStartButton_Click(object sender, RoutedEventArgs e)
+        private async void PatternStartButton_Click(object sender, RoutedEventArgs e)
         {
             if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.Patterns;
-            ShowCalibration();
+            await BeginRoundAsync();
         }
 
-        private void SimonStartButton_Click(object sender, RoutedEventArgs e)
+        private async void SimonStartButton_Click(object sender, RoutedEventArgs e)
         {
             if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.SimonSays;
-            ShowCalibration();
+            await BeginRoundAsync();
         }
 
-        private void ZombieStartButton_Click(object sender, RoutedEventArgs e)
+        private async void ZombieStartButton_Click(object sender, RoutedEventArgs e)
         {
             if (!ConfirmCarouselSelection(sender)) return;
             selectedGame = GameMode.ZombieTrain;
-            ShowCalibration();
+            await BeginRoundAsync();
         }
 
         private void SpookyAdventureButton_Click(object sender, RoutedEventArgs e)
@@ -325,6 +357,8 @@ namespace KinectKids
 
         private async Task BeginRoundAsync()
         {
+            menuMusic.Pause();
+            spokenInstructions.Stop();
             CalibrationPanel.Visibility = Visibility.Collapsed;
             HomePanel.Visibility = Visibility.Collapsed;
             GamePanel.Visibility = Visibility.Visible;
@@ -378,12 +412,29 @@ namespace KinectKids
         {
             bool zombies = selectedGame == GameMode.ZombieTrain;
             BalloonBackdrop.Visibility = Visibility.Visible;
+            string backgroundAsset = selectedGame == GameMode.Math ? "background-math.png"
+                : selectedGame == GameMode.Swedish ? "background-swedish.png"
+                : selectedGame == GameMode.Shapes ? "background-shapes.png"
+                : selectedGame == GameMode.Patterns ? "background-patterns.png"
+                : selectedGame == GameMode.SimonSays ? "background-simon.png"
+                : selectedGame == GameMode.Balloons ? "background-balloons.png"
+                : "learning-game-background.png";
+            GameBackgroundImage.Source = new BitmapImage(new Uri(
+                "pack://application:,,,/Assets/" + backgroundAsset, UriKind.Absolute));
             BalloonBackdrop.Background = selectedGame == GameMode.Math
                 ? BrushFrom("#173D63")
                 : selectedGame == GameMode.Swedish ? BrushFrom("#512847")
                 : selectedGame == GameMode.Shapes ? BrushFrom("#594018")
                 : selectedGame == GameMode.Patterns ? BrushFrom("#193F55")
                 : selectedGame == GameMode.SimonSays ? BrushFrom("#282B57") : BrushFrom("#102B46");
+            GameThemeTint.Background = selectedGame == GameMode.Math
+                ? BrushFrom("#38285F9B")
+                : selectedGame == GameMode.Swedish ? BrushFrom("#405F2859")
+                : selectedGame == GameMode.Shapes ? BrushFrom("#3A8A6218")
+                : selectedGame == GameMode.Patterns ? BrushFrom("#381D6D78")
+                : selectedGame == GameMode.SimonSays ? BrushFrom("#42402B73")
+                : selectedGame == GameMode.Balloons ? BrushFrom("#26357CA0")
+                : BrushFrom("#6010213D");
             Playfield.Background = Brushes.Transparent;
             GameSkeletonCanvas.Opacity = selectedGame == GameMode.SimonSays ? 0.9 : zombies ? 0.46 : 0.72;
             BossBanner.Visibility = Visibility.Collapsed;
@@ -529,9 +580,9 @@ namespace KinectKids
                     points = game.PopAt(new Point(x, y), 29);
                 }
 
-                if (points > 0)
+                if (points != 0)
                 {
-                    scores[playerIndex] += points;
+                    scores[playerIndex] = Math.Max(0, scores[playerIndex] + points);
                     UpdateScoreboard();
                     Pulse(cursor);
                     ShowPopFeedback(new Point(x, y), points, playerIndex);
@@ -541,7 +592,9 @@ namespace KinectKids
 
         private void ShowPopFeedback(Point point, int points, int playerIndex)
         {
-            var color = playerIndex == 0 ? BrushFrom("#FF5EAEFF") : BrushFrom("#FFFF7694");
+            var color = points < 0
+                ? BrushFrom("#FFFF4D65")
+                : playerIndex == 0 ? BrushFrom("#FF5EAEFF") : BrushFrom("#FFFF7694");
             var ring = new Ellipse
             {
                 Width = 70,
@@ -554,7 +607,7 @@ namespace KinectKids
             };
             var score = new TextBlock
             {
-                Text = "+" + points,
+                Text = points > 0 ? "+" + points : points.ToString(),
                 Foreground = Brushes.White,
                 FontSize = 27,
                 FontWeight = FontWeights.Black,
@@ -664,43 +717,119 @@ namespace KinectKids
             {
                 var player = visiblePlayers[playerIndex];
                 Brush color = playerIndex == 0 ? BrushFrom("#FF5EAEFF") : BrushFrom("#FFFF7694");
+                Brush outfit = playerIndex == 0 ? BrushFrom("#DD246BB2") : BrushFrom("#DDBB3E66");
 
                 foreach (var bone in Bones)
                 {
                     Point start = player.Joint(bone[0]);
                     Point end = player.Joint(bone[1]);
                     if (!IsTracked(start) || !IsTracked(end)) continue;
-                    canvas.Children.Add(new Line
-                    {
-                        X1 = start.X * canvas.ActualWidth,
-                        Y1 = start.Y * canvas.ActualHeight,
-                        X2 = end.X * canvas.ActualWidth,
-                        Y2 = end.Y * canvas.ActualHeight,
-                        Stroke = color,
-                        StrokeThickness = 7,
-                        StrokeStartLineCap = PenLineCap.Round,
-                        StrokeEndLineCap = PenLineCap.Round,
-                        IsHitTestVisible = false
-                    });
+                    AddAvatarLimb(canvas, start, end, outfit);
                 }
 
-                foreach (var point in player.Joints.Values.Where(IsTracked))
+                Point shoulderLeft = player.Joint(BodyJoint.ShoulderLeft);
+                Point shoulderRight = player.Joint(BodyJoint.ShoulderRight);
+                Point hipLeft = player.Joint(BodyJoint.HipLeft);
+                Point hipRight = player.Joint(BodyJoint.HipRight);
+                if (IsTracked(shoulderLeft) && IsTracked(shoulderRight) && IsTracked(hipLeft) && IsTracked(hipRight))
                 {
-                    var joint = new Ellipse
+                    var torso = new Polygon
                     {
-                        Width = 13,
-                        Height = 13,
-                        Fill = Brushes.White,
+                        Points = new PointCollection
+                        {
+                            ScalePoint(shoulderLeft, canvas), ScalePoint(shoulderRight, canvas),
+                            ScalePoint(hipRight, canvas), ScalePoint(hipLeft, canvas)
+                        },
+                        Fill = outfit,
                         Stroke = color,
-                        StrokeThickness = 3,
+                        StrokeThickness = 4,
+                        StrokeLineJoin = PenLineJoin.Round,
                         IsHitTestVisible = false
                     };
-                    Canvas.SetLeft(joint, point.X * canvas.ActualWidth - joint.Width / 2);
-                    Canvas.SetTop(joint, point.Y * canvas.ActualHeight - joint.Height / 2);
-                    canvas.Children.Add(joint);
+                    canvas.Children.Add(torso);
                 }
+
+                AddAvatarHead(canvas, player.Joint(BodyJoint.Head), color, playerIndex);
+                AddAvatarHand(canvas, player.Joint(BodyJoint.HandLeft), color);
+                AddAvatarHand(canvas, player.Joint(BodyJoint.HandRight), color);
             }
         }
+
+        private static void AddAvatarLimb(Canvas canvas, Point start, Point end, Brush color)
+        {
+            Point a = ScalePoint(start, canvas);
+            Point b = ScalePoint(end, canvas);
+            canvas.Children.Add(new Line
+            {
+                X1 = a.X, Y1 = a.Y, X2 = b.X, Y2 = b.Y,
+                Stroke = color,
+                StrokeThickness = 17,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                IsHitTestVisible = false
+            });
+        }
+
+        private static void AddAvatarHead(Canvas canvas, Point point, Brush color, int playerIndex)
+        {
+            if (!IsTracked(point)) return;
+            Point center = ScalePoint(point, canvas);
+            var head = new Ellipse
+            {
+                Width = 54, Height = 54,
+                Fill = playerIndex == 0 ? BrushFrom("#FFFFD2AD") : BrushFrom("#FFB97A56"),
+                Stroke = color, StrokeThickness = 5,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(head, center.X - 27);
+            Canvas.SetTop(head, center.Y - 27);
+            canvas.Children.Add(head);
+
+            AddFaceDot(canvas, center.X - 9, center.Y - 6);
+            AddFaceDot(canvas, center.X + 9, center.Y - 6);
+            var smileGeometry = new PathGeometry();
+            var smileFigure = new PathFigure { StartPoint = new Point(center.X - 10, center.Y + 5) };
+            smileFigure.Segments.Add(new QuadraticBezierSegment(
+                new Point(center.X, center.Y + 15), new Point(center.X + 10, center.Y + 5), true));
+            smileGeometry.Figures.Add(smileFigure);
+            canvas.Children.Add(new System.Windows.Shapes.Path
+            {
+                Data = smileGeometry,
+                Stroke = BrushFrom("#FF27364A"),
+                StrokeThickness = 3,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                IsHitTestVisible = false
+            });
+        }
+
+        private static void AddFaceDot(Canvas canvas, double x, double y)
+        {
+            var eye = new Ellipse
+            {
+                Width = 5, Height = 7, Fill = BrushFrom("#FF27364A"), IsHitTestVisible = false
+            };
+            Canvas.SetLeft(eye, x - eye.Width / 2);
+            Canvas.SetTop(eye, y - eye.Height / 2);
+            canvas.Children.Add(eye);
+        }
+
+        private static void AddAvatarHand(Canvas canvas, Point point, Brush color)
+        {
+            if (!IsTracked(point)) return;
+            Point center = ScalePoint(point, canvas);
+            var hand = new Ellipse
+            {
+                Width = 28, Height = 28, Fill = BrushFrom("#FFFFD2AD"),
+                Stroke = color, StrokeThickness = 4, IsHitTestVisible = false
+            };
+            Canvas.SetLeft(hand, center.X - 14);
+            Canvas.SetTop(hand, center.Y - 14);
+            canvas.Children.Add(hand);
+        }
+
+        private static Point ScalePoint(Point point, Canvas canvas) =>
+            new Point(point.X * canvas.ActualWidth, point.Y * canvas.ActualHeight);
 
         private bool ConfirmCarouselSelection(object sender)
         {
@@ -992,7 +1121,10 @@ namespace KinectKids
         {
             UpdateVisualQuestion();
             if (!string.IsNullOrWhiteSpace(e.VoiceKey))
-                spokenInstructions.Speak(e.VoiceKey);
+            {
+                if (e.ScoreDelta != 0) spokenInstructions.SpeakNow(e.VoiceKey);
+                else spokenInstructions.Speak(e.VoiceKey);
+            }
 
             if (selectedGame == GameMode.SimonSays && e.ScoreDelta > 0)
             {
@@ -1009,6 +1141,7 @@ namespace KinectKids
             isPlaying = false;
             gameTimer.Stop();
             moduleManager.Stop();
+            spokenInstructions.Stop();
             SessionMenu.HideAll();
             ResultOverlay.Visibility = Visibility.Visible;
             string scoreText = PlayerTwoScoreBox.Visibility == Visibility.Visible
@@ -1105,6 +1238,13 @@ namespace KinectKids
             MenuMusicButton.Content = menuMusicEnabled ? "♫ Musik: på" : "♫ Musik: av";
             if (menuMusicEnabled && HomePanel.Visibility == Visibility.Visible) menuMusic.Play();
             else menuMusic.Pause();
+        }
+
+        private void CameraModeButton_Click(object sender, RoutedEventArgs e)
+        {
+            showCamera = !showCamera;
+            CameraModeButton.Content = showCamera ? "Bild: kamera" : "Bild: figur";
+            UpdatePlayerViewMode();
         }
 
         private void StopRound()

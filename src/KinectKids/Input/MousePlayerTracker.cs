@@ -18,6 +18,7 @@ namespace KinectKids.Input
 
         public event EventHandler<IReadOnlyList<TrackedPlayer>> PlayersChanged;
         public event EventHandler<string> StatusChanged;
+        public event EventHandler<ColorFrameEventArgs> ColorFrameReady { add { } remove { } }
         public bool IsConnected => true;
         public string Status => "Testläge med mus";
 

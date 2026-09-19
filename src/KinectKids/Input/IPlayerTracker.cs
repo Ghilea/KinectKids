@@ -8,6 +8,7 @@ namespace KinectKids.Input
     {
         event EventHandler<IReadOnlyList<TrackedPlayer>> PlayersChanged;
         event EventHandler<string> StatusChanged;
+        event EventHandler<ColorFrameEventArgs> ColorFrameReady;
         bool IsConnected { get; }
         string Status { get; }
         void Start();

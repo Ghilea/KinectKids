@@ -61,6 +61,13 @@
     </Page>
     <Resource Include="Assets\zombie-scout.png" />
     <Resource Include="Assets\zombie-conductor-boss.png" />
+    <Resource Include="Assets\learning-game-background.png" />
+    <Resource Include="Assets\background-math.png" />
+    <Resource Include="Assets\background-swedish.png" />
+    <Resource Include="Assets\background-shapes.png" />
+    <Resource Include="Assets\background-patterns.png" />
+    <Resource Include="Assets\background-simon.png" />
+    <Resource Include="Assets\background-balloons.png" />
     <Content Include="Assets\menu-hella-bumps.mp3">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -90,6 +97,7 @@
     <Compile Include="Game\SimonSaysGame.cs" />
     <Compile Include="Game\GameManager.cs" />
     <Compile Include="Input\IPlayerTracker.cs" />
+    <Compile Include="Input\ColorFrameEventArgs.cs" />
     <Compile Include="Input\ActiveHandSelector.cs" />
     <Compile Include="Input\AutomaticPlayerTracker.cs" />
     <Compile Include="Input\KinectPlayerTracker.cs" Condition=" '$(UseKinectStub)' != 'true' " />
