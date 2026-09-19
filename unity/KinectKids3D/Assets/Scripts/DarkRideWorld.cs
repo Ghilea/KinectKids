@@ -703,11 +703,22 @@ namespace KinectKids3D
             noise.scrollSpeed = 0.08f;
 
             ParticleSystemRenderer renderer = particles.GetComponent<ParticleSystemRenderer>();
-            Shader shader = Shader.Find("KinectKids/Soft Mist");
-            if (shader == null) shader = Shader.Find("Legacy Shaders/Particles/Alpha Blended Premultiply");
-            if (shader != null)
+            // Utgå från Unitys eget partikelmaterial. Den tidigare Shader.Find-
+            // lösningen kunde strippas ur en release-build och gav då en stor
+            // skrikrosa fyrkant i korridoren.
+            Material baseMaterial = renderer.sharedMaterial;
+            Shader shader = baseMaterial != null ? baseMaterial.shader : null;
+            if (shader == null || !shader.isSupported || shader.name == "Hidden/InternalErrorShader")
+                shader = Shader.Find("Particles/Standard Unlit");
+            if (shader == null || !shader.isSupported)
+                shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (shader == null || !shader.isSupported)
+                shader = Shader.Find("Legacy Shaders/Particles/Alpha Blended");
+            if (baseMaterial != null || shader != null)
             {
-                renderer.material = new Material(shader);
+                renderer.material = baseMaterial != null && baseMaterial.shader != null && baseMaterial.shader.isSupported
+                    ? new Material(baseMaterial)
+                    : new Material(shader);
                 Material mistMaterial = renderer.material;
                 Texture2D texture = GetSoftMistTexture();
                 if (mistMaterial.HasProperty("_MainTex")) mistMaterial.SetTexture("_MainTex", texture);

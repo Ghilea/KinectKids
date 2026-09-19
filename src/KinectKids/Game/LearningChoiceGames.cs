@@ -369,6 +369,10 @@ namespace KinectKids.Game
 
     public sealed class PatternGame : LearningChoiceGame
     {
+        private readonly Queue<int> patternBag = new Queue<int>();
+        private int bagLevel = -1;
+        private int lastPatternIndex = -1;
+
         private static readonly string[][] Patterns =
         {
             new[] { "●  ■  ●  ■  ?", "●" },
@@ -386,8 +390,25 @@ namespace KinectKids.Game
 
         protected override LearningQuestion CreateLearningQuestion(Random source, int level)
         {
-            int maximum = level < 2 ? 3 : Patterns.Length;
-            int patternIndex = source.Next(maximum);
+            int difficultyBand = level < 2 ? 0 : 1;
+            if (patternBag.Count == 0 || bagLevel != difficultyBand)
+            {
+                bagLevel = difficultyBand;
+                int[] eligible = difficultyBand == 0
+                    ? new[] { 0, 1, 4, 5 }
+                    : Enumerable.Range(0, Patterns.Length).ToArray();
+                var shuffled = eligible.OrderBy(item => source.Next()).ToList();
+                if (shuffled.Count > 1 && shuffled[0] == lastPatternIndex)
+                {
+                    int first = shuffled[0];
+                    shuffled[0] = shuffled[1];
+                    shuffled[1] = first;
+                }
+                foreach (int item in shuffled) patternBag.Enqueue(item);
+            }
+
+            int patternIndex = patternBag.Dequeue();
+            lastPatternIndex = patternIndex;
             string[] selected = Patterns[patternIndex];
             string[] pool = { "●", "■", "▲", "★", "A", "B", "3", "5", "9", "10", "LITEN", "STOR" };
             var options = pool.Where(item => item != selected[1]).OrderBy(item => source.Next()).Take(3)

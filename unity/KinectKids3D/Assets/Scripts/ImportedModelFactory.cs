@@ -18,6 +18,7 @@ namespace KinectKids3D
             model.transform.localPosition = Vector3.zero;
             model.transform.localRotation = localRotation;
             ApplyKnownTexture(model, resourcePath);
+            RepairUnsupportedMaterials(model);
 
             foreach (Collider collider in model.GetComponentsInChildren<Collider>(true))
                 UnityEngine.Object.Destroy(collider);
@@ -41,6 +42,40 @@ namespace KinectKids3D
             ImportedModelAnimator player = model.AddComponent<ImportedModelAnimator>();
             player.Configure(resourcePath, preferredClips);
             return model;
+        }
+
+        private static void RepairUnsupportedMaterials(GameObject model)
+        {
+            Shader fallback = Shader.Find("Standard");
+            if (fallback == null || !fallback.isSupported)
+                fallback = Shader.Find("Universal Render Pipeline/Lit");
+            if (fallback == null) return;
+
+            foreach (Renderer renderer in model.GetComponentsInChildren<Renderer>(true))
+            {
+                Material[] materials = renderer.materials;
+                bool changed = false;
+                for (int index = 0; index < materials.Length; index++)
+                {
+                    Material source = materials[index];
+                    if (source != null && source.shader != null && source.shader.isSupported
+                        && source.shader.name != "Hidden/InternalErrorShader") continue;
+
+                    Texture texture = source != null && source.HasProperty("_MainTex")
+                        ? source.mainTexture : null;
+                    Color color = source != null && source.HasProperty("_Color")
+                        ? source.color : Color.white;
+                    Material replacement = new Material(fallback)
+                    {
+                        name = (source != null ? source.name : "Material") + " (reparerad)",
+                        color = color,
+                        mainTexture = texture
+                    };
+                    materials[index] = replacement;
+                    changed = true;
+                }
+                if (changed) renderer.materials = materials;
+            }
         }
 
         private static void ApplyKnownTexture(GameObject model, string resourcePath)

@@ -72,6 +72,7 @@ namespace KinectKids
         private DateTime dwellStartedAt;
         private bool dwellTriggered;
         private Button[] carouselButtons;
+        private MenuGameDefinition[] menuGames;
         private int carouselIndex;
         private int announcedCarouselIndex = -1;
         private double carouselDragDistance;
@@ -95,11 +96,31 @@ namespace KinectKids
             simonGame = new SimonSaysGame();
             moduleManager.GameEvent += OnModuleGameEvent;
             CreateHandCursors();
-            carouselButtons = new[]
+            menuGames = new[]
             {
-                MathStartButton, SwedishStartButton, ShapeStartButton, PatternStartButton,
-                SimonStartButton, BalloonStartButton, SpookyAdventureButton
+                new MenuGameDefinition(MathStartButton, "Matematikbanan",
+                    "Räkna tillsammans och slå på ballongen med rätt svar.",
+                    "MATEMATIK & LOGIK", "2 + 3", "#C52A7862", "menu_math"),
+                new MenuGameDefinition(ShapeStartButton, "Formverkstan",
+                    "Känn igen cirklar, trianglar, kvadrater och hur många hörn de har.",
+                    "MATEMATIK & LOGIK", "● ▲ ■", "#C52A7862", "menu_shapes"),
+                new MenuGameDefinition(PatternStartButton, "Mönsterjakten",
+                    "Fortsätt serier med former, bokstäver, storlekar och tal. Nya mönster låses upp när det blir svårare.",
+                    "MATEMATIK & LOGIK", "● ■ ● ?", "#C52A7862", "menu_patterns"),
+                new MenuGameDefinition(SwedishStartButton, "Bokstavsjakten",
+                    "Hitta begynnelsebokstäver och bokstäver som saknas i svenska ord.",
+                    "SVENSKA", "Å Ä Ö", "#C56D294F", "menu_swedish"),
+                new MenuGameDefinition(SimonStartButton, "Simon säger",
+                    "Se rörelsen, lyssna på instruktionen och härma med hela kroppen.",
+                    "RÖRELSE & LEK", "★", "#C5A34B20", "menu_simon"),
+                new MenuGameDefinition(BalloonStartButton, "Ballongjakten",
+                    "Rör den hand du vill använda och smäll så många färgglada ballonger du kan.",
+                    "RÖRELSE & LEK", "● ● ●", "#C5A34B20", "menu_balloons"),
+                new MenuGameDefinition(SpookyAdventureButton, "Spökjakten",
+                    "Kliv ombord på spökvagnen, ducka, väj och bekämpa slottets monster.",
+                    "ÄVENTYR", "☾", "#C51A102F", "menu_spooky")
             };
+            carouselButtons = menuGames.Select(item => item.Button).ToArray();
             GameCarousel.SizeChanged += (sender, args) => UpdateCarousel(false);
             menuMusic.MediaEnded += (sender, args) =>
             {
@@ -871,6 +892,7 @@ namespace KinectKids
                 if (offset > count / 2) offset -= count;
                 if (offset < -count / 2) offset += count;
                 Button button = carouselButtons[index];
+                button.Background = BrushFrom(menuGames[index].Color);
                 int distance = Math.Abs(offset);
                 if (distance > 3)
                 {
@@ -929,35 +951,12 @@ namespace KinectKids
                 }
             }
 
-            string[] titles =
-            {
-                "Matematikbanan", "Bokstavsjakten", "Formverkstan", "Mönsterjakten",
-                "Simon säger", "Ballongjakten", "Spökjakten"
-            };
-            string[] descriptions =
-            {
-                "Räkna tillsammans och slå på ballongen med rätt svar.",
-                "Hitta begynnelsebokstäver och bokstäver som saknas i svenska ord.",
-                "Känn igen cirklar, trianglar, kvadrater och hur många hörn de har.",
-                "Fortsätt serier med former, bokstäver, storlekar och tal.",
-                "Se rörelsen, lyssna på instruktionen och härma med hela kroppen.",
-                "Rör den hand du vill använda och smäll så många färgglada ballonger du kan.",
-                "Kliv ombord på spökvagnen, ducka, väj och bekämpa slottets monster."
-            };
-            string[] categories =
-            {
-                "MATEMATIK • 1–2 SPELARE", "SVENSKA • 1–2 SPELARE", "FORMER • 1–2 SPELARE",
-                "LOGIK • 1–2 SPELARE", "RÖRELSE • 1–2 SPELARE", "LEK • 1–2 SPELARE",
-                "3D-ÄVENTYR • 1–2 SPELARE"
-            };
-            string[] glyphs = { "2 + 3", "Å Ä Ö", "● ▲ ■", "● ■ ● ?", "★", "● ● ●", "☾" };
-            string[] colors = { "#C52A7862", "#C56D294F", "#C57B561D", "#C51D5372", "#C5292D67", "#C5712637", "#C51A102F" };
-
-            PreviewTitle.Text = titles[carouselIndex];
-            PreviewDescription.Text = descriptions[carouselIndex];
-            PreviewCategory.Text = categories[carouselIndex];
-            PreviewGlyph.Text = glyphs[carouselIndex];
-            PreviewTint.Background = BrushFrom(colors[carouselIndex]);
+            MenuGameDefinition selected = menuGames[carouselIndex];
+            PreviewTitle.Text = selected.Title;
+            PreviewDescription.Text = selected.Description;
+            PreviewCategory.Text = selected.Category + " • 1–2 SPELARE • NIVÅN ÖKAR";
+            PreviewGlyph.Text = selected.Glyph;
+            PreviewTint.Background = BrushFrom(selected.Color);
             if (animate)
                 PreviewTitle.BeginAnimation(OpacityProperty,
                     new DoubleAnimation(0.25, 1, TimeSpan.FromMilliseconds(260)));
@@ -969,13 +968,8 @@ namespace KinectKids
             if (!IsLoaded || HomePanel.Visibility != Visibility.Visible ||
                 carouselIndex == announcedCarouselIndex) return;
 
-            string[] voiceKeys =
-            {
-                "menu_math", "menu_swedish", "menu_shapes", "menu_patterns",
-                "menu_simon", "menu_balloons", "menu_spooky"
-            };
             announcedCarouselIndex = carouselIndex;
-            spokenInstructions.Speak(voiceKeys[carouselIndex]);
+            spokenInstructions.Speak(menuGames[carouselIndex].VoiceKey);
         }
 
         private Point SelectMenuHand(TrackedPlayer player, out double verticalMovement)
@@ -1374,6 +1368,29 @@ namespace KinectKids
             Shapes,
             Patterns,
             SimonSays
+        }
+
+        private sealed class MenuGameDefinition
+        {
+            public MenuGameDefinition(Button button, string title, string description,
+                string category, string glyph, string color, string voiceKey)
+            {
+                Button = button;
+                Title = title;
+                Description = description;
+                Category = category;
+                Glyph = glyph;
+                Color = color;
+                VoiceKey = voiceKey;
+            }
+
+            public Button Button { get; }
+            public string Title { get; }
+            public string Description { get; }
+            public string Category { get; }
+            public string Glyph { get; }
+            public string Color { get; }
+            public string VoiceKey { get; }
         }
     }
 }
