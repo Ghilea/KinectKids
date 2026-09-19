@@ -15,6 +15,7 @@ namespace KinectKids.Services
 
         public SpokenInstructionService()
         {
+            player.Volume = 0.92;
             player.MediaOpened += OnMediaOpened;
             player.MediaEnded += OnMediaEnded;
             player.MediaFailed += OnMediaFailed;
@@ -57,9 +58,9 @@ namespace KinectKids.Services
             if (parts.Length == 4 && parts[0] == "math")
                 return new[] { "prompt_math", "number_" + parts[1], parts[2], "number_" + parts[3] };
             if (parts.Length == 2 && parts[0] == "starts")
-                return new[] { "prompt_starts", "word_" + parts[1], "prompt_with" };
+                return new[] { "starts_" + parts[1] };
             if (parts.Length == 2 && parts[0] == "missing")
-                return new[] { "prompt_missing", "word_" + parts[1] };
+                return new[] { "missing_" + parts[1] };
             if (parts.Length == 2 && (parts[0] == "shape" || parts[0] == "pattern" || parts[0] == "simon"))
                 return new[] { parts[0] + "_" + parts[1] };
             return new[] { key };

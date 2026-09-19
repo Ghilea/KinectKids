@@ -1,0 +1,12 @@
+KinectKids svenska röstklipp
+
+Röstklippen är lokalt genererade med Supertonic 3, svensk språkmodell och
+röstprofil 2. Ingen text eller ljuddata skickas till en molntjänst.
+
+Supertonic 3 model: Copyright (c) 2026 Supertone Inc.
+Model license: OpenRAIL-M
+https://huggingface.co/Supertone/supertonic-3
+
+Inference engine used during generation: sherpa-onnx 1.13.8
+License: Apache-2.0
+https://github.com/k2-fsa/sherpa-onnx

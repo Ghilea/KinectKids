@@ -104,7 +104,7 @@ namespace KinectKids.Game
                 answeredQuestions++;
                 Raise("Rätt! " + question.Expression + " = " + question.CorrectAnswer, points, playerIndex, "correct");
                 question = null;
-                nextQuestionDelay = 1.8;
+                nextQuestionDelay = 2.5;
                 ClearBalloons();
                 return points;
             }

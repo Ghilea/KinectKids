@@ -241,7 +241,7 @@ namespace KinectKids3D
                 CreateTorch(z + 6.0f, 1);
             }
             CreateCastleGate(8f);
-            CreateSign(14f, "SPÖKJAKTEN 3D", amberGlow);
+            CreateSign(14f, "SPÖKJAKTEN", amberGlow);
             CreateArmor(22f, -1);
             CreateArmor(31f, 1);
             WallDoorScare.Create(38f, -1, 0, wood, darkStone, rail);

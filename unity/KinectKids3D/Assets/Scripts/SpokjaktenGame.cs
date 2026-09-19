@@ -1913,7 +1913,7 @@ namespace KinectKids3D
             float rideTime = Mathf.Max(0, gameTime - CountdownSeconds);
 
             GUI.Box(new Rect(18, 16, 430, 82), string.Empty);
-            GUI.Label(new Rect(34, 23, 400, 34), "SPÖKJAKTEN 3D", titleStyle);
+            GUI.Label(new Rect(34, 23, 400, 34), "SPÖKJAKTEN", titleStyle);
             GUI.Label(new Rect(35, 58, Mathf.Max(400, Screen.width - 70), 42), inputStatus, smallStyle);
 
             GUI.Box(new Rect(Screen.width - 315, 16, 297, 126), string.Empty);
@@ -2089,7 +2089,7 @@ namespace KinectKids3D
             float x = (Screen.width - width) * 0.5f;
             float y = (Screen.height - height) * 0.5f;
             GUI.Box(new Rect(x, y, width, height), string.Empty);
-            GUI.Label(new Rect(x + 30f, y + 20f, width - 60f, 54f), "SPÖKJAKTEN 3D", centerStyle);
+            GUI.Label(new Rect(x + 30f, y + 20f, width - 60f, 54f), "SPÖKJAKTEN", centerStyle);
             GUI.Label(new Rect(x + 35f, y + 70f, width - 70f, 42f),
                 "Välj inställningar och kalibrera Kinect innan vagnen startar", centerStyle);
 

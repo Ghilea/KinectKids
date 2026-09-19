@@ -155,7 +155,7 @@ namespace KinectKids.Game
             }
             while (Commands.Length > 1 && currentCommand == previous);
 
-            commandRemaining = 5.5;
+            commandRemaining = string.IsNullOrWhiteSpace(introduction) ? 6.5 : 8.5;
             poseHold = 0;
             lastPlayerIndex = -1;
             string voice = "simon|" + CommandKey(currentCommand);

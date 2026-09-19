@@ -1,5 +1,5 @@
 # Projekt: KinectKids - "Kanon i Realitet" (Skolversion)
-## Status: Spökjakten 3D är aktiv huvudprototyp; pedagogisk grund och äldre WPF-spel bevaras
+## Status: Spökjakten är aktiv huvudprototyp; pedagogisk grund och äldre WPF-spel bevaras
 ## Språk: C# (.NET 6/8), WPF, Microsoft Kinect SDK v1.8
 
 ### 1. VISION & MÅL
@@ -63,7 +63,7 @@ Vi ska bygga dessa spel i ordning baserat på komplexitet och pedagogisk värde:
     *   `SpookyAdventureLevelUnlocked`
     *   Total poäng för varje barn.
 *   **UI-överläggning:** Nästa uppgift eller rörelse visas över spelaren under hela träningsrundan.
-*   **Belöningskoppling:** Spökjakten 3D ligger kvar i Unity-projektet och låses upp efter 120 mattepoäng.
+*   **Belöningskoppling:** Spökjakten ligger kvar i Unity-projektet och låses upp efter 120 mattepoäng.
 
 #### Version 1.4: Nätverk & Multiplayer
 *   **Lokal Server (SimpleX/UDP):** Tillåt att flera datorer på skolan kan sända samma "Hinder-Data" till flera Kinect-kameror om de spelar samtidigt på samma station.
@@ -79,7 +79,7 @@ Vi ska bygga dessa spel i ordning baserat på komplexitet och pedagogisk värde:
 ### 5. NÄSTA STEG
 1.  Verifiera Matematikbanan och Simon säger med den fysiska Kinect-sensorn.
 2.  Justera rörelsetrösklar efter barnens verkliga avstånd och längd.
-3.  Göra en Windows-build av Unity-projektet så Spökjakten 3D kan startas direkt från huvudmenyn.
+3.  Göra en Windows-build av Unity-projektet så Spökjakten kan startas direkt från huvudmenyn.
 4.  Därefter bygga Färg & Form Labyrint som nästa pedagogiska modul.
 
 **Notera:** Vi fortsätter använda Kinect SDK v1.8 (.NET 4.8) för att hålla kompatibilitet med skolors äldre utrustning, men vi bygger på en modern .NET Core/Standard arkitektur där möjligt.

@@ -18,7 +18,7 @@ if (-not $SkipUnity) {
         throw "Unity 6000.0.60f1 hittades inte: $unityEditor"
     }
 
-    Write-Host 'Bygger fristående Spökjakten 3D…' -ForegroundColor Cyan
+    Write-Host 'Bygger fristående Spökjakten…' -ForegroundColor Cyan
     $log = Join-Path $unityProject 'Build\unity-build.log'
     $unityArguments = @(
         '-batchmode',

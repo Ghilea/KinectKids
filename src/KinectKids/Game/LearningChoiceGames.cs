@@ -99,7 +99,7 @@ namespace KinectKids.Game
                 answeredQuestions++;
                 Raise(question.SuccessMessage, points, playerIndex, "correct");
                 question = null;
-                nextQuestionDelay = 1.8;
+                nextQuestionDelay = 2.5;
                 ClearCards();
                 return points;
             }

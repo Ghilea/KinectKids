@@ -1,4 +1,4 @@
-# Musikplats för Spökjakten 3D
+# Musikplats för Spökjakten
 
 Spelet laddar `RideMusic.ogg` från den här mappen. Unity återskapar filen automatiskt
 och offline från de sex delarna i `MusicSource` när projektet öppnas. Loopen är den

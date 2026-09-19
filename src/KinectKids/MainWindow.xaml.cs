@@ -72,6 +72,7 @@ namespace KinectKids
         private bool dwellTriggered;
         private Button[] carouselButtons;
         private int carouselIndex;
+        private int announcedCarouselIndex = -1;
         private double carouselDragDistance;
         private DateTime lastCarouselMove;
         private readonly MediaPlayer menuMusic = new MediaPlayer();
@@ -222,10 +223,10 @@ namespace KinectKids
             if (executable == null)
             {
                 MessageBox.Show(
-                    "Spökjakten 3D finns i menyn men behöver byggas i Unity först.\n\n" +
+                    "Spökjakten finns i menyn men behöver byggas i Unity först.\n\n" +
                     "Öppna unity\\KinectKids3D i Unity 6 och bygg Windows-versionen till " +
                     "unity\\KinectKids3D\\Build.",
-                    "Spökjakten 3D",
+                    "Spökjakten",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 return;
@@ -801,7 +802,7 @@ namespace KinectKids
             string[] titles =
             {
                 "Matematikbanan", "Bokstavsjakten", "Formverkstan", "Mönsterjakten",
-                "Simon säger", "Ballongjakten", "Spökjakten 3D"
+                "Simon säger", "Ballongjakten", "Spökjakten"
             };
             string[] descriptions =
             {
@@ -830,6 +831,21 @@ namespace KinectKids
             if (animate)
                 PreviewTitle.BeginAnimation(OpacityProperty,
                     new DoubleAnimation(0.25, 1, TimeSpan.FromMilliseconds(260)));
+            AnnounceCarouselSelection();
+        }
+
+        private void AnnounceCarouselSelection()
+        {
+            if (!IsLoaded || HomePanel.Visibility != Visibility.Visible ||
+                carouselIndex == announcedCarouselIndex) return;
+
+            string[] voiceKeys =
+            {
+                "menu_math", "menu_swedish", "menu_shapes", "menu_patterns",
+                "menu_simon", "menu_balloons", "menu_spooky"
+            };
+            announcedCarouselIndex = carouselIndex;
+            spokenInstructions.Speak(voiceKeys[carouselIndex]);
         }
 
         private Point SelectMenuHand(TrackedPlayer player, out double verticalMovement)
@@ -1032,6 +1048,7 @@ namespace KinectKids
             GamePanel.Visibility = Visibility.Collapsed;
             HomePanel.Visibility = Visibility.Visible;
             if (menuMusicEnabled) menuMusic.Play();
+            announcedCarouselIndex = -1;
             UpdateCarousel(false);
             UpdateProgressionUi();
         }
@@ -1164,7 +1181,7 @@ namespace KinectKids
             if (SpookyAdventureButton == null || ProgressText == null) return;
             SpookyAdventureButton.IsEnabled = true;
             SpookyAdventureButton.Opacity = 1;
-            SpookyAdventureButton.Content = "Spökjakten 3D";
+            SpookyAdventureButton.Content = "Spökjakten";
             ProgressText.Text = "Alla spel är öppna • Samlade mattepoäng: " +
                                 progression.GetCombinedMathScore();
         }

@@ -35,7 +35,7 @@ namespace KinectKids3D.Editor
                 throw new InvalidOperationException("Windows-bygget misslyckades: " + report.summary.result);
 
             File.WriteAllText(Path.Combine(buildFolder, "STARTA-HÄR.txt"),
-                "SPÖKJAKTEN 3D\r\n\r\nStarta Spokjakten3D.exe.\r\n" +
+                "SPÖKJAKTEN\r\n\r\nStarta Spokjakten3D.exe.\r\n" +
                 "Unity behöver inte vara installerat. Datorn behöver Kinect SDK 1.8 och Kinectens nätadapter.\r\n" +
                 "Stäng Kinect Explorer och Kinect Studio innan spelet startas.\r\n");
             if (!Application.isBatchMode) EditorUtility.RevealInFinder(buildFolder);

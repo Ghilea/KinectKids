@@ -103,7 +103,7 @@
                         <Button x:Name="PatternStartButton" Content="◉  Mönsterjakten" Click="PatternStartButton_Click" Style="{StaticResource CarouselButton}" Background="#3184C6" />
                         <Button x:Name="SimonStartButton" Content="★  Simon säger" Click="SimonStartButton_Click" Style="{StaticResource CarouselButton}" Background="#3978D4" />
                         <Button x:Name="BalloonStartButton" Content="●  Ballongjakten" Click="StartButton_Click" Style="{StaticResource CarouselButton}" Background="#E85768" />
-                        <Button x:Name="SpookyAdventureButton" Content="☾  Spökjakten 3D" Click="SpookyAdventureButton_Click" Style="{StaticResource CarouselButton}" Background="#6741A5" />
+                        <Button x:Name="SpookyAdventureButton" Content="☾  Spökjakten" Click="SpookyAdventureButton_Click" Style="{StaticResource CarouselButton}" Background="#6741A5" />
                     </Canvas>
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Button Content="▲" Style="{StaticResource SmallButton}" Click="CarouselUpButton_Click" Margin="0,0,10,0" />

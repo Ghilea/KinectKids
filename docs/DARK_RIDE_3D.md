@@ -1,4 +1,4 @@
-# Designriktning: Spökjakten 3D
+# Designriktning: Spökjakten
 
 Målet är en egen, barnvänlig interaktiv dark ride inspirerad av känslan i klassiska spöktåg. Vi kopierar inte Furuviks dekor, figurer eller bana. Referensen används för att förstå formatet: långsam vagn, tydliga scenrum, lysande mål, överraskningar och poängjakt.
 

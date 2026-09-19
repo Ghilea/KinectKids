@@ -10,7 +10,7 @@ En svensk, barnvänlig plattform för **Xbox 360 Kinect (Kinect v1)** på Window
 - **Mönsterjakten:** fortsätt enkla mönster med former, bokstäver och tal.
 - **Simon säger:** händer upp, armar ut, händer tillsammans och ducka.
 - anonym lokal progression för Spelare 1 och Spelare 2
-- Spökjakten 3D är direkt tillgänglig från den gemensamma menyn
+- Spökjakten är direkt tillgänglig från den gemensamma menyn
 - gemensamt `IGame`-kontrakt och `GameManager` för nya moduler
 - instruktionen för nästa uppgift ligger alltid synlig under träningsspel
 
@@ -53,7 +53,7 @@ Sensorn bör sitta direkt i en USB 2.0-port som har tillräcklig bandbredd. Om a
 
 ## Starta på din dator
 
-När projektet redan är byggt dubbelklickar du på **`STARTA-KINECTKIDS.cmd`** i projektmappen. Därifrån kan även Spökjakten 3D startas utan Unity eller Unity Hub.
+När projektet redan är byggt dubbelklickar du på **`STARTA-KINECTKIDS.cmd`** i projektmappen. Därifrån kan även Spökjakten startas utan Unity eller Unity Hub.
 
 Enklast är att högerklicka på `scripts/Run.ps1` och välja **Kör med PowerShell**. Skriptet:
 
@@ -115,7 +115,7 @@ src/KinectKids/
   Services/   Anonym lokal progression
   MainWindow  WPF-gränssnitt och spelläge
 src/KinectBridge/  x86-brygga mellan Kinect SDK 1.8 och Unity
-unity/        Spökjakten 3D i Unity
+unity/        Spökjakten i Unity
 scripts/      kontroll, bygge och start
 ```
 

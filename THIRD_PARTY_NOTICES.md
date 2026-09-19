@@ -1,6 +1,6 @@
 # Tredjepartsmaterial
 
-## Spökjakten 3D – musik
+## Spökjakten – musik
 
 - **Spår:** `Playground.ogg`, distribuerat i projektet som `RideMusic.ogg`
 - **Paket:** Free Horror Music Pack - SVL
