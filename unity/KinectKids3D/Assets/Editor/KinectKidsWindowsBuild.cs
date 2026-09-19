@@ -42,6 +42,56 @@ namespace KinectKids3D.Editor
             UnityEngine.Debug.Log("Skolversionen är klar: " + buildFolder);
         }
 
+        [MenuItem("KinectKids/Bygg Greve Gasts Jakt for Windows")]
+        public static void BuildGreveGastVersion()
+        {
+            string root = FindProjectRoot();
+            if (root == null) throw new InvalidOperationException("KinectKids.sln hittades inte ovanfor Unity-projektet.");
+            ConfigureGreveGastMusic();
+            PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
+            PlayerSettings.defaultIsFullScreen = true;
+            PlayerSettings.defaultScreenWidth = 1920;
+            PlayerSettings.defaultScreenHeight = 1080;
+            BuildBridge(root);
+            CopyBridgeIntoProject(root);
+
+            string buildFolder = Path.Combine(root, "unity", "KinectKids3D", "Build", "GreveGastJakt");
+            Directory.CreateDirectory(buildFolder);
+            string[] scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray();
+            if (scenes.Length == 0) throw new InvalidOperationException("Ingen aktiv Unity-scen finns i Build Settings.");
+            BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = scenes,
+                locationPathName = Path.Combine(buildFolder, "GreveGastJakt.exe"),
+                target = BuildTarget.StandaloneWindows64,
+                options = BuildOptions.None
+            });
+            if (report.summary.result != BuildResult.Succeeded)
+                throw new InvalidOperationException("Greve Gast-bygget misslyckades: " + report.summary.result);
+
+            File.WriteAllText(Path.Combine(buildFolder, "STARTA-HAR.txt"),
+                "GREVE GASTS JAKT\r\n\r\nStarta GreveGastJakt.exe.\r\n" +
+                "F2 visar tidslinjeverktyget. F3 hoppar till forsta refrangen.\r\n" +
+                "Tangentbordstest: W spring, mellanslag hoppa, S ducka, A/D sidsteg.\r\n");
+            if (!Application.isBatchMode) EditorUtility.RevealInFinder(buildFolder);
+            UnityEngine.Debug.Log("Greve Gasts Jakt ar klar: " + buildFolder);
+        }
+
+        private static void ConfigureGreveGastMusic()
+        {
+            const string assetPath = "Assets/Resources/Audio/Music/GreveGastsJakt.wav";
+            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
+            AudioImporter importer = AssetImporter.GetAtPath(assetPath) as AudioImporter;
+            if (importer == null) throw new InvalidOperationException("Greve Gasts musikfil saknas: " + assetPath);
+            AudioImporterSampleSettings settings = importer.defaultSampleSettings;
+            settings.loadType = AudioClipLoadType.Streaming;
+            settings.compressionFormat = AudioCompressionFormat.Vorbis;
+            settings.quality = 0.82f;
+            settings.preloadAudioData = false;
+            importer.defaultSampleSettings = settings;
+            importer.SaveAndReimport();
+        }
+
         private static void BuildBridge(string root)
         {
             string script = Path.Combine(root, "scripts", "Build-KinectBridge.ps1");

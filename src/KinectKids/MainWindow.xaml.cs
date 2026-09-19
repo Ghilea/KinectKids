@@ -118,7 +118,10 @@ namespace KinectKids
                     "RÖRELSE & LEK", "● ● ●", "#C5A34B20", "menu_balloons"),
                 new MenuGameDefinition(SpookyAdventureButton, "Spökjakten",
                     "Kliv ombord på spökvagnen, ducka, väj och bekämpa slottets monster.",
-                    "ÄVENTYR", "☾", "#C51A102F", "menu_spooky")
+                    "ÄVENTYR", "☾", "#C51A102F", "menu_spooky"),
+                new MenuGameDefinition(GreveGastButton, "Greve Gasts Jakt",
+                    "Spring genom slottet i takt med musiken och lura den busiga Greve Gast.",
+                    "ÄVENTYR", "♬", "#C548176A", "menu_greve_gast")
             };
             carouselButtons = menuGames.Select(item => item.Button).ToArray();
             GameCarousel.SizeChanged += (sender, args) => UpdateCarousel(false);
@@ -291,6 +294,28 @@ namespace KinectKids
             {
                 WorkingDirectory = System.IO.Path.GetDirectoryName(executable),
                 Arguments = "--launcher \"" + Process.GetCurrentProcess().MainModule.FileName + "\"" +
+                            (isFullscreen ? " --launcher-fullscreen 1" : string.Empty)
+            });
+            Close();
+        }
+
+        private void GreveGastButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!ConfirmCarouselSelection(sender)) return;
+            string executable = FindGreveGastExecutable();
+            if (executable == null)
+            {
+                MessageBox.Show(
+                    "Greve Gasts Jakt behöver byggas i Unity först. Kör byggkommandot för Greve Gast.",
+                    "Greve Gasts Jakt", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            tracker?.Stop();
+            Process.Start(new ProcessStartInfo(executable)
+            {
+                WorkingDirectory = System.IO.Path.GetDirectoryName(executable),
+                Arguments = "--greve-gast --launcher \"" + Process.GetCurrentProcess().MainModule.FileName + "\"" +
                             (isFullscreen ? " --launcher-fullscreen 1" : string.Empty)
             });
             Close();
@@ -1355,6 +1380,19 @@ namespace KinectKids
                     "unity", "KinectKids3D", "Build", "Spokjakten3D", "Spokjakten3D.exe")),
                 System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDirectory, "..", "..", "..", "..",
                     "unity", "KinectKids3D", "Build", "KinectKids3D.exe"))
+            };
+            return candidates.FirstOrDefault(System.IO.File.Exists);
+        }
+
+        private static string FindGreveGastExecutable()
+        {
+            string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            string[] candidates =
+            {
+                System.IO.Path.Combine(baseDirectory, "GreveGastJakt", "GreveGastJakt.exe"),
+                System.IO.Path.Combine(baseDirectory, "GreveGastJakt.exe"),
+                System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDirectory, "..", "..", "..", "..",
+                    "unity", "KinectKids3D", "Build", "GreveGastJakt", "GreveGastJakt.exe"))
             };
             return candidates.FirstOrDefault(System.IO.File.Exists);
         }

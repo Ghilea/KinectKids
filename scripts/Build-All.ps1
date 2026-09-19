@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $unityProject = Join-Path $projectRoot 'unity\KinectKids3D'
 $unityBuild = Join-Path $unityProject 'Build\Spokjakten3D\Spokjakten3D.exe'
+$greveGastBuild = Join-Path $unityProject 'Build\GreveGastJakt\GreveGastJakt.exe'
 $launcher = Join-Path $projectRoot 'src\KinectKids\bin\Release\KinectKids.exe'
 $unityEditor = Join-Path ${env:ProgramFiles} 'Unity\Hub\Editor\6000.0.60f1\Editor\Unity.exe'
 
@@ -33,6 +34,22 @@ if (-not $SkipUnity) {
     if ($unityProcess.ExitCode -ne 0) {
         throw "Unity-bygget misslyckades med felkod $($unityProcess.ExitCode). Se $log"
     }
+
+    Write-Host 'Bygger fristaende Greve Gasts Jakt...' -ForegroundColor Cyan
+    $greveLog = Join-Path $unityProject 'Build\greve-gast-build.log'
+    $greveArguments = @(
+        '-batchmode',
+        '-nographics',
+        '-quit',
+        '-projectPath', ('"' + $unityProject + '"'),
+        '-executeMethod', 'KinectKids3D.Editor.KinectKidsWindowsBuild.BuildGreveGastVersion',
+        '-logFile', ('"' + $greveLog + '"')
+    )
+    $greveProcess = Start-Process -FilePath $unityEditor -ArgumentList $greveArguments `
+        -Wait -PassThru -WindowStyle Hidden
+    if ($greveProcess.ExitCode -ne 0) {
+        throw "Greve Gast-bygget misslyckades med felkod $($greveProcess.ExitCode). Se $greveLog"
+    }
 }
 
 if (-not (Test-Path -LiteralPath $launcher)) {
@@ -40,6 +57,9 @@ if (-not (Test-Path -LiteralPath $launcher)) {
 }
 if (-not (Test-Path -LiteralPath $unityBuild)) {
     throw "Spökjakten saknas efter bygget: $unityBuild"
+}
+if (-not (Test-Path -LiteralPath $greveGastBuild)) {
+    throw "Greve Gasts Jakt saknas efter bygget: $greveGastBuild"
 }
 
 Write-Host ''

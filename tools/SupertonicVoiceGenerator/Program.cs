@@ -126,7 +126,8 @@ static Dictionary<string, string> CreateMenuPrompts() => new Dictionary<string, 
     ["menu_patterns"] = "Mönsterjakten!",
     ["menu_simon"] = "Simon säger!",
     ["menu_balloons"] = "Ballongjakten!",
-    ["menu_spooky"] = "Spökjakten!"
+    ["menu_spooky"] = "Spökjakten!",
+    ["menu_greve_gast"] = "Greve Gasts Jakt!"
 };
 
 static string NumberWord(int number)
