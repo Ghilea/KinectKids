@@ -6,10 +6,10 @@ namespace KinectKids3D.Platform
     {
         private void Awake()
         {
-            if (FindFirstObjectByType<GreveGastGame>() == null)
+            if (FindFirstObjectByType<GreveGastStyleCGame>() == null)
             {
-                GameObject game = new GameObject("Greve Gasts teckningsjakt");
-                game.AddComponent<GreveGastGame>();
+                GameObject game = new GameObject("Greve Gast - Style C+ vertical slice");
+                game.AddComponent<GreveGastStyleCGame>();
             }
         }
     }

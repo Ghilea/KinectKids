@@ -1,127 +1,105 @@
-# KinectKids – lär och lek med Kinect 360
+# KinectKids – gemensam Unity-plattform
 
-En svensk, barnvänlig plattform för **Xbox 360 Kinect (Kinect v1)** på Windows 10. Ett eller två barn löser uppgifter och spelar rörelsespel helt utan handkontroll. Alla spel nås från samma meny och inga kamera-, ljud- eller skelettdata sparas.
+KinectKids är en svensk, barnvänlig spelplattform för Xbox 360 Kinect på
+Windows. Slutkunden ska bara använda ett program:
 
-## Pedagogisk version 1.3 under utveckling
+```text
+unity/KinectKids3D/Build/KinectKids/KinectKids.exe
+```
 
-- **Matematikbanan:** träffa ballongen med rätt svar på addition och subtraktion.
-- **Bokstavsjakten:** hitta begynnelsebokstäver och bokstäver som saknas.
-- **Formverkstan:** känn igen former och antal hörn.
-- **Mönsterjakten:** fortsätt enkla mönster med former, bokstäver och tal.
-- **Simon säger:** händer upp, armar ut, händer tillsammans och ducka.
-- anonym lokal progression för Spelare 1 och Spelare 2
-- Spökjakten är direkt tillgänglig från den gemensamma menyn
-- gemensamt `IGame`-kontrakt och `GameManager` för nya moduler
-- instruktionen för nästa uppgift ligger alltid synlig under träningsspel
+Programmet startar i Unitys gemensamma meny. Kinect, input, paus, scenbyten och
+återgång till menyn hanteras i samma Unity-process. Unity Hub behövs inte för
+att spela den färdigbyggda versionen.
 
-## Ny 3D-version under utveckling
+## Starta
 
-En separat Unity-baserad version av Spökjakten finns i [`unity/KinectKids3D`](unity/KinectKids3D). Den har riktig 3D-räls, spökvagn, mörkt texturerat slott, ett automatiskt vänster-/högerhandssikte och en stillastående slutbossfas med kastattacker. Kinect SDK 1.8 körs i en separat x86-brygga så att 64-bitars Unity inte behöver ladda den gamla SDK:n direkt. En fristående skolversion byggs från Unity-menyn **KinectKids → Bygg skolversion för Windows** och kräver inte Unity på måldatorn.
+Dubbelklicka `STARTA-KINECTKIDS.cmd`. Den startar alltid Unity-versionen och
+bygger den automatiskt om programfilen saknas.
 
-3D-åkturen använder den fritt tillåtna 80-sekundersloopen **Playground** av Shononoki/SVL. Se [tredjepartsnoteringarna](THIRD_PARTY_NOTICES.md) för källa och användningsvillkor.
-
-Se [start- och testinstruktionerna för KinectKids 3D](unity/KinectKids3D/README.md).
-
-## Det som finns i version 1.2
-
-- Ballongjakten med 60-sekundersrundor
-- Zombietåget: ett barnvänligt äventyr på räls genom station och tunnel
-- tydligt handsikte: håll handen på en zombie tills den gula mätaren fylls
-- zombier som kommer närmare och en konduktörsboss mot slutet
-- animerad färd med mjuka bakgrundsrörelser och övergång mellan två miljöer
-- automatisk spårning av en eller två spelare
-- stora, tydliga handmarkörer och barnvänligt gränssnitt
-- komplett skelettvy i kalibreringen och under spelet
-- Kinect-styrda menyer: håll höger hand över en knapp i drygt en sekund
-- kalibreringsvy före varje runda
-- individuella poäng i tvåspelarläge
-- stabilitetsfilter som motverkar falsk spelare två
-- helskärmsläge, paus och omstart
-- begripliga svenska fel för saknad ström och otillräcklig USB-bandbredd
-- musläge för att prova spelet utan Kinect
-- ingen inspelning eller lagring av kamera-, djup- eller skelettdata
-
-## Krav
-
-- Windows 10 (64-bit fungerar; appen byggs som x86 för SDK-kompatibilitet)
-- Xbox 360 Kinect med nät-/USB-adapter
-- [Kinect for Windows SDK 1.8](https://www.microsoft.com/en-us/download/details.aspx?id=40278)
-- .NET Framework 4.8
-- Visual Studio 2022 med arbetsbelastningen **.NET desktop development**
-
-Sensorn bör sitta direkt i en USB 2.0-port som har tillräcklig bandbredd. Om appen visar `För lite USB-bandbredd`, stäng andra kameror/USB-ljudenheter och prova en annan portgrupp på datorns baksida.
-
-## Starta på din dator
-
-När projektet redan är byggt dubbelklickar du på **`STARTA-KINECTKIDS.cmd`** i projektmappen. Därifrån kan även Spökjakten startas utan Unity eller Unity Hub.
-
-Enklast är att högerklicka på `scripts/Run.ps1` och välja **Kör med PowerShell**. Skriptet:
-
-1. kontrollerar att Kinect SDK 1.8 finns,
-2. hittar Visual Studios MSBuild,
-3. bygger Release-versionen,
-4. startar spelet.
-
-Om PowerShell blockerar lokala skript kan du öppna PowerShell i projektmappen och köra:
+Alternativt:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Run.ps1
 ```
 
-Du kan även öppna `KinectKids.sln` i Visual Studio, välja `Release | x86` och trycka `F5`.
-
-För att bygga om både huvudmenyn och den fristående Spökjakten-versionen utan att öppna Unity Hub kör du:
+Tvinga ett nytt bygge och starta:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Build-All.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\Run.ps1 -Rebuild
 ```
+
+Bygg utan att starta:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Build.ps1
+```
+
+## Nuvarande Unity-spel
+
+- Greve Gast – Style C+ vertical slice med musikstyrd jakt.
+
+Följande äldre spel finns ännu bara i WPF-källkoden och visas därför inte i
+slutkundens Unity-meny förrän de har porterats och verifierats:
+
+- Matematikbanan
+- Bokstavsjakten
+- Formverkstan
+- Mönsterjakten
+- Simon säger
+- Ballongjakten
+
+De ska återskapas som separata Unity-moduler under
+`Assets/KinectKids/Games/`. De ska använda plattformens gemensamma Kinect-input,
+ljud, inställningar och pausmeny.
+
+## Projektstruktur
+
+```text
+unity/KinectKids3D/Assets/KinectKids/
+  Core/       beständiga plattformstjänster
+  Menu/       Unitys gemensamma spelmeny och GameRegistry
+  Games/      separata Unity-spelmoduler
+  SharedArt/  delad grafik
+  SharedAudio/delat ljud
+
+src/KinectBridge/  x86-brygga mellan Kinect SDK 1.8 och 64-bitars Unity
+src/KinectKids/    legacy WPF-referens; inte ett slutkundsprogram
+```
+
+## Legacy WPF
+
+WPF-koden ligger kvar endast som beteende- och innehållsreferens tills varje
+spel har porterats. Den byggs inte av standardkommandona och får inte användas
+som gemensam meny.
+
+Om en utvecklare uttryckligen behöver jämföra mot referensen kan den byggas med:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-LegacyWpf.ps1
+```
+
+## Krav för Kinect
+
+- Windows 10/11
+- Xbox 360 Kinect med nät-/USB-adapter
+- Kinect for Windows SDK 1.8
+
+Kinect SDK körs genom den separata 32-bitarsbryggan. Ingen kamera-, djup- eller
+skelettdata sparas till disk eller skickas över nätverket.
 
 ## Kontroller
 
 | Kontroll | Funktion |
 |---|---|
-| Händerna i Ballongjakten | Smäll ballonger |
-| Håll en handring på en zombie | Fyll den gula mätaren och träffa |
-| Höger hand över en knapp | Fyll mätaren och tryck på knappen |
-| `Mellanslag` | Paus / fortsätt |
-| `F11` | Helskärm / fönster |
-| `Esc` | Tillbaka / lämna helskärm |
-
-I **Testa med mus** fungerar muspekaren som båda händerna för spelare 1.
-
-## Felsökning
-
-Kör först:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Check-Kinect.ps1
-```
-
-Vanliga orsaker:
-
-- **Ingen Kinect hittades:** kontrollera nätadaptern och USB-kabeln.
-- **För lite USB-bandbredd:** använd en annan fysisk USB-controller/portgrupp och koppla ur andra högbandbreddsenheter.
-- **Microsoft.Kinect.dll saknas vid bygge:** installera Kinect for Windows SDK 1.8, inte SDK 2.0.
-- **Blinkande grön lampa:** normalt i vänteläge. När spelet öppnar sensorn ska den bli aktiv.
-
-## Projektstruktur
-
-```text
-src/KinectKids/
-  Assets/     Stations-, tunnel- och zombieillustrationer
-  Game/       Pedagogiska moduler samt Ballong- och Zombietåget-motorer
-  Input/      Kinect- och musspårning bakom samma gränssnitt
-  Models/     Normaliserad spelardata och mattefrågor
-  Services/   Anonym lokal progression
-  MainWindow  WPF-gränssnitt och spelläge
-src/KinectBridge/  x86-brygga mellan Kinect SDK 1.8 och Unity
-unity/        Spökjakten i Unity
-scripts/      kontroll, bygge och start
-```
-
-## Integritet och säkerhet
-
-Programmet använder bara ledpositionerna som SDK:n beräknar i realtid. Det öppnar inte färgkamerans bildström och skriver ingen sensorinformation till disk eller nätverk. Se till att barnen har fri golvyta och att sensorn står stadigt.
+| Höger hand | Menymarkör |
+| Håll över knapp | Välj efter ungefär en sekund |
+| W / uppåtpil | Hoppa |
+| S / nedåtpil | Ducka |
+| A / vänsterpil | Flytta vänster |
+| D / högerpil | Flytta höger |
+| Shift | Spring |
+| Mellanslag | Handling |
+| Escape | Gemensam pausmeny |
 
 ## Licens
 

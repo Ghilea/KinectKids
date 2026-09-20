@@ -34,6 +34,11 @@ namespace KinectKids3D
 
         public static void ReturnToLauncher()
         {
+            if (global::KinectKids3D.Platform.KinectKidsPlatformRoot.IsActive)
+            {
+                global::KinectKids3D.Platform.KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
+                return;
+            }
             StartLauncher();
             Application.Quit();
         }

@@ -14,8 +14,8 @@ namespace KinectKids3D.Platform
             KinectKidsPlatformRoot.Instance.Scenes.LoadGame("GreveGast");
             yield return WaitForScene("GreveGast");
             yield return null;
-            if (FindFirstObjectByType<GreveGastGame>() == null)
-                Debug.LogError("PLATFORM_SMOKE: GreveGastGame missing");
+            if (FindFirstObjectByType<GreveGastStyleCGame>() == null)
+                Debug.LogError("PLATFORM_SMOKE: GreveGastStyleCGame missing");
             else Debug.Log("PLATFORM_SMOKE: Greve Gast loaded");
             yield return new WaitForSecondsRealtime(2f);
             KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
