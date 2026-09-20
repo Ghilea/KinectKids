@@ -120,7 +120,7 @@ namespace KinectKids
                     "Kliv ombord på spökvagnen, ducka, väj och bekämpa slottets monster.",
                     "ÄVENTYR", "☾", "#C51A102F", "menu_spooky"),
                 new MenuGameDefinition(GreveGastButton, "Greve Gasts Jakt",
-                    "Spring genom slottet i takt med musiken och lura den busiga Greve Gast.",
+                    "Greve Gast har tagit över en levande teckning. Spring genom pappersvärlden och lura honom.",
                     "ÄVENTYR", "♬", "#C548176A", "menu_greve_gast")
             };
             carouselButtons = menuGames.Select(item => item.Button).ToArray();
@@ -306,7 +306,7 @@ namespace KinectKids
             if (executable == null)
             {
                 MessageBox.Show(
-                    "Greve Gasts Jakt behöver byggas i Unity först. Kör byggkommandot för Greve Gast.",
+                    "Greve Gasts Jakt behöver byggas i Unity först. Kör det gemensamma byggkommandot.",
                     "Greve Gasts Jakt", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }

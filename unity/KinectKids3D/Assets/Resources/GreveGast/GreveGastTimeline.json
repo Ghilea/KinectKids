@@ -1,9 +1,11 @@
 {
   "title": "Greve Gasts Jakt - forsta passet",
   "songLength": 372.0,
+  "gameplayStart": 21.00,
   "sections": [
     { "name": "Intro", "start": 0.0 },
-    { "name": "Jakten borjar", "start": 13.75 },
+    { "name": "Teckningen vaknar", "start": 13.75 },
+    { "name": "Jakten borjar", "start": 21.00 },
     { "name": "Slottskorridoren", "start": 31.88 },
     { "name": "Forsta refrangen", "start": 60.35 },
     { "name": "Fortsattning", "start": 88.26 }

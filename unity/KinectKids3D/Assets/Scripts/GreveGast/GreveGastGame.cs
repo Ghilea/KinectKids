@@ -38,6 +38,10 @@ namespace KinectKids3D
         private Transform skeletonRightLeg;
         private Transform greve;
         private global::GreveGast.GreveGastAnimationDriver greveAnimation;
+        private global::GreveGast2D.GreveGastDrawnController drawnGreveAnimation;
+        private global::GreveGast2D.GreveGastDrawnIntro drawnIntro;
+        private global::GreveGast2D.GreveGastDrawingPowers drawingPowers;
+        private float chaserGroundY = -0.8f;
         private Light moon;
         private AudioSource effects;
         private AudioSource ambience;
@@ -47,6 +51,8 @@ namespace KinectKids3D
         private Material purple;
         private Material danger;
         private Material pit;
+        private Material hauntedWood;
+        private Material rustedIron;
         private string warningSymbol;
         private float warningUntil;
         private float feedbackUntil;
@@ -60,6 +66,8 @@ namespace KinectKids3D
         private GreveGastAction previousBodyAction;
         private float jumpStartedAt = -10f;
         private int jumpObstacleCounter;
+        private int currentLane;
+        private bool laneGestureArmed = true;
         private string section = "Intro";
         private GUIStyle hugeStyle;
         private GUIStyle titleStyle;
@@ -72,13 +80,10 @@ namespace KinectKids3D
         private const float CameraZ = 22f;
         private const float LaneSpacing = 7.5f;
         private const float JumpVisualDuration = 0.82f;
-        // Greven sager "spring" forsta gangen har. Fore denna punkt ar det
-        // bara presentation och ingen varning eller nagot fysiskt hinder.
-        private const float GameplayStartTime = 13.75f;
 
         private void Start()
         {
-            name = "Greve Gasts Jakt";
+            name = "Greve Gasts teckningsjakt";
             if (ApplyDefaultFullscreen()) Invoke(nameof(ForceFullscreen), 0.75f);
             BuildWorld();
             body = new GreveGastBodyInput();
@@ -88,6 +93,11 @@ namespace KinectKids3D
             song.Cue += OnCue;
             song.SectionChanged += value => section = value.name;
             song.Begin();
+            if (drawnGreveAnimation != null)
+            {
+                drawnIntro = gameObject.AddComponent<global::GreveGast2D.GreveGastDrawnIntro>();
+                drawnIntro.Configure(drawnGreveAnimation, song);
+            }
         }
 
         private static bool ApplyDefaultFullscreen()
@@ -145,6 +155,10 @@ namespace KinectKids3D
             purple = MakeMaterial(new Color(0.42f, 0.08f, 0.63f), new Color(0.22f, 0.02f, 0.42f));
             danger = MakeMaterial(new Color(0.75f, 0.1f, 0.16f), new Color(0.45f, 0.02f, 0.04f));
             pit = MakeMaterial(new Color(0.006f, 0.004f, 0.012f));
+            hauntedWood = DarkRideWorld.TexturedMaterial(new Color(0.34f, 0.17f, 0.07f),
+                HauntedTextureFactory.OldWood(317), 0f);
+            rustedIron = DarkRideWorld.TexturedMaterial(new Color(0.27f, 0.25f, 0.23f),
+                HauntedTextureFactory.RustedMetal(411), 0.68f);
 
             var cameraObject = new GameObject("Musikalisk foljkamera");
             Camera camera = cameraObject.AddComponent<Camera>();
@@ -215,31 +229,48 @@ namespace KinectKids3D
 
             BuildPlayerCharacter();
 
-            GameObject grevePrefab = Resources.Load<GameObject>("GreveGastCharacter/GreveGast");
-            GameObject imported = grevePrefab != null ? Instantiate(grevePrefab, transform, false) : null;
+            GameObject drawnGrevePrefab = Resources.Load<GameObject>("GreveGast2D/GreveGastDrawn");
+            GameObject imported = drawnGrevePrefab != null ? Instantiate(drawnGrevePrefab, transform, false) : null;
             if (imported != null)
             {
-                imported.name = "Greve Gast - animerad prototyp";
+                imported.name = "Greve Gast - tecknad skepnad";
                 greve = imported.transform;
-                greve.position = new Vector3(0f, -0.8f, -38f);
+                chaserGroundY = 0f;
+                greve.position = new Vector3(0f, chaserGroundY, -38f);
                 greve.rotation = Quaternion.identity;
-                greve.localScale = Vector3.one * 5.2f;
-                greveAnimation = imported.GetComponent<global::GreveGast.GreveGastAnimationDriver>();
-                if (greveAnimation != null) greveAnimation.SetRun(true);
+                greve.localScale = Vector3.one * 2.4f;
+                drawnGreveAnimation = imported.GetComponent<global::GreveGast2D.GreveGastDrawnController>();
+                SetChaserRunning(false);
             }
             else
             {
-                greve = GameObject.CreatePrimitive(PrimitiveType.Sphere).transform;
-                greve.name = "Greve Gast";
-                greve.position = new Vector3(0f, -0.8f, -38f);
-                greve.localScale = Vector3.one * 7f;
-                greve.GetComponent<Renderer>().material = purple;
+                GameObject grevePrefab = Resources.Load<GameObject>("GreveGastCharacter/GreveGast");
+                imported = grevePrefab != null ? Instantiate(grevePrefab, transform, false) : null;
+                if (imported != null)
+                {
+                    imported.name = "Greve Gast - inaktiv reservmodell";
+                    greve = imported.transform;
+                    greve.position = new Vector3(0f, -0.8f, -38f);
+                    greve.rotation = Quaternion.identity;
+                    greve.localScale = Vector3.one * 5.2f;
+                    greveAnimation = imported.GetComponent<global::GreveGast.GreveGastAnimationDriver>();
+                    SetChaserRunning(true);
+                }
+                else
+                {
+                    greve = GameObject.CreatePrimitive(PrimitiveType.Sphere).transform;
+                    greve.name = "Reservfigur";
+                    greve.position = new Vector3(0f, -0.8f, -38f);
+                    greve.localScale = Vector3.one * 7f;
+                    greve.GetComponent<Renderer>().material = purple;
+                }
             }
 
             effects = gameObject.AddComponent<AudioSource>();
             effects.spatialBlend = 0f;
             effects.volume = 0.45f;
             warningTone = CreateTone();
+            drawingPowers = gameObject.AddComponent<global::GreveGast2D.GreveGastDrawingPowers>();
             AudioClip ambienceClip = Resources.Load<AudioClip>("Audio/SFX/Ambience/ambient_horror");
             if (ambienceClip != null)
             {
@@ -273,6 +304,13 @@ namespace KinectKids3D
             if (paused || body == null || song == null) return;
 
             body.Update();
+            // The intro may reveal the corridor during its final camera pullback,
+            // but the actual world must remain completely still until SPRING.
+            if (song.SongTime < song.GameplayStartTime)
+            {
+                moon.intensity = 2.9f + Mathf.Sin(song.SongTime * 1.4f) * 0.12f;
+                return;
+            }
             if (body.Current == GreveGastAction.Jump && previousBodyAction != GreveGastAction.Jump)
                 jumpStartedAt = Time.time;
             previousBodyAction = body.Current;
@@ -286,10 +324,24 @@ namespace KinectKids3D
 
         private void AnimateCharacters()
         {
-            int lane = body.HorizontalDelta < -0.10f ? -1 : body.HorizontalDelta > 0.10f ? 1 : 0;
+            if (Mathf.Abs(body.HorizontalDelta) < 0.08f) laneGestureArmed = true;
+            if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
+                currentLane = Mathf.Max(-1, currentLane - 1);
+            else if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
+                currentLane = Mathf.Min(1, currentLane + 1);
+            else if (laneGestureArmed && body.HorizontalDelta < -0.16f)
+            {
+                currentLane = Mathf.Max(-1, currentLane - 1);
+                laneGestureArmed = false;
+            }
+            else if (laneGestureArmed && body.HorizontalDelta > 0.16f)
+            {
+                currentLane = Mathf.Min(1, currentLane + 1);
+                laneGestureArmed = false;
+            }
             // Kameran tittar tillbaka langs banan och speglar varlds-X.
             // Negativ kroppslutning ska fortfarande synas som vanster pa skarmen.
-            float targetX = -lane * LaneSpacing;
+            float targetX = -currentLane * LaneSpacing;
             float runBob = body.Current == GreveGastAction.Run
                 ? Mathf.Abs(Mathf.Sin(song.SongTime * 10f)) * 0.09f : 0f;
             float jumpProgress = (Time.time - jumpStartedAt) / JumpVisualDuration;
@@ -315,13 +367,14 @@ namespace KinectKids3D
                 skeletonRightLeg.localRotation = playerRightLeg.localRotation;
             }
 
-            // Spelaren springer mot kameran. Greve Gast jagar bakifran och far
+            // Spelaren springer mot kameran. Jagarfiguren ligger bakom och far
             // aldrig lagga sig mellan kameran och spelarfiguren.
             float lyricApproach = song.SongTime < scriptedApproachUntil ? 10f : 0f;
             float greveZ = Mathf.Lerp(-42f, -25f, chase) + lyricApproach;
             Vector3 target = new Vector3(Mathf.Sin(song.SongTime * 1.4f) * 1.3f,
-                -0.8f + Mathf.Sin(song.SongTime * 2.2f) * 0.30f, greveZ);
+                chaserGroundY + Mathf.Sin(song.SongTime * 2.2f) * 0.10f, greveZ);
             greve.position = Vector3.Lerp(greve.position, target, 1f - Mathf.Exp(-3f * Time.deltaTime));
+            if (drawnGreveAnimation != null) drawnGreveAnimation.SetChaseDistance(chase);
         }
 
         private void ScrollCorridor()
@@ -346,14 +399,14 @@ namespace KinectKids3D
             GreveGastAction action = ParseAction(cue.action);
             if (action != GreveGastAction.None)
             {
-                if (cue.time < GameplayStartTime || song.SongTime < GameplayStartTime) return;
+                if (cue.time < song.GameplayStartTime || song.SongTime < song.GameplayStartTime) return;
                 warningSymbol = Symbol(action);
                 warningUntil = cue.time + cue.duration;
                 effects.PlayOneShot(warningTone);
                 SpawnObstacle(cue, action);
-                if (greveAnimation != null && chase > 0.68f) greveAnimation.PlayReach();
+                if (chase > 0.68f) PlayChaserReach();
             }
-            else if (cue.kind == "scare")
+            else if (cue.kind == "scare" && cue.time >= song.GameplayStartTime)
             {
                 warningUntil = cue.time + 0.35f;
                 warningSymbol = "!";
@@ -363,44 +416,51 @@ namespace KinectKids3D
         private void OnCue(GreveGastCue cue)
         {
             GreveGastAction action = ParseAction(cue.action);
-            if (action != GreveGastAction.None && cue.time >= GameplayStartTime)
+            if (action != GreveGastAction.None && cue.time >= song.GameplayStartTime)
+            {
                 pending.Add(new PendingAction { Cue = cue });
-            if (greveAnimation != null)
+                if (action == GreveGastAction.Run) SetChaserRunning(true);
+            }
+            if (greveAnimation != null || drawnGreveAnimation != null)
             {
                 switch (cue.kind)
                 {
                     case "gast_run":
-                        greveAnimation.SetRun(true);
+                        if (cue.time >= song.GameplayStartTime) SetChaserRunning(true);
                         break;
                     case "gast_closer":
-                        greveAnimation.SetRun(true);
-                        scriptedApproachUntil = song.SongTime + Mathf.Max(2f, cue.duration);
+                        if (cue.time >= song.GameplayStartTime)
+                        {
+                            SetChaserRunning(true);
+                            scriptedApproachUntil = song.SongTime + Mathf.Max(2f, cue.duration);
+                        }
                         break;
                     case "gast_stumble":
-                        greveAnimation.PlayStumble();
+                        PlayChaserStumble();
                         break;
                     case "gast_dance":
-                        greveAnimation.PlayDance();
+                        PlayChaserDance();
                         break;
                     case "gast_reach":
-                        greveAnimation.PlayReach();
+                        PlayChaserReach();
                         break;
                     case "gast_catch":
-                        greveAnimation.PlayCatch();
+                        PlayChaserCatch();
+                        break;
+                    case "gast_laugh":
+                        PlayChaserLaugh();
+                        break;
+                    case "gast_surprise":
+                        PlayChaserSurprise();
                         break;
                 }
             }
-            if (cue.kind == "reveal" || cue.kind == "scare")
+            if (cue.kind == "reveal") PlayChaserSurprise();
+            if ((cue.kind == "reveal" || cue.kind == "scare")
+                && cue.time >= song.GameplayStartTime)
             {
                 chase = Mathf.Clamp01(chase + 0.07f);
-                feedback = "BU!";
-                feedbackColor = new Color(0.9f, 0.35f, 1f);
-                feedbackUntil = song.SongTime + 0.65f;
-                if (greveAnimation != null)
-                {
-                    if (cue.kind == "reveal") greveAnimation.PlayDance();
-                    else greveAnimation.PlayStumble();
-                }
+                if (cue.kind == "scare") PlayChaserStumble();
                 if (cue.kind == "scare") SpawnAtmosphereScare(cue);
             }
         }
@@ -420,7 +480,7 @@ namespace KinectKids3D
                     feedback = "★";
                     feedbackColor = new Color(0.35f, 1f, 0.66f);
                     feedbackUntil = now + 0.75f;
-                    if (greveAnimation != null) greveAnimation.PlayStumble();
+                    PlayChaserStumble();
                 }
                 else if (now > item.Cue.time + item.Cue.duration)
                 {
@@ -429,11 +489,8 @@ namespace KinectKids3D
                     feedback = "!";
                     feedbackColor = new Color(1f, 0.34f, 0.28f);
                     feedbackUntil = now + 0.75f;
-                    if (greveAnimation != null)
-                    {
-                        if (chase > 0.9f) greveAnimation.PlayCatch();
-                        else greveAnimation.PlayReach();
-                    }
+                    if (chase > 0.9f) PlayChaserCatch();
+                    else PlayChaserReach();
                 }
             }
         }
@@ -447,21 +504,58 @@ namespace KinectKids3D
                 if ((jumpObstacleCounter & 1) == 0)
                 {
                     Cube("Golvgrop", root.transform, new Vector3(0, 0.035f, 0), new Vector3(23.5f, 0.06f, 4.2f), pit);
-                    Cube("Framre kant", root.transform, new Vector3(0, 0.075f, 2.08f), new Vector3(23.5f, 0.12f, 0.16f), danger);
-                    Cube("Bakre kant", root.transform, new Vector3(0, 0.075f, -2.08f), new Vector3(23.5f, 0.12f, 0.16f), danger);
+                    Cube("Trasig framkant", root.transform, new Vector3(0, 0.10f, 2.08f), new Vector3(23.5f, 0.18f, 0.24f), stone);
+                    Cube("Trasig bakkant", root.transform, new Vector3(0, 0.10f, -2.08f), new Vector3(23.5f, 0.18f, 0.24f), stone);
+                    for (int lane = -1; lane <= 1; lane++)
+                        ImportedModelFactory.Create("Models/KenneyGraveyard/rocks-tall", root.transform,
+                            "Rasade stenar vid grop", new Vector3(lane * LaneSpacing, 0.30f, 2.0f),
+                            1.25f, Quaternion.Euler(0f, lane * 17f, 0f));
                 }
                 else
-                    Cube("Lagt hinder", root.transform, new Vector3(0, 0.45f, 0), new Vector3(23.5f, 0.9f, 0.8f), danger);
+                {
+                    Cube("Nedfallen takbjalk", root.transform, new Vector3(0, 0.48f, 0),
+                        new Vector3(23.5f, 0.72f, 0.85f), hauntedWood);
+                    for (int lane = -1; lane <= 1; lane++)
+                        ImportedModelFactory.Create("Models/KenneyGraveyard/debris-wood", root.transform,
+                            "Trasigt virke", new Vector3(lane * LaneSpacing, 0.42f, 0.15f),
+                            1.6f, Quaternion.Euler(0f, lane * 21f, 0f));
+                }
             }
             else if (action == GreveGastAction.Duck)
-                Cube("Hog bjalk", root.transform, new Vector3(0, 2.05f, 0), new Vector3(23.5f, 0.75f, 0.8f), danger);
+            {
+                Cube("Hangande slottsbjalk", root.transform, new Vector3(0, 2.22f, 0),
+                    new Vector3(23.5f, 0.72f, 1.0f), hauntedWood);
+                for (int x = -10; x <= 10; x += 10)
+                    Cube("Rostig kedja", root.transform, new Vector3(x, 5.3f, 0),
+                        new Vector3(0.13f, 5.8f, 0.13f), rustedIron);
+                ImportedModelFactory.Create("Models/KenneyGraveyard/lantern-candle", root.transform,
+                    "Svangande lykta", new Vector3(0f, 1.62f, 0f), 1.15f,
+                    Quaternion.Euler(0f, 180f, 0f));
+            }
             else if (action == GreveGastAction.Left)
-                Cube("Blockering mitten och hoger", root.transform, new Vector3(-3.75f, 1.2f, 0), new Vector3(14f, 2.4f, 0.8f), danger);
+            {
+                // Skarmens vanstra fil ar world +X eftersom kameran ser bakat.
+                AddLaneBarricade(root.transform, 0f, 0);
+                AddLaneBarricade(root.transform, -LaneSpacing, 1);
+            }
             else if (action == GreveGastAction.Right)
-                Cube("Blockering vanster och mitten", root.transform, new Vector3(3.75f, 1.2f, 0), new Vector3(14f, 2.4f, 0.8f), danger);
+            {
+                AddLaneBarricade(root.transform, 0f, 2);
+                AddLaneBarricade(root.transform, LaneSpacing, 3);
+            }
             else
                 return;
             root.transform.position = new Vector3(0f, 0f, ObstacleStartZ);
+            if (drawingPowers != null)
+            {
+                global::GreveGast2D.GreveGastDrawnPower power = action == GreveGastAction.Jump
+                    && root.transform.Find("Golvgrop") != null
+                    ? global::GreveGast2D.GreveGastDrawnPower.DrawHole
+                    : action == GreveGastAction.Duck
+                        ? global::GreveGast2D.GreveGastDrawnPower.DrawWall
+                        : global::GreveGast2D.GreveGastDrawnPower.DrawObstacle;
+                drawingPowers.DrawIntoWorld(root, greve, power);
+            }
             float remaining = Mathf.Max(0.5f, cue.time - song.SongTime);
             obstacles.Add(new Obstacle
             {
@@ -469,6 +563,38 @@ namespace KinectKids3D
                 Object = root,
                 Speed = (ObstacleStartZ - PlayerZ) / remaining
             });
+        }
+
+        private void AddLaneBarricade(Transform parent, float x, int variant)
+        {
+            string path;
+            float size;
+            switch (variant % 4)
+            {
+                case 0:
+                    path = "Models/KenneyGraveyard/coffin-old";
+                    size = 3.9f;
+                    break;
+                case 1:
+                    path = "Models/KenneyGraveyard/gravestone-cross-large";
+                    size = 3.7f;
+                    break;
+                case 2:
+                    path = "Models/KenneyGraveyard/gravestone-debris";
+                    size = 3.5f;
+                    break;
+                default:
+                    path = "Models/KenneyGraveyard/rocks-tall";
+                    size = 3.8f;
+                    break;
+            }
+            ImportedModelFactory.Create(path, parent, "Slottsbråte som blockerar filen",
+                new Vector3(x, 1.35f, 0f), size,
+                Quaternion.Euler(0f, 180f + variant * 13f, 0f));
+            Cube("Korslagda plankor A", parent, new Vector3(x, 1.25f, -0.15f),
+                new Vector3(4.8f, 0.28f, 0.34f), hauntedWood).transform.localRotation = Quaternion.Euler(0f, 0f, 24f);
+            Cube("Korslagda plankor B", parent, new Vector3(x, 1.25f, -0.12f),
+                new Vector3(4.8f, 0.28f, 0.34f), hauntedWood).transform.localRotation = Quaternion.Euler(0f, 0f, -24f);
         }
 
         private void UpdateObstacles()
@@ -503,8 +629,9 @@ namespace KinectKids3D
         {
             EnsureStyles();
             float now = song != null ? song.SongTime : 0f;
+            if (drawnIntro != null && drawnIntro.enabled) return;
             if (now < 3.0f)
-                GUI.Label(new Rect(0, Screen.height * 0.12f, Screen.width, 100), "GREVE GASTS JAKT", titleStyle);
+                GUI.Label(new Rect(0, Screen.height * 0.12f, Screen.width, 100), "GREVE GASTS TECKNINGSJAKT", titleStyle);
             if (now < 3.2f)
                 GUI.Label(new Rect(0, Screen.height * 0.72f, Screen.width, 60), "Ror hela kroppen i takt med musiken", panelStyle);
             if (!string.IsNullOrEmpty(warningSymbol) && now <= warningUntil)
@@ -517,12 +644,12 @@ namespace KinectKids3D
                 GUI.color = old;
             }
 
-            GUI.Box(new Rect(24, 22, 350, 38), GUIContent.none);
+            GUI.Box(new Rect(24, 22, 470, 38), GUIContent.none);
             Color previous = GUI.color;
             GUI.color = Color.Lerp(new Color(0.3f, 0.95f, 0.7f), new Color(0.95f, 0.18f, 0.3f), chase);
-            GUI.DrawTexture(new Rect(28, 26, 342 * chase, 30), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(28, 26, 462 * chase, 30), Texture2D.whiteTexture);
             GUI.color = previous;
-            GUI.Label(new Rect(32, 25, 334, 30), "GREVE GAST KOMMER NARMARE", panelStyle);
+            GUI.Label(new Rect(32, 25, 454, 30), "GREVE GAST KOMMER NARMARE", panelStyle);
 
             if (debug) DrawDebug(now);
             if (paused) DrawPause();
@@ -546,14 +673,16 @@ namespace KinectKids3D
                 if (next != null) song.Seek(Mathf.Max(0, next.time - next.warning - 0.3f));
             }
             GUI.Label(new Rect(35, 226, 340, 35), "F3 = forsta refrangen  |  PgDn = nasta handelse");
-            if (greveAnimation != null)
+            if (greveAnimation != null || drawnGreveAnimation != null)
             {
-                if (GUI.Button(new Rect(35, 270, 58, 30), "Idle")) greveAnimation.SetRun(false);
-                if (GUI.Button(new Rect(97, 270, 58, 30), "Run")) greveAnimation.SetRun(true);
-                if (GUI.Button(new Rect(159, 270, 62, 30), "Reach")) greveAnimation.PlayReach();
-                if (GUI.Button(new Rect(225, 270, 72, 30), "Stumble")) greveAnimation.PlayStumble();
-                if (GUI.Button(new Rect(301, 270, 62, 30), "Dance")) greveAnimation.PlayDance();
-                if (GUI.Button(new Rect(367, 270, 62, 30), "Catch")) greveAnimation.PlayCatch();
+                if (GUI.Button(new Rect(35, 270, 58, 30), "Idle")) SetChaserRunning(false);
+                if (GUI.Button(new Rect(97, 270, 58, 30), "Run")) SetChaserRunning(true);
+                if (GUI.Button(new Rect(159, 270, 62, 30), "Reach")) PlayChaserReach();
+                if (GUI.Button(new Rect(225, 270, 72, 30), "Stumble")) PlayChaserStumble();
+                if (GUI.Button(new Rect(301, 270, 62, 30), "Laugh")) PlayChaserLaugh();
+                if (GUI.Button(new Rect(367, 270, 62, 30), "Dance")) PlayChaserDance();
+                if (GUI.Button(new Rect(301, 306, 62, 30), "Catch")) PlayChaserCatch();
+                if (GUI.Button(new Rect(367, 306, 62, 30), "Surprise")) PlayChaserSurprise();
             }
         }
 
@@ -567,6 +696,8 @@ namespace KinectKids3D
             {
                 song.Seek(0f);
                 chase = 0.5f;
+                currentLane = 0;
+                laneGestureArmed = true;
                 TogglePause();
             }
             string playerView = skeletonMode ? "SPELARE: SKELETT" : "SPELARE: FIGUR";
@@ -853,6 +984,48 @@ namespace KinectKids3D
                 case GreveGastAction.Run: return "⚡";
                 default: return string.Empty;
             }
+        }
+
+        private void SetChaserRunning(bool running)
+        {
+            if (drawnGreveAnimation != null) drawnGreveAnimation.SetRunning(running);
+            if (greveAnimation != null) greveAnimation.SetRun(running);
+        }
+
+        private void PlayChaserReach()
+        {
+            if (drawnGreveAnimation != null) drawnGreveAnimation.PlayReach();
+            if (greveAnimation != null) greveAnimation.PlayReach();
+        }
+
+        private void PlayChaserStumble()
+        {
+            if (drawnGreveAnimation != null) drawnGreveAnimation.PlayStumble();
+            if (greveAnimation != null) greveAnimation.PlayStumble();
+        }
+
+        private void PlayChaserLaugh()
+        {
+            if (drawnGreveAnimation != null) drawnGreveAnimation.PlayLaugh();
+            else if (greveAnimation != null) greveAnimation.PlayDance();
+        }
+
+        private void PlayChaserDance()
+        {
+            if (drawnGreveAnimation != null) drawnGreveAnimation.PlayDance();
+            if (greveAnimation != null) greveAnimation.PlayDance();
+        }
+
+        private void PlayChaserCatch()
+        {
+            if (drawnGreveAnimation != null) drawnGreveAnimation.PlayCatch();
+            if (greveAnimation != null) greveAnimation.PlayCatch();
+        }
+
+        private void PlayChaserSurprise()
+        {
+            if (drawnGreveAnimation != null) drawnGreveAnimation.PlaySurprise();
+            else if (greveAnimation != null) greveAnimation.PlayDance();
         }
 
         private void EnsureStyles()

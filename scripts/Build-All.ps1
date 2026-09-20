@@ -35,7 +35,7 @@ if (-not $SkipUnity) {
         throw "Unity-bygget misslyckades med felkod $($unityProcess.ExitCode). Se $log"
     }
 
-    Write-Host 'Bygger fristaende Greve Gasts Jakt...' -ForegroundColor Cyan
+    Write-Host 'Bygger fristaende Greve Gasts teckningsjakt...' -ForegroundColor Cyan
     $greveLog = Join-Path $unityProject 'Build\greve-gast-build.log'
     $greveArguments = @(
         '-batchmode',

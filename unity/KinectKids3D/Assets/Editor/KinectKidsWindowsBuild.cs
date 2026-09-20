@@ -47,6 +47,10 @@ namespace KinectKids3D.Editor
         {
             string root = FindProjectRoot();
             if (root == null) throw new InvalidOperationException("KinectKids.sln hittades inte ovanfor Unity-projektet.");
+            GreveGast2DBuilder.BuildAll();
+            EnsureGreveGastDrawnRuntimePrefab();
+            // Behall den gamla 3D-figuren som saker fallback tills hela den nya
+            // 2.5D-riktningen ar verifierad i spelet.
             global::GreveGast.Editor.GreveGastBuilder.BuildCharacter();
             EnsureGreveGastRuntimePrefab();
             ConfigureGreveGastMusic();
@@ -72,11 +76,32 @@ namespace KinectKids3D.Editor
                 throw new InvalidOperationException("Greve Gast-bygget misslyckades: " + report.summary.result);
 
             File.WriteAllText(Path.Combine(buildFolder, "STARTA-HAR.txt"),
-                "GREVE GASTS JAKT\r\n\r\nStarta GreveGastJakt.exe.\r\n" +
+                "GREVE GASTS TECKNINGSJAKT - TEKNISK PROTOTYP\r\n\r\nStarta GreveGastJakt.exe.\r\n" +
+                "Greve Gast har tagit over en levande teckning och jagar spelaren genom pappersvarlden.\r\n" +
                 "F2 visar tidslinjeverktyget. F3 hoppar till forsta refrangen.\r\n" +
                 "Tangentbordstest: W spring, mellanslag hoppa, S ducka, A/D sidsteg.\r\n");
             if (!Application.isBatchMode) EditorUtility.RevealInFinder(buildFolder);
             UnityEngine.Debug.Log("Greve Gasts Jakt ar klar: " + buildFolder);
+        }
+
+        [MenuItem("KinectKids/Greve Gast/Bygg tecknat animationstest for Windows")]
+        public static void BuildGreveGastDrawnTestVersion()
+        {
+            GreveGast2DBuilder.BuildAll();
+            string root = FindProjectRoot();
+            if (root == null) throw new InvalidOperationException("KinectKids.sln hittades inte ovanfor Unity-projektet.");
+            string buildFolder = Path.Combine(root, "unity", "KinectKids3D", "Build", "GreveGastDrawnTest");
+            Directory.CreateDirectory(buildFolder);
+            BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = new[] { "Assets/GreveGast2D/GreveGastDrawnTest.unity" },
+                locationPathName = Path.Combine(buildFolder, "GreveGastDrawnTest.exe"),
+                target = BuildTarget.StandaloneWindows64,
+                options = BuildOptions.None
+            });
+            if (report.summary.result != BuildResult.Succeeded)
+                throw new InvalidOperationException("Greve Gast-animationstestet misslyckades: " + report.summary.result);
+            UnityEngine.Debug.Log("Greve Gast-animationstestet ar klart: " + buildFolder);
         }
 
         private static void EnsureGreveGastRuntimePrefab()
@@ -89,6 +114,20 @@ namespace KinectKids3D.Editor
             AssetDatabase.DeleteAsset(target);
             if (!AssetDatabase.CopyAsset(source, target))
                 throw new InvalidOperationException("Greve Gast-prefaben kunde inte kopieras till Resources.");
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        private static void EnsureGreveGastDrawnRuntimePrefab()
+        {
+            const string source = "Assets/GreveGast2D/Prefabs/GreveGastDrawn.prefab";
+            const string folder = "Assets/Resources/GreveGast2D";
+            const string target = folder + "/GreveGastDrawn.prefab";
+            if (!AssetDatabase.IsValidFolder(folder))
+                AssetDatabase.CreateFolder("Assets/Resources", "GreveGast2D");
+            AssetDatabase.DeleteAsset(target);
+            if (!AssetDatabase.CopyAsset(source, target))
+                throw new InvalidOperationException("Greve Gasts tecknade prefab kunde inte kopieras till Resources.");
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }

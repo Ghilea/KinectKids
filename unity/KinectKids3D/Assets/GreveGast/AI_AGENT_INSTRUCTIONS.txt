@@ -1,17 +1,36 @@
-Use the Greve Gast Unity prototype package already placed under Assets/GreveGast.
+VIKTIG STORYANDRING
 
-1. Let Unity compile it.
-2. Run Tools > Greve Gast > Build Character.
-3. Use Assets/GreveGast/Generated/Prefabs/GreveGast.prefab as the enemy model in the musical chase.
-4. Do not rewrite the builder unless there is a compile error. Fix only compatibility issues required by the current Unity/render-pipeline version.
-5. Integrate GreveGastAnimationDriver with the ChaseTimeline:
-   - Run during active chase
-   - Reach when Greve Gast nearly catches the player
-   - Stumble for comic misses/environment crashes
-   - Dance during selected musical breaks
-   - Catch when the player loses
-6. Greve Gast should remain behind the player most of the time. Adjust distance using the chase-meter system rather than animation root motion.
-7. Keep all song timing based on the master WAV clock.
-8. Add a debug panel where the developer can manually test all Greve Gast animation states.
-9. Do not remove the generated concept/reference art or textures.
-10. After integration, run the scene and fix all console errors.
+Fienden heter fortfarande GREVE GAST.
+Greve Gast ar samma figur och personlighet som i laten, men han har tagit over en teckning och anvander den som sin nya kropp.
+Den fargglada klotterfiguren ar INTE en separat karaktar och far aldrig kallas Klotter-Kasper i spelet.
+Nya klasser, prefabs och UI-namn ska anvanda GreveGastDrawn eller GreveGast2D.
+
+INTRO STORY
+
+Spelet borjar i den riktiga varlden. Ett barn har ritat en figur pa ett papper och lagt ner pennan.
+Greve Gasts rost hors fran teckningen: "Halla dar..."
+Svarta streck ror sig, ogonen oppnas och farger sprider sig genom kroppen.
+Ansiktet far Greve Gasts stora busiga leende. Han sager: "Vart tror du att du ska?"
+Han pressar handerna mot papprets kant och kliver ut. Teckningsvarlden sprider sig ut i rummet.
+Nar Greve Gast sager eller sjunger "SPRING!" gar spelet somlost over till jaktbanan.
+
+GREVE GASTS TECKNINGSKRAFTER
+
+I den levande teckningen kan Greve Gast:
+- rita fram hinder, dorrar, vaggar och hal i marken
+- skapa genvagar at sig sjalv
+- sudda bort delar av vagen och broar
+- kasta farg och kritstreck
+- rita fram sma levande doodles
+- kliva in i en vaggteckning och komma ut langre fram
+- deformera kroppen som en tecknad figur
+- stracka armarna onaturligt langt vid Reach
+
+TEKNISKA REGLER
+
+1. Assets/GreveGast2D/Prefabs/GreveGastDrawn.prefab ar den aktiva fienden. Den gamla 3D-figuren ar endast fallback.
+2. Run anvands under aktiv jakt, Reach nar Greve Gast nastan nar spelaren, Stumble vid missar, Dance under musikskamt och Catch vid forlust.
+3. Greve Gast ska vara bakom spelaren. Avstand styrs av chase-metern, inte animation root motion.
+4. All timing ska folja master-WAV-klockan. Hinder far inte borja fore forsta "SPRING!".
+5. Varldsobjekt ska ritas fram visuellt; de far inte bara poppa in.
+6. Behall debugpanelen for alla animationer och kor spelet efter andringar tills konsolen ar fri fran fel.

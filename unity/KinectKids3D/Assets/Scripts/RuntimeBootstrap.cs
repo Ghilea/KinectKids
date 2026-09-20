@@ -18,10 +18,12 @@ namespace KinectKids3D
         private static void StartGame()
         {
             if (UnityEngine.Object.FindFirstObjectByType<SpokjaktenGame>() != null
-                || UnityEngine.Object.FindFirstObjectByType<GreveGastGame>() != null) return;
+                || UnityEngine.Object.FindFirstObjectByType<GreveGastGame>() != null
+                || UnityEngine.Object.FindFirstObjectByType<global::GreveGast2D.GreveGastDrawnTestPanel>() != null
+                || SceneManager.GetActiveScene().name == "GreveGastDrawnTest") return;
             bool greveGast = IsGreveGastBuild();
             GameObject root = new GameObject(greveGast
-                ? "KinectKids 3D - Greve Gasts Jakt"
+                ? "KinectKids 3D - Greve Gasts teckningsjakt"
                 : "KinectKids 3D - Spokjakten");
             if (greveGast) root.AddComponent<GreveGastGame>();
             else root.AddComponent<SpokjaktenGame>();

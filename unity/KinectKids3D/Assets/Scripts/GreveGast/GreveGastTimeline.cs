@@ -23,6 +23,7 @@ namespace KinectKids3D
     {
         public string title;
         public float songLength;
+        public float gameplayStart = 21.00f;
         public GreveGastSection[] sections = Array.Empty<GreveGastSection>();
         public GreveGastCue[] cues = Array.Empty<GreveGastCue>();
     }
@@ -44,6 +45,7 @@ namespace KinectKids3D
         public GreveGastTimelineData Timeline => timeline;
         public float SongTime => source != null ? source.time : 0f;
         public bool IsPlaying => source != null && source.isPlaying;
+        public float GameplayStartTime => timeline != null ? timeline.gameplayStart : 21.00f;
 
         public bool Begin()
         {
