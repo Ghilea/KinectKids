@@ -21,6 +21,37 @@ namespace KinectKids3D.Platform
             KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
             yield return WaitForScene(KinectKidsSceneLoader.MainMenuScene);
             Debug.Log("PLATFORM_SMOKE: return to MainMenu succeeded");
+            yield return new WaitForSecondsRealtime(0.5f);
+            KinectKidsPlatformRoot.Instance.Scenes.LoadGame("Spokjakten");
+            yield return WaitForScene("Spokjakten");
+            yield return null;
+            if (FindFirstObjectByType<SpokjaktenGame>() == null)
+                Debug.LogError("PLATFORM_SMOKE: SpokjaktenGame missing");
+            else Debug.Log("PLATFORM_SMOKE: Spokjakten loaded");
+            yield return new WaitForSecondsRealtime(2f);
+            KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
+            yield return WaitForScene(KinectKidsSceneLoader.MainMenuScene);
+            Debug.Log("PLATFORM_SMOKE: Spokjakten return to MainMenu succeeded");
+            string[] learningScenes = { "Matematikbanan", "Bokstavsjakten", "Formverkstan", "Monsterjakten", "SimonSager", "Ballongjakten" };
+            foreach (string learningScene in learningScenes)
+            {
+                yield return new WaitForSecondsRealtime(0.25f);
+                KinectKidsPlatformRoot.Instance.Scenes.LoadGame(learningScene);
+                yield return WaitForScene(learningScene);
+                yield return null;
+                bool gameFound = learningScene == "SimonSager"
+                    ? FindFirstObjectByType<SimonGameUnity>() != null
+                    : learningScene == "Ballongjakten"
+                        ? FindFirstObjectByType<BalloonGameUnity>() != null
+                        : FindFirstObjectByType<LearningChoiceGameUnity>() != null;
+                if (!gameFound)
+                    Debug.LogError("PLATFORM_SMOKE: learning game missing in " + learningScene);
+                else Debug.Log("PLATFORM_SMOKE: " + learningScene + " loaded");
+                yield return new WaitForSecondsRealtime(0.7f);
+                KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
+                yield return WaitForScene(KinectKidsSceneLoader.MainMenuScene);
+                Debug.Log("PLATFORM_SMOKE: " + learningScene + " return succeeded");
+            }
             Application.Quit(0);
         }
 

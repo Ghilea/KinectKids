@@ -14,5 +14,26 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/KinectKids/Games/GreveGast/Scenes/GreveGast.unity
     guid: 1320a2fdded9be243b1fd54a43056759
+  - enabled: 1
+    path: Assets/KinectKids/Games/GhostHunt/Spokjakten.unity
+    guid: 523f2ebd0c09343459f2b4096b2e29f0
+  - enabled: 1
+    path: Assets/KinectKids/Games/Learning/Scenes/Matematikbanan.unity
+    guid: 3d20f076d744d454fbc39ba6ccfe6150
+  - enabled: 1
+    path: Assets/KinectKids/Games/Learning/Scenes/Bokstavsjakten.unity
+    guid: 7bf0a191a46bf1b459f2782a18543cfa
+  - enabled: 1
+    path: Assets/KinectKids/Games/Learning/Scenes/Formverkstan.unity
+    guid: 89c6ba62c6e4c2943b2324c77cf8de84
+  - enabled: 1
+    path: Assets/KinectKids/Games/Learning/Scenes/Monsterjakten.unity
+    guid: 672327880cf4f7445808cc2124987eb1
+  - enabled: 1
+    path: Assets/KinectKids/Games/Learning/Scenes/SimonSager.unity
+    guid: cb170b0a1d5cfa1478abdce195a6d88e
+  - enabled: 1
+    path: Assets/KinectKids/Games/Learning/Scenes/Ballongjakten.unity
+    guid: fd8cba841d501184ca3d2765965a91e5
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

@@ -1,6 +1,6 @@
 @echo off
 setlocal
-set "GAME_DIR=%~dp0unity\KinectKids3D\Build\KinectKids"
+set "GAME_DIR=%LOCALAPPDATA%\KinectKids\Build\KinectKids"
 set "GAME_EXE=%GAME_DIR%\KinectKids.exe"
 
 if not exist "%GAME_EXE%" (

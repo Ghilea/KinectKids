@@ -9,4 +9,4 @@ $ErrorActionPreference = 'Stop'
 
 Write-Host ''
 Write-Host 'HELA UNITY-PLATTFORMEN AR KLAR' -ForegroundColor Green
-Write-Host 'Starta alltid STARTA-KINECTKIDS.cmd eller unity\KinectKids3D\Build\KinectKids\KinectKids.exe.' -ForegroundColor Green
+Write-Host 'Starta alltid STARTA-KINECTKIDS.cmd eller KinectKids.exe under lokal programdata.' -ForegroundColor Green

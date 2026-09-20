@@ -189,7 +189,9 @@ namespace KinectKids3D
             CreateAudio();
             CreateHudTextures();
             ResetRide();
-            flow = GameFlow.Menu;
+            if (global::KinectKids3D.Platform.KinectKidsPlatformRoot.IsActive)
+                CompleteCalibration();
+            else flow = GameFlow.Menu;
         }
 
         private void CreateCamera()
@@ -212,6 +214,12 @@ namespace KinectKids3D
 
         private void CreateInput()
         {
+            if (global::KinectKids3D.Platform.KinectKidsInputManager.Instance != null)
+            {
+                aimProvider = new global::KinectKids3D.Platform.PlatformAimProvider();
+                RefreshInputStatus();
+                return;
+            }
             var automatic = new KinectAutoAimProvider();
             automatic.Start();
             aimProvider = automatic;
@@ -222,6 +230,9 @@ namespace KinectKids3D
         {
             KinectAutoAimProvider automatic = aimProvider as KinectAutoAimProvider;
             if (automatic != null) return automatic.KinectConnected;
+            if (aimProvider is global::KinectKids3D.Platform.PlatformAimProvider)
+                return global::KinectKids3D.Platform.KinectKidsInputManager.Instance != null
+                    && global::KinectKids3D.Platform.KinectKidsInputManager.Instance.KinectConnected;
             return aimProvider is KinectBridgeAimProvider || aimProvider is KinectV1AimProvider;
         }
 
@@ -512,8 +523,10 @@ namespace KinectKids3D
             }
 
             if (Input.GetKeyDown(KeyCode.F2)) JumpToNextCheckpoint();
-            if (!finished && (Input.GetKeyDown(KeyCode.P) || Input.GetKeyDown(KeyCode.Space)
-                || Input.GetKeyDown(KeyCode.Escape))) paused = !paused;
+            bool platform = global::KinectKids3D.Platform.KinectKidsPlatformRoot.IsActive;
+            if (!finished && (Input.GetKeyDown(KeyCode.P)
+                || (!platform && (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Escape)))))
+                paused = !paused;
             if (finished && Input.GetKeyDown(KeyCode.R)) ReloadRide();
             if (Input.GetKeyDown(KeyCode.B) && !bossDefeated)
             {

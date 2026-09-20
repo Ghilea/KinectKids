@@ -14,11 +14,15 @@ namespace KinectKids3D.Platform
         private float previousHead = 1.7f;
         private float calibrationTime;
         private float runEnergy;
+        private readonly List<AimSample> latestAimSamples = new List<AimSample>(4);
+        private readonly List<PlayerPose> latestPlayerPoses = new List<PlayerPose>(2);
 
         public static KinectKidsInputManager Instance { get; private set; }
         public PlayerInputFrame Frame => frame;
         public bool KinectConnected => provider != null && provider.KinectConnected;
         public string Status => provider != null ? provider.Status : "Kinect startar";
+        public IReadOnlyList<AimSample> AimSamples => latestAimSamples;
+        public IReadOnlyList<PlayerPose> PlayerPoses => latestPlayerPoses;
 
         private void Awake()
         {
@@ -35,6 +39,10 @@ namespace KinectKids3D.Platform
             if (provider == null) return;
             IReadOnlyList<PlayerPose> poses = provider.GetPlayerPoses();
             IReadOnlyList<AimSample> aims = provider.GetAimSamples();
+            latestPlayerPoses.Clear();
+            for (int i = 0; i < poses.Count; i++) latestPlayerPoses.Add(poses[i]);
+            latestAimSamples.Clear();
+            for (int i = 0; i < aims.Count; i++) latestAimSamples.Add(aims[i]);
             bool tracked = poses.Count > 0;
             if (tracked)
             {

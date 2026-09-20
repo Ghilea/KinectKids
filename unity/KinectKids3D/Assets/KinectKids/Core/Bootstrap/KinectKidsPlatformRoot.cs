@@ -29,7 +29,15 @@ namespace KinectKids3D.Platform
         private void Start()
         {
             if (SceneManager.GetActiveScene().name == KinectKidsSceneLoader.BootstrapScene)
-                Scenes.LoadMenu();
+            {
+                string requestedScene = null;
+                foreach (string argument in Environment.GetCommandLineArgs())
+                    if (argument.StartsWith("--start-game=", StringComparison.OrdinalIgnoreCase))
+                        requestedScene = argument.Substring("--start-game=".Length);
+                if (!string.IsNullOrWhiteSpace(requestedScene) && Application.CanStreamedLevelBeLoaded(requestedScene))
+                    Scenes.LoadGame(requestedScene);
+                else Scenes.LoadMenu();
+            }
         }
 
         private void OnDestroy()

@@ -67,18 +67,25 @@ namespace KinectKids3D.Platform
 
         private void DrawCards()
         {
-            float x = 70f, y = 175f, w = Mathf.Min(650f, Screen.width * 0.43f), h = 122f;
-            for (int i = 0; i < registry.games.Length; i++)
+            float x = 70f, w = Mathf.Min(650f, Screen.width * 0.43f), h = Mathf.Min(112f, Screen.height * 0.13f);
+            float centerY = Screen.height * 0.47f - h * 0.5f;
+            int visible = Mathf.Min(5, registry.games.Length);
+            int half = visible / 2;
+            for (int offset = -half; offset <= half; offset++)
             {
+                if (visible % 2 == 0 && offset == half) continue;
+                int i = (selected + offset + registry.games.Length) % registry.games.Length;
                 GameDefinition game = registry.games[i];
-                Rect rect = new Rect(x + Mathf.Abs(i - selected) * 22f, y + i * (h + 20f), w, h);
+                float curve = Mathf.Abs(offset) * 42f;
+                float scale = offset == 0 ? 1f : 0.86f - Mathf.Abs(offset) * 0.05f;
+                Rect rect = new Rect(x + curve, centerY + offset * (h + 15f), w * scale, h * scale);
                 GUI.color = new Color(0.18f, 0.10f, 0.22f, 0.28f);
                 GUI.DrawTexture(new Rect(rect.x + 8, rect.y + 9, rect.width, rect.height), Texture2D.whiteTexture);
                 GUI.color = i == selected ? game.cardColor : Color.Lerp(game.cardColor, Color.white, 0.28f);
                 GUI.DrawTexture(rect, Texture2D.whiteTexture);
                 GUI.color = Color.white;
                 if (GUI.Button(rect, game.displayName, card)) { selected = i; details = true; }
-                if (i == selected) selectedRect = rect;
+                if (offset == 0) selectedRect = rect;
             }
             GameDefinition active = registry.games[selected];
             Rect preview = new Rect(Screen.width * 0.56f, 180f, Screen.width * 0.37f, Screen.height * 0.56f);

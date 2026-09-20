@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $unityProject = Join-Path $projectRoot 'unity\KinectKids3D'
 $unityEditor = Join-Path ${env:ProgramFiles} 'Unity\Hub\Editor\6000.0.60f1\Editor\Unity.exe'
-$output = Join-Path $unityProject 'Build\KinectKids\KinectKids.exe'
+$output = Join-Path $env:LOCALAPPDATA 'KinectKids\Build\KinectKids\KinectKids.exe'
 $log = Join-Path $unityProject 'Build\kinectkids-platform-build.log'
 
 if (-not (Test-Path -LiteralPath $unityEditor)) {

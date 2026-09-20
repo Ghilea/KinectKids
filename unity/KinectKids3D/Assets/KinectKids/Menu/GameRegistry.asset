@@ -14,3 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   games:
   - {fileID: 11400000, guid: 45440f8ee82026544b6ff36aa966b25e, type: 2}
+  - {fileID: 11400000, guid: 74bc1db6c2f3e6b489976894b6a8d108, type: 2}
+  - {fileID: 11400000, guid: 514a04ae6a522c541bc460c0876f799f, type: 2}
+  - {fileID: 11400000, guid: 92d78c973c4b6c94bb0144264abc5260, type: 2}
+  - {fileID: 11400000, guid: 6bdc2b43624fb9646b4396a527df0a4c, type: 2}
+  - {fileID: 11400000, guid: d9b6d67bf8755bf4996a585e8ce33bd9, type: 2}
+  - {fileID: 11400000, guid: f7749950337db9849a80d0c23a44d97b, type: 2}
+  - {fileID: 11400000, guid: 5140e8f87e1cf5e45ab51e0781052b97, type: 2}

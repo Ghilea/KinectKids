@@ -4,7 +4,7 @@ KinectKids är en svensk, barnvänlig spelplattform för Xbox 360 Kinect på
 Windows. Slutkunden ska bara använda ett program:
 
 ```text
-unity/KinectKids3D/Build/KinectKids/KinectKids.exe
+%LOCALAPPDATA%/KinectKids/Build/KinectKids/KinectKids.exe
 ```
 
 Programmet startar i Unitys gemensamma meny. Kinect, input, paus, scenbyten och
