@@ -15,7 +15,7 @@
     { "id": "gast_reveal", "time": 8.50, "warning": 0.0, "duration": 2.0, "kind": "reveal", "action": "none", "lane": 0 },
     { "id": "tutorial_duck", "time": 11.00, "warning": 2.0, "duration": 1.1, "kind": "action", "action": "duck", "lane": 0 },
     { "id": "lyric_efter_dig_minsann", "time": 13.40, "warning": 0.0, "duration": 3.5, "kind": "gast_run", "action": "none", "lane": 0 },
-    { "id": "chase_start", "time": 13.75, "warning": 1.5, "duration": 4.0, "kind": "action", "action": "run", "lane": 0 },
+    { "id": "chase_start", "time": 21.00, "warning": 0.7, "duration": 7.5, "kind": "action", "action": "run", "lane": 0 },
     { "id": "tutorial_left", "time": 17.20, "warning": 1.8, "duration": 1.1, "kind": "action", "action": "left", "lane": 1 },
     { "id": "lyric_jag_kommer_narmare", "time": 19.70, "warning": 0.0, "duration": 4.0, "kind": "gast_closer", "action": "none", "lane": 0 },
     { "id": "tutorial_right", "time": 21.20, "warning": 1.8, "duration": 1.1, "kind": "action", "action": "right", "lane": -1 },

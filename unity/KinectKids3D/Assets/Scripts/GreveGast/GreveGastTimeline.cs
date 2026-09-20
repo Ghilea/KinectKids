@@ -58,7 +58,6 @@ namespace KinectKids3D
             }
 
             timeline = JsonUtility.FromJson<GreveGastTimelineData>(json.text);
-            FillRemainingSongWithGameplay();
             source = gameObject.AddComponent<AudioSource>();
             source.clip = clip;
             source.loop = false;
@@ -71,34 +70,6 @@ namespace KinectKids3D
                       " | langd=" + clip.length.ToString("0.00") +
                       " | cues=" + timeline.cues.Length);
             return true;
-        }
-
-        private void FillRemainingSongWithGameplay()
-        {
-            if (timeline == null) return;
-            var cues = new List<GreveGastCue>(timeline.cues ?? Array.Empty<GreveGastCue>());
-            float lastTime = 0f;
-            foreach (GreveGastCue existing in cues) lastTime = Mathf.Max(lastTime, existing.time);
-            string[] pattern = { "jump", "left", "duck", "right", "jump", "run", "duck", "left", "right" };
-            float time = Mathf.Max(92f, lastTime + 5.5f);
-            int index = 0;
-            while (time < timeline.songLength - 4f)
-            {
-                string action = pattern[index % pattern.Length];
-                cues.Add(new GreveGastCue
-                {
-                    id = "auto_" + index + "_" + action,
-                    time = time,
-                    warning = 3f,
-                    duration = action == "run" ? 2.4f : 1.05f,
-                    kind = "action",
-                    action = action,
-                    lane = action == "left" ? 1 : action == "right" ? -1 : 0
-                });
-                time += 5.2f + (index % 4) * 0.55f;
-                index++;
-            }
-            timeline.cues = cues.ToArray();
         }
 
         private void Update()
@@ -116,7 +87,9 @@ namespace KinectKids3D
 
             foreach (GreveGastCue cue in timeline.cues)
             {
-                float warningLead = cue.kind == "action" ? Mathf.Max(3f, cue.warning) : cue.warning;
+                // Every lyric cue owns its reaction time. Fast passages can use
+                // a short warning while child mode can keep a longer one.
+                float warningLead = Mathf.Max(0f, cue.warning);
                 if (!warned.Contains(cue.id) && now >= cue.time - warningLead)
                 {
                     warned.Add(cue.id);

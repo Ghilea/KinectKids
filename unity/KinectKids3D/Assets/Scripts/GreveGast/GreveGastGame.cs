@@ -60,6 +60,8 @@ namespace KinectKids3D
         private Color feedbackColor;
         private float chase = 0.5f;
         private float scriptedApproachUntil;
+        private float activeRunUntil = -1f;
+        private float runSpeedBoost;
         private bool paused;
         private bool debug;
         private bool skeletonMode;
@@ -68,10 +70,17 @@ namespace KinectKids3D
         private int jumpObstacleCounter;
         private int currentLane;
         private bool laneGestureArmed = true;
+        private float laneNeutralSince = -1f;
+        private float laneChangeCooldownUntil;
+        private bool caught;
+        private float catchReleaseAt;
+        private bool catchPausedSong;
         private string section = "Intro";
         private GUIStyle hugeStyle;
         private GUIStyle titleStyle;
         private GUIStyle panelStyle;
+        private GUIStyle hudStyle;
+        private GUIStyle catchStyle;
         private const float CorridorSpeed = 7f;
         // Hindren borjar i forgrunden, mellan kameran och spelaren, och aker
         // fran nederkanten upp mot spelarfiguren.
@@ -301,6 +310,12 @@ namespace KinectKids3D
                 GreveGastCue next = song.NextCue();
                 if (next != null) song.Seek(Mathf.Max(0f, next.time - next.warning - 0.5f));
             }
+            if (caught)
+            {
+                UpdateCaughtVisual();
+                if (Time.unscaledTime >= catchReleaseAt) ReleaseFromCatch();
+                return;
+            }
             if (paused || body == null || song == null) return;
 
             body.Update();
@@ -311,6 +326,7 @@ namespace KinectKids3D
                 moon.intensity = 2.9f + Mathf.Sin(song.SongTime * 1.4f) * 0.12f;
                 return;
             }
+            UpdateRunChallenge();
             if (body.Current == GreveGastAction.Jump && previousBodyAction != GreveGastAction.Jump)
                 jumpStartedAt = Time.time;
             previousBodyAction = body.Current;
@@ -319,25 +335,35 @@ namespace KinectKids3D
             ScrollCorridor();
             UpdateObstacles();
             ResolveActions();
+            if (chase >= 0.995f) TriggerCaught();
             moon.intensity = 2.9f + Mathf.Sin(song.SongTime * 2.3f) * 0.24f;
         }
 
         private void AnimateCharacters()
         {
-            if (Mathf.Abs(body.HorizontalDelta) < 0.08f) laneGestureArmed = true;
-            if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
-                currentLane = Mathf.Max(-1, currentLane - 1);
-            else if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
-                currentLane = Mathf.Min(1, currentLane + 1);
-            else if (laneGestureArmed && body.HorizontalDelta < -0.16f)
+            bool neutral = Mathf.Abs(body.HorizontalDelta) < 0.075f;
+            if (neutral)
             {
-                currentLane = Mathf.Max(-1, currentLane - 1);
-                laneGestureArmed = false;
+                if (laneNeutralSince < 0f) laneNeutralSince = Time.unscaledTime;
+                if (Time.unscaledTime - laneNeutralSince >= 0.16f) laneGestureArmed = true;
             }
-            else if (laneGestureArmed && body.HorizontalDelta > 0.16f)
+            else laneNeutralSince = -1f;
+
+            if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
+                MoveOneLane(-1);
+            else if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
+                MoveOneLane(1);
+            else if (laneGestureArmed && Time.unscaledTime >= laneChangeCooldownUntil
+                     && body.HorizontalDelta < -0.16f)
             {
-                currentLane = Mathf.Min(1, currentLane + 1);
                 laneGestureArmed = false;
+                MoveOneLane(-1);
+            }
+            else if (laneGestureArmed && Time.unscaledTime >= laneChangeCooldownUntil
+                     && body.HorizontalDelta > 0.16f)
+            {
+                laneGestureArmed = false;
+                MoveOneLane(1);
             }
             // Kameran tittar tillbaka langs banan och speglar varlds-X.
             // Negativ kroppslutning ska fortfarande synas som vanster pa skarmen.
@@ -370,7 +396,7 @@ namespace KinectKids3D
             // Spelaren springer mot kameran. Jagarfiguren ligger bakom och far
             // aldrig lagga sig mellan kameran och spelarfiguren.
             float lyricApproach = song.SongTime < scriptedApproachUntil ? 10f : 0f;
-            float greveZ = Mathf.Lerp(-42f, -25f, chase) + lyricApproach;
+            float greveZ = Mathf.Min(-4.5f, Mathf.Lerp(-58f, -5.5f, chase) + lyricApproach);
             Vector3 target = new Vector3(Mathf.Sin(song.SongTime * 1.4f) * 1.3f,
                 chaserGroundY + Mathf.Sin(song.SongTime * 2.2f) * 0.10f, greveZ);
             greve.position = Vector3.Lerp(greve.position, target, 1f - Mathf.Exp(-3f * Time.deltaTime));
@@ -386,12 +412,54 @@ namespace KinectKids3D
                 Transform segment = corridor[i];
                 // Banmarkeringarna kommer fran nederkanten och flyttas upp mot
                 // spelarens position. En ny del matas in fran forgrunden.
-                segment.position += Vector3.back * (CorridorSpeed * Time.deltaTime);
+                segment.position += Vector3.back * (CorridorSpeed * (1f + runSpeedBoost * 0.62f) * Time.deltaTime);
                 // Ateranvand delen tillrackligt langt bakom kameran sa att de
                 // tre vagarna alltid fortsatter hela vagen ned till bildkanten.
                 if (segment.position.z < backLimit)
                     segment.position += Vector3.forward * corridorLength;
             }
+        }
+
+        private void MoveOneLane(int direction)
+        {
+            if (Time.unscaledTime < laneChangeCooldownUntil) return;
+            direction = direction < 0 ? -1 : 1;
+            currentLane = Mathf.Clamp(currentLane + direction, -1, 1);
+            laneChangeCooldownUntil = Time.unscaledTime + 0.42f;
+            laneGestureArmed = false;
+            laneNeutralSince = -1f;
+        }
+
+        private void TriggerCaught()
+        {
+            if (caught) return;
+            caught = true;
+            chase = 1f;
+            runSpeedBoost = 0f;
+            catchReleaseAt = Time.unscaledTime + 2.8f;
+            PlayChaserCatch();
+            catchPausedSong = song != null && song.IsPlaying;
+            if (catchPausedSong) song.TogglePause();
+        }
+
+        private void ReleaseFromCatch()
+        {
+            caught = false;
+            chase = 0.56f;
+            currentLane = 0;
+            laneGestureArmed = false;
+            laneNeutralSince = Time.unscaledTime;
+            if (catchPausedSong && song != null) song.TogglePause();
+            catchPausedSong = false;
+            SetChaserRunning(true);
+        }
+
+        private void UpdateCaughtVisual()
+        {
+            if (greve == null) return;
+            Vector3 target = new Vector3(0f, chaserGroundY, -4.5f);
+            greve.position = Vector3.Lerp(greve.position, target,
+                1f - Mathf.Exp(-5.5f * Time.unscaledDeltaTime));
         }
 
         private void OnWarning(GreveGastCue cue)
@@ -418,8 +486,8 @@ namespace KinectKids3D
             GreveGastAction action = ParseAction(cue.action);
             if (action != GreveGastAction.None && cue.time >= song.GameplayStartTime)
             {
-                pending.Add(new PendingAction { Cue = cue });
-                if (action == GreveGastAction.Run) SetChaserRunning(true);
+                if (action == GreveGastAction.Run) BeginRunChallenge(cue);
+                else pending.Add(new PendingAction { Cue = cue });
             }
             if (greveAnimation != null || drawnGreveAnimation != null)
             {
@@ -492,6 +560,38 @@ namespace KinectKids3D
                     if (chase > 0.9f) PlayChaserCatch();
                     else PlayChaserReach();
                 }
+            }
+        }
+
+        private void BeginRunChallenge(GreveGastCue cue)
+        {
+            activeRunUntil = Mathf.Max(activeRunUntil, cue.time + Mathf.Max(1.5f, cue.duration));
+            warningSymbol = "⚡";
+            warningUntil = activeRunUntil;
+            SetChaserRunning(true);
+        }
+
+        private void UpdateRunChallenge()
+        {
+            if (song.SongTime > activeRunUntil)
+            {
+                runSpeedBoost = Mathf.MoveTowards(runSpeedBoost, 0f, Time.deltaTime * 1.8f);
+                return;
+            }
+
+            bool keyboardRun = Input.GetKey(KeyCode.W);
+            float effort = keyboardRun ? 1f : body.RunEnergy;
+            bool running = effort > 0.38f || body.Current == GreveGastAction.Run;
+            if (running)
+            {
+                float effectiveEffort = Mathf.Max(0.52f, effort);
+                runSpeedBoost = Mathf.MoveTowards(runSpeedBoost, effectiveEffort, Time.deltaTime * 2.8f);
+                chase = Mathf.Clamp01(chase - Time.deltaTime * (0.055f + effectiveEffort * 0.070f));
+            }
+            else
+            {
+                runSpeedBoost = Mathf.MoveTowards(runSpeedBoost, 0f, Time.deltaTime * 2.2f);
+                chase = Mathf.Clamp01(chase + Time.deltaTime * 0.072f);
             }
         }
 
@@ -635,7 +735,7 @@ namespace KinectKids3D
             if (now < 3.2f)
                 GUI.Label(new Rect(0, Screen.height * 0.72f, Screen.width, 60), "Ror hela kroppen i takt med musiken", panelStyle);
             if (!string.IsNullOrEmpty(warningSymbol) && now <= warningUntil)
-                GUI.Label(new Rect(0, Screen.height * 0.12f, Screen.width, 190), warningSymbol, hugeStyle);
+                GUI.Label(new Rect(0, Screen.height * 0.15f, Screen.width, 190), warningSymbol, hugeStyle);
             if (now <= feedbackUntil)
             {
                 Color old = GUI.color;
@@ -644,12 +744,32 @@ namespace KinectKids3D
                 GUI.color = old;
             }
 
-            GUI.Box(new Rect(24, 22, 470, 38), GUIContent.none);
+            GUI.Box(new Rect(22, 20, 540, 76), GUIContent.none);
+            GUI.Label(new Rect(34, 25, 516, 27), "AVSTAND TILL GREVE GAST", hudStyle);
             Color previous = GUI.color;
             GUI.color = Color.Lerp(new Color(0.3f, 0.95f, 0.7f), new Color(0.95f, 0.18f, 0.3f), chase);
-            GUI.DrawTexture(new Rect(28, 26, 462 * chase, 30), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(36, 58, 512 * chase, 24), Texture2D.whiteTexture);
             GUI.color = previous;
-            GUI.Label(new Rect(32, 25, 454, 30), "GREVE GAST KOMMER NARMARE", panelStyle);
+            GUI.Label(new Rect(36, 56, 512, 28), Mathf.RoundToInt(chase * 100f) + "%", hudStyle);
+
+            if (song != null && now <= activeRunUntil)
+            {
+                GUI.Box(new Rect(22, 104, 540, 67), GUIContent.none);
+                GUI.Label(new Rect(34, 108, 516, 25), "SPRING!  W = TANGENTBORD", hudStyle);
+                GUI.color = new Color(0.22f, 0.88f, 1f);
+                GUI.DrawTexture(new Rect(36, 140, 512 * Mathf.Clamp01(runSpeedBoost), 18), Texture2D.whiteTexture);
+                GUI.color = previous;
+            }
+
+            if (caught)
+            {
+                GUI.Box(new Rect(Screen.width * 0.20f, Screen.height * 0.34f,
+                    Screen.width * 0.60f, Screen.height * 0.26f), GUIContent.none);
+                GUI.Label(new Rect(Screen.width * 0.20f, Screen.height * 0.37f,
+                    Screen.width * 0.60f, Screen.height * 0.15f), "GREVE GAST TOG DIG!", catchStyle);
+                GUI.Label(new Rect(Screen.width * 0.20f, Screen.height * 0.52f,
+                    Screen.width * 0.60f, 42f), "Jakten fortsatter strax...", hudStyle);
+            }
 
             if (debug) DrawDebug(now);
             if (paused) DrawPause();
@@ -1045,6 +1165,18 @@ namespace KinectKids3D
                 fontSize = Mathf.Clamp(Screen.height / 42, 16, 28),
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = Color.white }
+            };
+            hudStyle = new GUIStyle(panelStyle)
+            {
+                fontSize = Mathf.Clamp(Screen.height / 48, 16, 23),
+                wordWrap = false,
+                clipping = TextClipping.Clip
+            };
+            catchStyle = new GUIStyle(panelStyle)
+            {
+                fontSize = Mathf.Clamp(Screen.height / 15, 42, 76),
+                wordWrap = false,
+                clipping = TextClipping.Overflow
             };
         }
 
