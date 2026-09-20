@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace KinectKids3D.Platform
@@ -5,42 +6,165 @@ namespace KinectKids3D.Platform
     public sealed class MainMenuController : MonoBehaviour
     {
         [SerializeField] private GameRegistry registry;
+        [SerializeField] private Texture2D background;
+        [SerializeField] private Texture2D cardSheet;
+        [SerializeField] private Texture2D panelSheet;
+        [SerializeField] private Texture2D buttonSheet;
+        [SerializeField] private Texture2D iconSheet;
+
+        private readonly Rect[] visibleCardRects = new Rect[5];
+        private readonly int[] visibleGameIndices = new int[5];
         private int selected;
-        private bool details;
-        private Rect selectedRect;
+        private int hoverTarget = int.MinValue;
+        private int hoverHand = int.MinValue;
         private float dwell;
-        private GUIStyle title;
-        private GUIStyle card;
-        private GUIStyle body;
+        private float nextScrollAt;
+        private Rect playRect;
+        private GUIStyle logoStyle;
+        private GUIStyle subtitleStyle;
+        private GUIStyle cardTitleStyle;
+        private GUIStyle cardTagStyle;
+        private GUIStyle gameTitleStyle;
+        private GUIStyle bodyStyle;
+        private GUIStyle footerStyle;
+        private AudioSource voice;
 
         public void SetRegistry(GameRegistry value) => registry = value;
+
+        public void SetVisualAssets(Texture2D menuBackground, Texture2D cards, Texture2D panels,
+            Texture2D buttons, Texture2D icons)
+        {
+            background = menuBackground;
+            cardSheet = cards;
+            panelSheet = panels;
+            buttonSheet = buttons;
+            iconSheet = icons;
+        }
+
+        private void Awake()
+        {
+            voice = gameObject.AddComponent<AudioSource>();
+            voice.spatialBlend = 0f;
+            voice.playOnAwake = false;
+        }
+
+        private void Start()
+        {
+            AnnounceSelected();
+        }
 
         private void Update()
         {
             int count = registry != null && registry.games != null ? registry.games.Length : 0;
             if (count == 0) return;
-            if (!details && (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))) selected = (selected + count - 1) % count;
-            if (!details && (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))) selected = (selected + 1) % count;
-            if (Input.GetKeyDown(KeyCode.Escape)) details = false;
-            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
+
+            if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W)) ChangeSelected(-1);
+            if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S)) ChangeSelected(1);
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space)) Play();
+
+            float wheel = Input.mouseScrollDelta.y;
+            if (Mathf.Abs(wheel) > 0.2f && Time.unscaledTime >= nextScrollAt)
             {
-                if (details) Play(); else details = true;
+                ChangeSelected(wheel > 0f ? -1 : 1);
+                nextScrollAt = Time.unscaledTime + 0.22f;
             }
 
+            UpdateKinectDwell();
+        }
+
+        private void UpdateKinectDwell()
+        {
             KinectKidsInputManager input = KinectKidsInputManager.Instance;
-            if (input == null || !input.KinectConnected || selectedRect.width <= 0f) { dwell = 0f; return; }
-            Vector2 hand = input.Frame.RightHand;
-            Vector2 cursor = new Vector2(hand.x * Screen.width, hand.y * Screen.height);
-            if (selectedRect.Contains(cursor))
+            if (input == null || !input.KinectConnected)
             {
-                dwell += Time.unscaledDeltaTime;
-                if (dwell >= 1f) { dwell = 0f; if (details) Play(); else details = true; }
+                ResetDwell();
+                return;
             }
-            else dwell = 0f;
+
+            int foundTarget = int.MinValue;
+            int foundHand = int.MinValue;
+            IReadOnlyList<AimSample> hands = input.AimSamples;
+            for (int handIndex = 0; handIndex < hands.Count && foundTarget == int.MinValue; handIndex++)
+            {
+                AimSample hand = hands[handIndex];
+                if (hand.PlayerIndex != 0) continue;
+                Vector2 cursor = new Vector2(hand.Position.x * Screen.width, hand.Position.y * Screen.height);
+                if (playRect.Contains(cursor))
+                {
+                    foundTarget = -1;
+                    foundHand = hand.HandId;
+                    break;
+                }
+                for (int slot = 0; slot < visibleCardRects.Length; slot++)
+                {
+                    if (!visibleCardRects[slot].Contains(cursor)) continue;
+                    foundTarget = visibleGameIndices[slot];
+                    foundHand = hand.HandId;
+                    break;
+                }
+            }
+
+            if (foundTarget == int.MinValue)
+            {
+                ResetDwell();
+                return;
+            }
+            if (foundTarget != hoverTarget || foundHand != hoverHand)
+            {
+                hoverTarget = foundTarget;
+                hoverHand = foundHand;
+                dwell = 0f;
+            }
+            dwell += Time.unscaledDeltaTime;
+
+            float required = foundTarget == -1 ? 1f : 0.42f;
+            if (dwell < required) return;
+            if (foundTarget == -1) Play();
+            else if (foundTarget != selected) SetSelected(foundTarget);
+            ResetDwell();
+        }
+
+        private void ResetDwell()
+        {
+            hoverTarget = int.MinValue;
+            hoverHand = int.MinValue;
+            dwell = 0f;
+        }
+
+        private void ChangeSelected(int direction)
+        {
+            if (registry == null || registry.games == null || registry.games.Length == 0) return;
+            SetSelected((selected + direction + registry.games.Length) % registry.games.Length);
+        }
+
+        private void SetSelected(int index)
+        {
+            if (index == selected) return;
+            selected = index;
+            AnnounceSelected();
+        }
+
+        private void AnnounceSelected()
+        {
+            if (voice == null || registry == null || registry.games == null || registry.games.Length == 0) return;
+            string scene = registry.games[selected].sceneName;
+            string key = scene == "GreveGast" ? "menu_greve_gast" :
+                scene == "Spokjakten" ? "menu_spooky" :
+                scene == "Matematikbanan" ? "menu_math" :
+                scene == "Bokstavsjakten" ? "menu_swedish" :
+                scene == "Formverkstan" ? "menu_shapes" :
+                scene == "Monsterjakten" ? "menu_patterns" :
+                scene == "SimonSager" ? "menu_simon" : "menu_balloons";
+            AudioClip clip = Resources.Load<AudioClip>("Voice/" + key);
+            if (clip == null) return;
+            voice.Stop();
+            voice.clip = clip;
+            voice.Play();
         }
 
         private void Play()
         {
+            if (registry == null || registry.games == null || selected >= registry.games.Length) return;
             GameDefinition game = registry.games[selected];
             if (game != null && game.isAvailable) KinectKidsPlatformRoot.Instance.Scenes.LoadGame(game.sceneName);
         }
@@ -48,113 +172,177 @@ namespace KinectKids3D.Platform
         private void OnGUI()
         {
             EnsureStyles();
-            GUI.color = new Color(0.96f, 0.91f, 0.76f);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-            DrawPaperDecorations();
-            GUI.color = Color.white;
-            GUI.Label(new Rect(55, 30, Screen.width - 110, 75), "KINECT KIDS", title);
-            GUI.Label(new Rect(58, 100, Screen.width - 116, 40), "Välj ett äventyr", body);
+            if (background != null) GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), background, ScaleMode.ScaleAndCrop);
+            else Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0.04f, 0.12f, 0.20f));
 
             if (registry == null || registry.games == null || registry.games.Length == 0)
             {
-                GUI.Label(new Rect(60, 180, 700, 70), "Inga spel är registrerade ännu.", body);
+                GUI.Label(new Rect(40, 40, Screen.width - 80, 80), "Inga spel \u00e4r registrerade.", gameTitleStyle);
                 return;
             }
 
-            if (details) DrawDetails(); else DrawCards();
-            DrawCursor();
+            DrawBrand();
+            DrawGameList();
+            DrawGamePresentation();
+            DrawFooter();
+            DrawCursors();
         }
 
-        private void DrawCards()
+        private void DrawBrand()
         {
-            float x = 70f, w = Mathf.Min(650f, Screen.width * 0.43f), h = Mathf.Min(112f, Screen.height * 0.13f);
-            float centerY = Screen.height * 0.47f - h * 0.5f;
-            int visible = Mathf.Min(5, registry.games.Length);
-            int half = visible / 2;
-            for (int offset = -half; offset <= half; offset++)
-            {
-                if (visible % 2 == 0 && offset == half) continue;
-                int i = (selected + offset + registry.games.Length) % registry.games.Length;
-                GameDefinition game = registry.games[i];
-                float curve = Mathf.Abs(offset) * 42f;
-                float scale = offset == 0 ? 1f : 0.86f - Mathf.Abs(offset) * 0.05f;
-                Rect rect = new Rect(x + curve, centerY + offset * (h + 15f), w * scale, h * scale);
-                GUI.color = new Color(0.18f, 0.10f, 0.22f, 0.28f);
-                GUI.DrawTexture(new Rect(rect.x + 8, rect.y + 9, rect.width, rect.height), Texture2D.whiteTexture);
-                GUI.color = i == selected ? game.cardColor : Color.Lerp(game.cardColor, Color.white, 0.28f);
-                GUI.DrawTexture(rect, Texture2D.whiteTexture);
-                GUI.color = Color.white;
-                if (GUI.Button(rect, game.displayName, card)) { selected = i; details = true; }
-                if (offset == 0) selectedRect = rect;
-            }
-            GameDefinition active = registry.games[selected];
-            Rect preview = new Rect(Screen.width * 0.56f, 180f, Screen.width * 0.37f, Screen.height * 0.56f);
-            GUI.color = Color.Lerp(active.cardColor, new Color(1f, 0.95f, 0.72f), 0.72f);
-            GUI.DrawTexture(preview, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.Label(new Rect(preview.x + 35, preview.y + 35, preview.width - 70, 100), active.displayName, title);
-            GUI.Label(new Rect(preview.x + 42, preview.y + 145, preview.width - 84, 180), active.description, body);
-            string hint = KinectKidsInputManager.Instance != null && KinectKidsInputManager.Instance.KinectConnected
-                ? "Håll handen över kortet i 1 sekund" : "Klicka eller tryck Enter för att välja";
-            GUI.Label(new Rect(preview.x + 42, preview.yMax - 90, preview.width - 84, 55), hint, body);
+            GUI.Label(ScaleRect(0.035f, 0.025f, 0.34f, 0.07f), "KINECT KIDS", logoStyle);
+            GUI.Label(ScaleRect(0.038f, 0.092f, 0.34f, 0.035f), "R\u00d6RELSE, SPELGL\u00c4DJE, F\u00d6R ALLA", subtitleStyle);
         }
 
-        private void DrawDetails()
+        private void DrawGameList()
+        {
+            int count = registry.games.Length;
+            float listX = Screen.width * 0.035f;
+            float listW = Screen.width * 0.34f;
+            float rowH = Screen.height * 0.118f;
+            float gap = Screen.height * 0.008f;
+            float top = Screen.height * 0.18f;
+
+            for (int slot = 0; slot < 5; slot++)
+            {
+                int offset = slot - 2;
+                int gameIndex = (selected + offset + count) % count;
+                bool active = offset == 0;
+                float curve = Mathf.Abs(offset) * Screen.width * 0.012f;
+                Rect rect = new Rect(listX + curve, top + slot * (rowH + gap), listW - curve, rowH);
+                visibleCardRects[slot] = rect;
+                visibleGameIndices[slot] = gameIndex;
+
+                if (cardSheet != null)
+                {
+                    Rect uv = active ? new Rect(0.075f, 0.68f, 0.90f, 0.165f) : new Rect(0.075f, 0.535f, 0.90f, 0.14f);
+                    GUI.DrawTextureWithTexCoords(rect, cardSheet, uv, true);
+                }
+                else
+                {
+                    Fill(rect, active ? new Color(1f, 0.93f, 0.72f, 0.97f) : new Color(0.78f, 0.82f, 0.85f, 0.95f));
+                }
+
+                GameDefinition game = registry.games[gameIndex];
+                float textX = rect.x + rect.width * 0.34f;
+                GUI.Label(new Rect(textX, rect.y + rect.height * 0.08f, rect.width * 0.62f, rect.height * 0.50f),
+                    game.displayName.ToUpperInvariant(), cardTitleStyle);
+                GUI.Label(new Rect(textX, rect.y + rect.height * 0.56f, rect.width * 0.62f, rect.height * 0.30f),
+                    Tagline(game.sceneName), cardTagStyle);
+                if (GUI.Button(rect, GUIContent.none, GUIStyle.none)) SetSelected(gameIndex);
+            }
+
+            GUI.Label(new Rect(listX + listW * 0.43f, top - 35f, 60f, 35f), "\u25b2", cardTitleStyle);
+            GUI.Label(new Rect(listX + listW * 0.43f, top + 5f * (rowH + gap) - 5f, 60f, 35f), "\u25bc", cardTitleStyle);
+        }
+
+        private void DrawGamePresentation()
         {
             GameDefinition game = registry.games[selected];
-            Rect panel = new Rect(Screen.width * 0.16f, Screen.height * 0.18f, Screen.width * 0.68f, Screen.height * 0.66f);
-            GUI.color = new Color(game.cardColor.r, game.cardColor.g, game.cardColor.b, 0.92f);
-            GUI.Box(panel, GUIContent.none);
-            GUI.color = Color.white;
-            GUI.Label(new Rect(panel.x + 50, panel.y + 35, panel.width - 100, 90), game.displayName, title);
-            GUI.Label(new Rect(panel.x + 60, panel.y + 140, panel.width - 120, 160), game.description, body);
-            selectedRect = new Rect(panel.x + panel.width * 0.24f, panel.yMax - 130f, panel.width * 0.52f, 72f);
-            if (GUI.Button(selectedRect, "SPELA", card)) Play();
-            if (GUI.Button(new Rect(panel.x + 22, panel.y + 18, 110, 48), "TILLBAKA")) details = false;
+            Rect titlePanel = ScaleRect(0.41f, 0.43f, 0.40f, 0.14f);
+            if (panelSheet != null)
+                GUI.DrawTextureWithTexCoords(titlePanel, panelSheet, new Rect(0.01f, 0.765f, 0.61f, 0.22f), true);
+            else Fill(titlePanel, new Color(1f, 0.96f, 0.84f, 0.95f));
+            GUI.Label(new Rect(titlePanel.x + 25f, titlePanel.y + 10f, titlePanel.width - 50f, titlePanel.height - 20f),
+                game.displayName.ToUpperInvariant(), gameTitleStyle);
+
+            GUI.Label(ScaleRect(0.43f, 0.585f, 0.38f, 0.14f), game.description, bodyStyle);
+
+            Rect infoRect = ScaleRect(0.42f, 0.74f, 0.39f, 0.11f);
+            if (panelSheet != null)
+                GUI.DrawTextureWithTexCoords(infoRect, panelSheet, new Rect(0.01f, 0.49f, 0.61f, 0.24f), true);
+            else Fill(infoRect, new Color(0.03f, 0.14f, 0.25f, 0.95f));
+            float labelY = infoRect.y + infoRect.height * 0.58f;
+            float labelH = infoRect.height * 0.28f;
+            GUI.Label(new Rect(infoRect.x, labelY, infoRect.width * 0.25f, labelH), "1\u20132 SPELARE", footerStyle);
+            GUI.Label(new Rect(infoRect.x + infoRect.width * 0.25f, labelY, infoRect.width * 0.25f, labelH), "R\u00d6RELSE", footerStyle);
+            GUI.Label(new Rect(infoRect.x + infoRect.width * 0.50f, labelY, infoRect.width * 0.25f, labelH), "MUSIK", footerStyle);
+            GUI.Label(new Rect(infoRect.x + infoRect.width * 0.75f, labelY, infoRect.width * 0.25f, labelH), "CA 5 MIN", footerStyle);
+
+            playRect = ScaleRect(0.80f, 0.62f, 0.17f, 0.28f);
+            if (buttonSheet != null)
+                GUI.DrawTextureWithTexCoords(playRect, buttonSheet, new Rect(0.0f, 0.52f, 0.34f, 0.47f), true);
+            else Fill(playRect, new Color(1f, 0.75f, 0.12f, 0.98f));
+            GUIStyle playLabel = new GUIStyle(cardTitleStyle) { alignment = TextAnchor.MiddleCenter };
+            playLabel.normal.textColor = new Color(0.03f, 0.08f, 0.14f);
+            GUI.Label(new Rect(playRect.x, playRect.y + playRect.height * 0.76f, playRect.width, playRect.height * 0.18f),
+                "STARTA SPEL", playLabel);
+            if (GUI.Button(playRect, GUIContent.none, GUIStyle.none)) Play();
         }
 
-        private void DrawCursor()
+        private void DrawFooter()
+        {
+            Rect footer = new Rect(0, Screen.height * 0.925f, Screen.width, Screen.height * 0.075f);
+            Fill(footer, new Color(0.025f, 0.09f, 0.16f, 0.96f));
+            string inputHint = KinectKidsInputManager.Instance != null && KinectKidsInputManager.Instance.KinectConnected
+                ? "FLYTTA HANDEN F\u00d6R ATT NAVIGERA     \u2022     H\u00c5LL KVAR F\u00d6R ATT V\u00c4LJA"
+                : "PILTANGENTER / MUS F\u00d6R ATT NAVIGERA     \u2022     ENTER F\u00d6R ATT STARTA";
+            GUI.Label(new Rect(Screen.width * 0.04f, footer.y, Screen.width * 0.92f, footer.height), inputHint, footerStyle);
+        }
+
+        private void DrawCursors()
         {
             KinectKidsInputManager input = KinectKidsInputManager.Instance;
             if (input == null || !input.KinectConnected) return;
-            Vector2 hand = input.Frame.RightHand;
-            Vector2 p = new Vector2(hand.x * Screen.width, hand.y * Screen.height);
-            GUI.color = new Color(0.2f, 0.85f, 1f);
-            GUI.DrawTexture(new Rect(p.x - 17, p.y - 17, 34, 34), Texture2D.whiteTexture);
-            GUI.color = new Color(1f, 0.85f, 0.2f);
-            GUI.DrawTexture(new Rect(p.x - 21, p.y + 23, 42 * Mathf.Clamp01(dwell), 7), Texture2D.whiteTexture);
+            foreach (AimSample hand in input.AimSamples)
+            {
+                if (hand.PlayerIndex != 0) continue;
+                Vector2 point = new Vector2(hand.Position.x * Screen.width, hand.Position.y * Screen.height);
+                float size = Mathf.Max(34f, Screen.height * 0.045f);
+                GUI.color = hand.HandId == hoverHand ? new Color(1f, 0.82f, 0.15f) : new Color(0.25f, 0.82f, 1f);
+                GUI.DrawTexture(new Rect(point.x - size * 0.5f, point.y - size * 0.5f, size, size), Texture2D.whiteTexture);
+                if (hand.HandId == hoverHand)
+                {
+                    float required = hoverTarget == -1 ? 1f : 0.42f;
+                    GUI.color = Color.white;
+                    GUI.DrawTexture(new Rect(point.x - size * 0.6f, point.y + size * 0.62f,
+                        size * 1.2f * Mathf.Clamp01(dwell / required), 7f), Texture2D.whiteTexture);
+                }
+            }
             GUI.color = Color.white;
         }
 
-        private void DrawPaperDecorations()
+        private static string Tagline(string scene)
         {
-            Color[] crayons =
-            {
-                new Color(0.92f, 0.22f, 0.35f), new Color(0.10f, 0.63f, 0.82f),
-                new Color(0.98f, 0.62f, 0.12f), new Color(0.31f, 0.67f, 0.30f)
-            };
-            for (int i = 0; i < 12; i++)
-            {
-                GUI.color = new Color(crayons[i % crayons.Length].r, crayons[i % crayons.Length].g,
-                    crayons[i % crayons.Length].b, 0.32f);
-                float x = (i * 173f + 35f) % Mathf.Max(1f, Screen.width - 120f);
-                float y = (i % 2 == 0 ? 145f : Screen.height - 85f) + (i % 3) * 9f;
-                GUI.DrawTexture(new Rect(x, y, 92f, 7f), Texture2D.whiteTexture);
-            }
-            GUI.color = Color.white;
+            if (scene == "GreveGast") return "SPRING \u2022 HOPPA \u2022 DUCKA";
+            if (scene == "Spokjakten") return "SIKTA \u2022 KASTA \u2022 V\u00c4J";
+            if (scene == "Matematikbanan") return "R\u00c4KNA \u2022 F\u00c5NGA \u2022 L\u00c4R";
+            if (scene == "Bokstavsjakten") return "LYSSNA \u2022 BOKST\u00c4VER \u2022 ORD";
+            if (scene == "Formverkstan") return "FORMER \u2022 F\u00c4RGER \u2022 R\u00d6RELSE";
+            if (scene == "Monsterjakten") return "M\u00d6NSTER \u2022 T\u00c4NK \u2022 F\u00c5NGA";
+            if (scene == "SimonSager") return "LYSSNA \u2022 H\u00c4RMA \u2022 R\u00d6R DIG";
+            return "F\u00c5NGA \u2022 POPPA \u2022 SAMARBETA";
         }
 
         private void EnsureStyles()
         {
-            if (title != null) return;
-            title = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Clamp(Screen.height / 17, 34, 68), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            title.normal.textColor = new Color(0.17f, 0.08f, 0.22f);
-            card = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Clamp(Screen.height / 30, 24, 40), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            card.normal.textColor = Color.white;
-            card.hover.textColor = new Color(1f, 0.93f, 0.35f);
-            card.active.textColor = Color.white;
-            body = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Clamp(Screen.height / 42, 18, 30), wordWrap = true, alignment = TextAnchor.UpperCenter };
-            body.normal.textColor = new Color(0.20f, 0.12f, 0.24f);
+            if (logoStyle != null) return;
+            logoStyle = NewStyle(Mathf.Clamp(Screen.height / 21, 34, 58), FontStyle.Bold, TextAnchor.MiddleLeft, Color.white);
+            subtitleStyle = NewStyle(Mathf.Clamp(Screen.height / 55, 15, 24), FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.86f, 0.90f, 0.94f));
+            cardTitleStyle = NewStyle(Mathf.Clamp(Screen.height / 38, 22, 36), FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.04f, 0.10f, 0.17f));
+            cardTagStyle = NewStyle(Mathf.Clamp(Screen.height / 70, 13, 20), FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.08f, 0.13f, 0.20f));
+            gameTitleStyle = NewStyle(Mathf.Clamp(Screen.height / 18, 36, 66), FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.03f, 0.08f, 0.14f));
+            bodyStyle = NewStyle(Mathf.Clamp(Screen.height / 39, 20, 32), FontStyle.Normal, TextAnchor.UpperLeft, Color.white);
+            bodyStyle.wordWrap = true;
+            footerStyle = NewStyle(Mathf.Clamp(Screen.height / 62, 14, 22), FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+        }
+
+        private static GUIStyle NewStyle(int size, FontStyle fontStyle, TextAnchor alignment, Color color)
+        {
+            GUIStyle style = new GUIStyle(GUI.skin.label) { fontSize = size, fontStyle = fontStyle, alignment = alignment };
+            style.normal.textColor = color;
+            return style;
+        }
+
+        private static Rect ScaleRect(float x, float y, float width, float height) =>
+            new Rect(Screen.width * x, Screen.height * y, Screen.width * width, Screen.height * height);
+
+        private static void Fill(Rect rect, Color color)
+        {
+            Color old = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = old;
         }
     }
 }

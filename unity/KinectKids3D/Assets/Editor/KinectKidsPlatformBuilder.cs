@@ -76,6 +76,12 @@ namespace KinectKids3D.Editor
             scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             MainMenuController menu = new GameObject("Gemensam spelmeny").AddComponent<MainMenuController>();
             menu.SetRegistry(registry);
+            menu.SetVisualAssets(
+                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/ChatGPT Image 20 sep. 2026 16_54_25 (1).png"),
+                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/ChatGPT Image 20 sep. 2026 16_54_26 (2).png"),
+                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/ChatGPT Image 20 sep. 2026 16_54_26 (4).png"),
+                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/ChatGPT Image 20 sep. 2026 16_54_27 (5).png"),
+                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/ChatGPT Image 20 sep. 2026 16_54_28 (7).png"));
             EditorUtility.SetDirty(menu);
             EditorSceneManager.SaveScene(scene, MenuPath);
 
