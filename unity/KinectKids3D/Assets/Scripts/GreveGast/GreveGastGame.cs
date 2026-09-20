@@ -295,7 +295,8 @@ namespace KinectKids3D
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.Escape)) TogglePause();
+            if (!global::KinectKids3D.Platform.KinectKidsPlatformRoot.IsActive
+                && Input.GetKeyDown(KeyCode.Escape)) TogglePause();
             if (Input.GetKeyDown(KeyCode.F11))
             {
                 Screen.fullScreenMode = FullScreenMode.FullScreenWindow;
@@ -755,7 +756,8 @@ namespace KinectKids3D
             if (song != null && now <= activeRunUntil)
             {
                 GUI.Box(new Rect(22, 104, 540, 67), GUIContent.none);
-                GUI.Label(new Rect(34, 108, 516, 25), "SPRING!  W = TANGENTBORD", hudStyle);
+                GUI.Label(new Rect(34, 108, 516, 25), global::KinectKids3D.Platform.KinectKidsPlatformRoot.IsActive
+                    ? "SPRING!  SHIFT = TANGENTBORD" : "SPRING!  W = TANGENTBORD", hudStyle);
                 GUI.color = new Color(0.22f, 0.88f, 1f);
                 GUI.DrawTexture(new Rect(36, 140, 512 * Mathf.Clamp01(runSpeedBoost), 18), Texture2D.whiteTexture);
                 GUI.color = previous;

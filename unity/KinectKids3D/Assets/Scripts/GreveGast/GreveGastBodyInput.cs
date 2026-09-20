@@ -7,7 +7,7 @@ namespace KinectKids3D
 
     public sealed class GreveGastBodyInput
     {
-        private readonly KinectAutoAimProvider provider = new KinectAutoAimProvider();
+        private KinectAutoAimProvider provider;
         private float baselineHead = 1.7f;
         private float baselineCenter;
         private float filteredHead = 1.7f;
@@ -17,17 +17,41 @@ namespace KinectKids3D
         private float runEnergy;
         private bool initialized;
 
-        public bool KinectConnected => provider.KinectConnected;
-        public string Status => provider.Status;
+        public bool KinectConnected => Platform.KinectKidsInputManager.Instance != null
+            ? Platform.KinectKidsInputManager.Instance.KinectConnected
+            : provider != null && provider.KinectConnected;
+        public string Status => Platform.KinectKidsInputManager.Instance != null
+            ? Platform.KinectKidsInputManager.Instance.Status
+            : provider != null ? provider.Status : "Kinect startar";
         public float HeightDelta { get; private set; }
         public float HorizontalDelta { get; private set; }
         public float RunEnergy => runEnergy;
         public GreveGastAction Current { get; private set; }
 
-        public void Start() => provider.Start();
+        public void Start()
+        {
+            if (Platform.KinectKidsInputManager.Instance != null) return;
+            provider = new KinectAutoAimProvider();
+            provider.Start();
+        }
 
         public void Update()
         {
+            if (Platform.KinectKidsInputManager.Instance != null)
+            {
+                Platform.PlayerInputFrame shared = Platform.KinectKidsInputManager.Instance.Frame;
+                HeightDelta = shared.HeadY;
+                HorizontalDelta = shared.CenterX;
+                runEnergy = shared.Run ? 1f : Mathf.MoveTowards(runEnergy, 0f, Time.unscaledDeltaTime * 4f);
+                Current = GreveGastAction.None;
+                if (shared.Run) Current = GreveGastAction.Run;
+                if (shared.Jump) Current = GreveGastAction.Jump;
+                if (shared.Duck) Current = GreveGastAction.Duck;
+                if (shared.MoveLeft) Current = GreveGastAction.Left;
+                if (shared.MoveRight) Current = GreveGastAction.Right;
+                return;
+            }
+            if (provider == null) return;
             IReadOnlyList<PlayerPose> poses = provider.GetPlayerPoses();
             if (poses.Count > 0)
             {
@@ -64,6 +88,10 @@ namespace KinectKids3D
             if (HorizontalDelta > 0.16f || Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) Current = GreveGastAction.Right;
         }
 
-        public void Dispose() => provider.Dispose();
+        public void Dispose()
+        {
+            if (provider != null) provider.Dispose();
+            provider = null;
+        }
     }
 }

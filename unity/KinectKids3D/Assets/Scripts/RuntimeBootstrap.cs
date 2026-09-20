@@ -17,6 +17,9 @@ namespace KinectKids3D
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void StartGame()
         {
+            string activeScene = SceneManager.GetActiveScene().name;
+            if (activeScene == "00_Bootstrap" || activeScene == "01_MainMenu" || activeScene == "GreveGast"
+                || global::KinectKids3D.Platform.KinectKidsPlatformRoot.IsActive) return;
             if (UnityEngine.Object.FindFirstObjectByType<SpokjaktenGame>() != null
                 || UnityEngine.Object.FindFirstObjectByType<GreveGastGame>() != null
                 || UnityEngine.Object.FindFirstObjectByType<global::GreveGast2D.GreveGastDrawnTestPanel>() != null

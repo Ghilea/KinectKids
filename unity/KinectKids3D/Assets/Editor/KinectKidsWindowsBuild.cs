@@ -21,7 +21,7 @@ namespace KinectKids3D.Editor
 
             string buildFolder = Path.Combine(root, "unity", "KinectKids3D", "Build", "Spokjakten3D");
             Directory.CreateDirectory(buildFolder);
-            string[] scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray();
+            string[] scenes = { "Assets/Scenes/Spokjakten3D.unity" };
             if (scenes.Length == 0) throw new InvalidOperationException("Ingen aktiv Unity-scen finns i Build Settings.");
 
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
@@ -63,7 +63,7 @@ namespace KinectKids3D.Editor
 
             string buildFolder = Path.Combine(root, "unity", "KinectKids3D", "Build", "GreveGastJakt");
             Directory.CreateDirectory(buildFolder);
-            string[] scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray();
+            string[] scenes = { "Assets/Scenes/Spokjakten3D.unity" };
             if (scenes.Length == 0) throw new InvalidOperationException("Ingen aktiv Unity-scen finns i Build Settings.");
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
@@ -104,7 +104,7 @@ namespace KinectKids3D.Editor
             UnityEngine.Debug.Log("Greve Gast-animationstestet ar klart: " + buildFolder);
         }
 
-        private static void EnsureGreveGastRuntimePrefab()
+        internal static void EnsureGreveGastRuntimePrefab()
         {
             const string source = "Assets/GreveGast/Generated/Prefabs/GreveGast.prefab";
             const string folder = "Assets/Resources/GreveGastCharacter";
@@ -118,7 +118,7 @@ namespace KinectKids3D.Editor
             AssetDatabase.Refresh();
         }
 
-        private static void EnsureGreveGastDrawnRuntimePrefab()
+        internal static void EnsureGreveGastDrawnRuntimePrefab()
         {
             const string source = "Assets/GreveGast2D/Prefabs/GreveGastDrawn.prefab";
             const string folder = "Assets/Resources/GreveGast2D";
@@ -132,7 +132,7 @@ namespace KinectKids3D.Editor
             AssetDatabase.Refresh();
         }
 
-        private static void ConfigureGreveGastMusic()
+        internal static void ConfigureGreveGastMusic()
         {
             const string assetPath = "Assets/Resources/Audio/Music/GreveGastsJakt.wav";
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
@@ -147,7 +147,7 @@ namespace KinectKids3D.Editor
             importer.SaveAndReimport();
         }
 
-        private static void BuildBridge(string root)
+        internal static void BuildBridge(string root)
         {
             string script = Path.Combine(root, "scripts", "Build-KinectBridge.ps1");
             using (Process process = Process.Start(new ProcessStartInfo
@@ -164,7 +164,7 @@ namespace KinectKids3D.Editor
             }
         }
 
-        private static void CopyBridgeIntoProject(string root)
+        internal static void CopyBridgeIntoProject(string root)
         {
             string source = Path.Combine(root, "src", "KinectBridge", "bin", "Release", "KinectBridge.exe");
             string targetFolder = Path.Combine(Application.dataPath, "StreamingAssets", "KinectBridge");
@@ -175,7 +175,7 @@ namespace KinectKids3D.Editor
             AssetDatabase.Refresh();
         }
 
-        private static string FindProjectRoot()
+        internal static string FindProjectRoot()
         {
             DirectoryInfo directory = new DirectoryInfo(Application.dataPath);
             while (directory != null)
