@@ -3,16 +3,6 @@ using UnityEngine;
 
 namespace KinectKids3D.Platform
 {
-    public sealed class BalloonGameEntry : MonoBehaviour
-    {
-        private void Awake() => gameObject.AddComponent<BalloonGameUnity>();
-    }
-
-    public sealed class SimonGameEntry : MonoBehaviour
-    {
-        private void Awake() => gameObject.AddComponent<SimonGameUnity>();
-    }
-
     public abstract class SimpleKidsGame : MonoBehaviour
     {
         protected AudioSource Voice;

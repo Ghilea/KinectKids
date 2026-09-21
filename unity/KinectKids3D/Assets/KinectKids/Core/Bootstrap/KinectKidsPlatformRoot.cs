@@ -16,6 +16,7 @@ namespace KinectKids3D.Platform
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            Application.runInBackground = true;
             Scenes = new KinectKidsSceneLoader();
             Input = gameObject.AddComponent<KinectKidsInputManager>();
             gameObject.AddComponent<KinectKidsPauseMenu>();

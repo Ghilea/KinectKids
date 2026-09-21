@@ -22,6 +22,7 @@ namespace KinectKids3D.Editor
         [MenuItem("KinectKids/Plattform/Skapa scener och register")]
         public static void CreatePlatformAssets()
         {
+            EnsureRuntimeMaterial();
             GameDefinition definition = AssetDatabase.LoadAssetAtPath<GameDefinition>(DefinitionPath);
             if (definition == null)
             {
@@ -199,6 +200,24 @@ namespace KinectKids3D.Editor
             game.isAvailable = true;
             EditorUtility.SetDirty(game);
             return game;
+        }
+
+        private static void EnsureRuntimeMaterial()
+        {
+            const string path = "Assets/Resources/KinectKidsRuntimeStandard.mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            Shader shader = Shader.Find("Standard");
+            if (shader == null) shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (material == null)
+            {
+                material = new Material(shader) { name = "KinectKids Runtime Standard" };
+                AssetDatabase.CreateAsset(material, path);
+            }
+            else if (shader != null)
+            {
+                material.shader = shader;
+                EditorUtility.SetDirty(material);
+            }
         }
 
         private static void CreateLearningScene(string sceneName, LearningGameMode mode)

@@ -939,9 +939,10 @@ namespace KinectKids3D
 
         public static Material MaterialOf(Color color, float metallic = 0f)
         {
+            Material template = Resources.Load<Material>("KinectKidsRuntimeStandard");
             Shader shader = Shader.Find("Standard");
             if (shader == null) shader = Shader.Find("Universal Render Pipeline/Lit");
-            Material material = new Material(shader);
+            Material material = template != null ? new Material(template) : new Material(shader);
             if (material.HasProperty("_Color")) material.SetColor("_Color", color);
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", metallic);
