@@ -329,6 +329,8 @@ namespace KinectKids.Games.GreveGast
             GUI.DrawTexture(new Rect(meter.x, meter.y, meter.width * chase, meter.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
             GUI.Label(new Rect(meter.x, meter.y + 26, meter.width + 200, 26), "GREVE GAST NÄRMAR SIG", smallStyle);
+            GUI.Label(new Rect(meter.x, meter.y + 52, meter.width + 400, 26),
+                useSpriteArt ? "Grafik: riktiga sprites" : "Grafik: platshållare (sprites hittades inte)", smallStyle);
 
             if (Time.unscaledTime < feedbackUntil)
             {

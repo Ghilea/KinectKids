@@ -126,6 +126,7 @@ namespace KinectKids3D.Editor
             string root = KinectKidsWindowsBuild.FindProjectRoot();
             if (root == null) throw new InvalidOperationException("KinectKids.sln hittades inte ovanför Unity-projektet.");
             GreveGast2DBuilder.BuildAll();
+            GreveChaseSpriteImporter.ImportAll();
             KinectKidsWindowsBuild.EnsureGreveGastDrawnRuntimePrefab();
             KinectKidsWindowsBuild.ConfigureGreveGastMusic();
             KinectKidsWindowsBuild.BuildBridge(root);
