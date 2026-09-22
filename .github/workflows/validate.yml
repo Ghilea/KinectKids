@@ -50,6 +50,12 @@ jobs:
             './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/ChaseSceneDirector.cs',
             './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/ChaseEnvironmentBuilder.cs',
             './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/GreveGastSceneEntry.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/GreveChaseSprites.cs',
+            # Riktiga chase-sprites (utskurna ur asset-arken).
+            './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Resources/GreveChase/Player/player_idle.png',
+            './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Resources/GreveChase/Player/player_run_near.png',
+            './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Resources/GreveChase/GreveGast/greve_idle.png',
+            './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Resources/GreveChase/GreveGast/greve_reach.png',
             # Spokjakten 2.5D wagon-ride.
             './unity/KinectKids3D/Assets/KinectKids/Games/GhostHunt/GhostRide25D.cs',
             './unity/KinectKids3D/Assets/KinectKids/Games/GhostHunt/SpokjaktenSceneEntry.cs',

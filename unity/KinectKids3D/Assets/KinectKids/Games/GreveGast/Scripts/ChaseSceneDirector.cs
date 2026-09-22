@@ -31,6 +31,11 @@ namespace KinectKids.Games.GreveGast
         private ParallaxController parallax;
         private PuppetRig playerRig;
         private PuppetRig grevePuppet;
+        private PoseSpriteCharacter playerSprite;
+        private PoseSpriteCharacter greveSprite;
+        private Transform playerTransform;
+        private Transform greveTransform;
+        private bool useSpriteArt;
         private GreveGastBodyInput body;
 
         private float chase = 0.35f;      // 0 = far behind, 1 = caught
@@ -54,15 +59,40 @@ namespace KinectKids.Games.GreveGast
             BuildCamera();
             parallax = ChaseEnvironmentBuilder.Build(transform);
 
-            // Player near the camera, running toward it.
-            playerRig = PuppetBuilder.BuildPlayer(transform);
-            playerRig.transform.localPosition = new Vector3(0f, -1.4f, LayerSorting.BandZ(SceneBand.Actors));
-            playerRig.transform.localScale = Vector3.one * 1.4f;
+            useSpriteArt = GreveChaseSprites.HasPlayerArt && GreveChaseSprites.HasGreveArt;
+            if (useSpriteArt)
+            {
+                // Real cut sprites: pose-swapping single-sprite characters.
+                var playerGo = new GameObject("Player");
+                playerGo.transform.SetParent(transform, false);
+                playerGo.transform.localPosition = new Vector3(0f, -1.4f, LayerSorting.BandZ(SceneBand.Actors));
+                playerGo.transform.localScale = Vector3.one * 3.2f;
+                playerSprite = playerGo.AddComponent<PoseSpriteCharacter>();
+                playerSprite.Init(GreveChaseSprites.Player, SceneBand.Actors, 0.9f);
+                playerSprite.SetPose("run_near");
+                playerTransform = playerGo.transform;
 
-            // Greve Gast behind the player, scaled by chase distance.
-            grevePuppet = PuppetBuilder.BuildGreveGast(transform);
-            grevePuppet.transform.localPosition = new Vector3(0f, 0.5f, LayerSorting.BandZ(SceneBand.Actors, 0.2f));
-            grevePuppet.SetPose("chase");
+                var greveGo = new GameObject("GreveGast");
+                greveGo.transform.SetParent(transform, false);
+                greveGo.transform.localPosition = new Vector3(0f, 0.5f, LayerSorting.BandZ(SceneBand.Actors, 0.2f));
+                greveSprite = greveGo.AddComponent<PoseSpriteCharacter>();
+                greveSprite.Init(GreveChaseSprites.Greve, SceneBand.Actors, 0.3f);
+                greveSprite.SetPose("chase");
+                greveTransform = greveGo.transform;
+            }
+            else
+            {
+                // Placeholder puppets.
+                playerRig = PuppetBuilder.BuildPlayer(transform);
+                playerRig.transform.localPosition = new Vector3(0f, -1.4f, LayerSorting.BandZ(SceneBand.Actors));
+                playerRig.transform.localScale = Vector3.one * 1.4f;
+                playerTransform = playerRig.transform;
+
+                grevePuppet = PuppetBuilder.BuildGreveGast(transform);
+                grevePuppet.transform.localPosition = new Vector3(0f, 0.5f, LayerSorting.BandZ(SceneBand.Actors, 0.2f));
+                grevePuppet.SetPose("chase");
+                greveTransform = grevePuppet.transform;
+            }
 
             hazardTimer = hazardInterval;
         }
@@ -155,7 +185,7 @@ namespace KinectKids.Games.GreveGast
             {
                 Feedback("GREVE GAST TOG DIG!", new Color(0.8f, 0.3f, 0.85f));
                 scriptedCamera?.BlendTo("Caught");
-                grevePuppet?.SetPose("threaten");
+                SetGrevePose("threaten");
                 chase = 0.55f; // reset for continued play
             }
             else if (scriptedCamera != null && chase < 0.9f)
@@ -166,34 +196,52 @@ namespace KinectKids.Games.GreveGast
 
         private void DriveCharacters()
         {
-            // Player pose from current action.
-            if (playerRig != null)
+            // --- Player ---
+            if (playerTransform != null)
             {
-                string pose = "run";
-                switch (currentDodge)
+                if (useSpriteArt)
                 {
-                    case DodgeAction.Jump: pose = "jump"; break;
-                    case DodgeAction.Duck: pose = "duck"; break;
-                    case DodgeAction.Left: pose = "left"; break;
-                    case DodgeAction.Right: pose = "right"; break;
+                    string pose = "run_near";
+                    switch (currentDodge)
+                    {
+                        case DodgeAction.Jump: pose = "jump"; break;
+                        case DodgeAction.Duck: pose = "duck"; break;
+                        case DodgeAction.Left: pose = "sidestep_left"; break;
+                        case DodgeAction.Right: pose = "sidestep_right"; break;
+                    }
+                    playerSprite.SetPose(pose);
                 }
-                playerRig.SetPose(pose);
-                Vector3 p = playerRig.transform.localPosition;
+                else
+                {
+                    string pose = "run";
+                    switch (currentDodge)
+                    {
+                        case DodgeAction.Jump: pose = "jump"; break;
+                        case DodgeAction.Duck: pose = "duck"; break;
+                        case DodgeAction.Left: pose = "left"; break;
+                        case DodgeAction.Right: pose = "right"; break;
+                    }
+                    playerRig.SetPose(pose);
+                }
+                Vector3 p = playerTransform.localPosition;
                 p.x = Mathf.Lerp(p.x, lateral * 1.8f, 1f - Mathf.Exp(-10f * Time.deltaTime));
-                playerRig.transform.localPosition = p;
+                playerTransform.localPosition = p;
             }
 
-            // Greve Gast scales / rises with chase closeness.
-            if (grevePuppet != null)
+            // --- Greve Gast: scales / rises with chase closeness ---
+            if (greveTransform != null)
             {
-                float scale = Mathf.Lerp(0.7f, 2.0f, chase);
-                grevePuppet.transform.localScale = Vector3.one * scale;
-                Vector3 gp = grevePuppet.transform.localPosition;
+                float baseScale = useSpriteArt ? 3.0f : 1f;
+                float scale = Mathf.Lerp(0.5f, 1.3f, chase) * baseScale;
+                greveTransform.localScale = Vector3.one * scale;
+                Vector3 gp = greveTransform.localPosition;
                 gp.y = Mathf.Lerp(1.4f, 0.2f, chase);
                 gp.x = Mathf.Lerp(gp.x, lateral * 1.2f, 1f - Mathf.Exp(-4f * Time.deltaTime));
-                grevePuppet.transform.localPosition = gp;
-                if (chase > 0.75f) grevePuppet.SetPose("reach");
-                else grevePuppet.SetPose("chase");
+                greveTransform.localPosition = gp;
+
+                string grevePose = chase > 0.75f ? "reach" : "chase";
+                if (useSpriteArt) greveSprite.SetPose(grevePose);
+                else grevePuppet.SetPose(grevePose);
             }
         }
 
@@ -206,7 +254,23 @@ namespace KinectKids.Games.GreveGast
             HazardKind kind = (HazardKind)Random.Range(0, 4);
             HazardBase hazard = HazardFactory.Spawn(kind, transform, this);
             hazard.transform.localPosition = new Vector3(0, 0, LayerSorting.BandZ(SceneBand.Hazards));
+
+            // Swap in real hazard art where a matching cut sprite exists.
+            switch (kind)
+            {
+                case HazardKind.LowBeam: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_1")); break; // hanging beam
+                case HazardKind.Falling: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_0")); break; // falling rock
+                case HazardKind.Side: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_4")); break;    // rolling barrel
+                case HazardKind.Jump: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_0")); break;    // rock/obstacle
+            }
+
             hazard.Resolved += OnHazardResolved;
+        }
+
+        private void SetGrevePose(string pose)
+        {
+            if (useSpriteArt) greveSprite?.SetPose(pose);
+            else grevePuppet?.SetPose(pose);
         }
 
         private void OnHazardResolved(HazardBase hazard, bool avoided)
@@ -215,14 +279,14 @@ namespace KinectKids.Games.GreveGast
             {
                 chase = Mathf.Clamp01(chase - 0.05f);
                 Feedback("BRA!", new Color(0.3f, 0.85f, 0.45f));
-                grevePuppet?.SetPose("stunned");
+                SetGrevePose("stunned");
             }
             else
             {
                 chase = Mathf.Clamp01(chase + catchOnHit);
                 Feedback("OJ!", new Color(0.9f, 0.3f, 0.3f));
                 scriptedCamera?.Shake(0.4f);
-                grevePuppet?.SetPose("reach");
+                SetGrevePose("reach");
             }
         }
 

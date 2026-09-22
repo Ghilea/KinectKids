@@ -35,6 +35,17 @@ namespace KinectKids.Scene25D
         public HazardResult Result => result;
         public bool Finished { get; private set; }
 
+        /// <summary>
+        /// Optionally replace the hazard's placeholder sprite with real art.
+        /// Behaviour (required dodge, timing) is unchanged; only the visual swaps.
+        /// </summary>
+        public void OverrideSprite(Sprite sprite)
+        {
+            if (sprite == null) return;
+            SpriteRenderer sr = GetComponentInChildren<SpriteRenderer>(true);
+            if (sr != null) sr.sprite = sprite;
+        }
+
         /// <summary>Fired once when the hazard is resolved. bool = avoided.</summary>
         public event Action<HazardBase, bool> Resolved;
 
