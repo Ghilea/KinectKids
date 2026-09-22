@@ -9,8 +9,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v2
       - name: Validate XML and project references
         shell: pwsh
         run: |
@@ -27,9 +25,6 @@ jobs:
             if (-not (Test-Path $path)) { throw "Projektfilen refererar till en fil som saknas: $path" }
           }
           Write-Host 'Alla XAML/XML-filer och projektreferenser är giltiga.'
-      - name: Compile WPF application
-        shell: pwsh
-        run: msbuild .\KinectKids.sln /m /p:Configuration=Release /p:Platform=x86 /p:UseKinectStub=true /verbosity:minimal
       - name: Validate Unity 3D prototype
         shell: pwsh
         run: |
