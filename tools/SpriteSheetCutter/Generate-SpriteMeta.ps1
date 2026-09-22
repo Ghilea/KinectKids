@@ -131,10 +131,18 @@ TextureImporter:
 $count = 0
 Get-ChildItem -Path $Root -Recurse -Filter *.png | ForEach-Object {
     $metaPath = $_.FullName + '.meta'
-    if (Test-Path -LiteralPath $metaPath) { return }
-    $guid = [guid]::NewGuid().ToString('N')
+    # Reuse an existing GUID if the meta is present (even if truncated), so no
+    # asset references break. Only skip metas that already contain a full
+    # TextureImporter block.
+    $guid = $null
+    if (Test-Path -LiteralPath $metaPath) {
+        $existing = Get-Content -LiteralPath $metaPath -Raw
+        if ($existing -match 'TextureImporter') { return }  # already complete
+        if ($existing -match 'guid:\s*([0-9a-fA-F]{32})') { $guid = $Matches[1] }
+    }
+    if (-not $guid) { $guid = [guid]::NewGuid().ToString('N') }
     $content = $template.Replace('__GUID__', $guid).Replace('__PX__', $PivotX).Replace('__PY__', $PivotY)
     Set-Content -LiteralPath $metaPath -Value $content -NoNewline
     $count++
 }
-Write-Host "Skapade $count .meta-filer under $Root"
+Write-Host "Skapade/reparerade $count .meta-filer under $Root"
