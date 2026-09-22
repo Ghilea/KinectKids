@@ -1,0 +1,232 @@
+// Reusable UnityEngine + project stub for STANDALONE SYNTAX verification of the
+// KinectKids 2.5D pipeline and game scripts. NOT the real Unity API — it only
+// declares the surface the scripts use so Roslyn can check syntax/references
+// outside the Unity editor. Keep in sync when scripts start using new APIs.
+using System;
+using System.Collections;
+using System.Collections.Generic;
+
+namespace UnityEngine
+{
+    public struct Vector2
+    {
+        public float x, y;
+        public Vector2(float x, float y) { this.x = x; this.y = y; }
+        public float magnitude => (float)Math.Sqrt(x * x + y * y);
+        public static Vector2 zero => new Vector2(0, 0);
+        public static Vector2 operator *(Vector2 a, float b) => new Vector2(a.x * b, a.y * b);
+        public static Vector2 operator +(Vector2 a, Vector2 b) => new Vector2(a.x + b.x, a.y + b.y);
+        public static Vector2 operator -(Vector2 a, Vector2 b) => new Vector2(a.x - b.x, a.y - b.y);
+        public static float Distance(Vector2 a, Vector2 b) => (a - b).magnitude;
+    }
+    public struct Vector3
+    {
+        public float x, y, z;
+        public Vector3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
+        public static Vector3 zero => new Vector3(0, 0, 0);
+        public static Vector3 one => new Vector3(1, 1, 1);
+        public static Vector3 operator *(Vector3 a, float b) => new Vector3(a.x * b, a.y * b, a.z * b);
+        public static Vector3 operator +(Vector3 a, Vector3 b) => new Vector3(a.x + b.x, a.y + b.y, a.z + b.z);
+        public static Vector3 operator -(Vector3 a, Vector3 b) => new Vector3(a.x - b.x, a.y - b.y, a.z - b.z);
+        public static Vector3 Lerp(Vector3 a, Vector3 b, float t) => a + (b - a) * t;
+        public static implicit operator Vector3(Vector2 v) => new Vector3(v.x, v.y, 0);
+    }
+    public struct Bounds { public Vector3 size; }
+    public struct Quaternion
+    {
+        public static Quaternion identity => new Quaternion();
+        public static Quaternion Euler(float x, float y, float z) => new Quaternion();
+        public static Quaternion operator *(Quaternion a, Quaternion b) => new Quaternion();
+    }
+    public struct Color
+    {
+        public float r, g, b, a;
+        public Color(float r, float g, float b) { this.r = r; this.g = g; this.b = b; this.a = 1; }
+        public Color(float r, float g, float b, float a) { this.r = r; this.g = g; this.b = b; this.a = a; }
+        public static Color white => new Color(1, 1, 1);
+        public static Color Lerp(Color a, Color b, float t) => a;
+    }
+    public struct Rect
+    {
+        public float x, y, width, height;
+        public Rect(float x, float y, float w, float h) { this.x = x; this.y = y; width = w; height = h; }
+        public float xMax => x + width;
+        public float yMax => y + height;
+        public Vector2 center => new Vector2(x + width / 2, y + height / 2);
+    }
+    public static class Mathf
+    {
+        public static float Clamp01(float v) => v < 0 ? 0 : v > 1 ? 1 : v;
+        public static float Clamp(float v, float a, float b) => v < a ? a : v > b ? b : v;
+        public static int Clamp(int v, int a, int b) => v < a ? a : v > b ? b : v;
+        public static float Lerp(float a, float b, float t) => a + (b - a) * t;
+        public static float InverseLerp(float a, float b, float v) => 0.5f;
+        public static float Abs(float v) => Math.Abs(v);
+        public static float Max(float a, float b) => Math.Max(a, b);
+        public static float Min(float a, float b) => Math.Min(a, b);
+        public static int Max(int a, int b) => Math.Max(a, b);
+        public static int Min(int a, int b) => Math.Min(a, b);
+        public static float Sin(float v) => (float)Math.Sin(v);
+        public static float Cos(float v) => (float)Math.Cos(v);
+        public static float Sqrt(float v) => (float)Math.Sqrt(v);
+        public static float Exp(float v) => (float)Math.Exp(v);
+        public static float Repeat(float t, float len) => t - (float)Math.Floor(t / len) * len;
+        public static float MoveTowards(float a, float b, float d) => a;
+        public static float Atan2(float y, float x) => (float)Math.Atan2(y, x);
+        public static int RoundToInt(float v) => (int)Math.Round(v);
+        public static int CeilToInt(float v) => (int)Math.Ceiling(v);
+        public const float Rad2Deg = 57.29578f;
+    }
+    public static class Time { public static float deltaTime, unscaledDeltaTime, unscaledTime, time; }
+    public static class Random
+    {
+        public static float value => 0.5f;
+        public static float Range(float a, float b) => a;
+        public static int Range(int a, int b) => a;
+    }
+    public enum TextureFormat { RGBA32 }
+    public enum TextureWrapMode { Clamp }
+    public enum FilterMode { Bilinear }
+    public enum HideFlags { DontSave }
+    public enum CameraClearFlags { SolidColor }
+    public enum FontStyle { Bold }
+    public enum TextAnchor { MiddleCenter }
+    public enum KeyCode { W, S, A, D, Space, LeftShift, RightShift, UpArrow, DownArrow, LeftArrow, RightArrow, F2, F3, PageDown,
+        Alpha1, Alpha2, Alpha3, Alpha4, Keypad1, Keypad2, Keypad3, Keypad4, R }
+
+    public class Object { public string name; public HideFlags hideFlags; public static void Destroy(Object o, float t = 0) { } }
+    public class Texture : Object { }
+    public class Texture2D : Texture
+    {
+        public int width, height;
+        public TextureWrapMode wrapMode; public FilterMode filterMode;
+        public Texture2D(int w, int h, TextureFormat f, bool m) { width = w; height = h; }
+        public void SetPixel(int x, int y, Color c) { }
+        public void SetPixels(Color[] c) { }
+        public void Apply() { }
+        public static Texture2D whiteTexture => new Texture2D(1, 1, TextureFormat.RGBA32, false);
+    }
+    public class Sprite : Object
+    {
+        public Texture2D texture;
+        public Bounds bounds;
+        public static Sprite Create(Texture2D t, Rect r, Vector2 pivot, float ppu) => new Sprite();
+    }
+    public class AudioClip : Object { }
+    public class Component : Object
+    {
+        public Transform transform;
+        public GameObject gameObject;
+        public T GetComponent<T>() where T : Component => null;
+        public T[] GetComponentsInChildren<T>(bool inc = false) where T : Component => new T[0];
+        public void GetComponentsInChildren<T>(bool inc, List<T> list) where T : Component { }
+        public T GetComponentInChildren<T>(bool inc = false) where T : Component => null;
+        public T AddComponent<T>() where T : Component => Activator.CreateInstance<T>();
+        public Coroutine StartCoroutine(IEnumerator e) => null;
+        public void StopAllCoroutines() { }
+    }
+    public class Transform : Component
+    {
+        public Vector3 localPosition, position, localScale, eulerAngles;
+        public Quaternion localRotation;
+        public float aspect;
+        public void SetParent(Transform p, bool worldStays) { }
+    }
+    public class GameObject : Object
+    {
+        public Transform transform = new Transform();
+        public GameObject() { }
+        public GameObject(string n) { name = n; }
+        public string tag;
+        public T AddComponent<T>() where T : Component => Activator.CreateInstance<T>();
+        public Component AddComponent(Type t) => null;
+        public T GetComponent<T>() where T : Component => null;
+    }
+    public class Behaviour : Component { public bool enabled; }
+    public class MonoBehaviour : Behaviour { public static T FindFirstObjectByType<T>() where T : Object => null; }
+    public class Coroutine { }
+    public class WaitForSecondsRealtime { public WaitForSecondsRealtime(float s) { } }
+    public class Renderer : Component { public int sortingOrder; }
+    public class SpriteRenderer : Renderer { public Sprite sprite; public Color color; public bool enabled; }
+    public class AudioSource : Behaviour
+    {
+        public float spatialBlend; public bool playOnAwake; public bool isPlaying; public AudioClip clip;
+        public void Play() { } public void Stop() { } public void PlayOneShot(AudioClip c) { }
+    }
+    public class AudioListener : Behaviour { }
+    public class Camera : Behaviour
+    {
+        public bool orthographic; public float orthographicSize; public float aspect;
+        public CameraClearFlags clearFlags; public Color backgroundColor;
+        public static Camera main => null;
+        public Vector3 WorldToViewportPoint(Vector3 p) => Vector3.zero;
+    }
+    public class Matrix4x4 { }
+    public static class GUI
+    {
+        public static Color color; public static Matrix4x4 matrix;
+        public static GUISkin skin => new GUISkin();
+        public static void DrawTexture(Rect r, Texture t, ScaleMode m = ScaleMode.StretchToFill, bool alpha = false) { }
+        public static void Label(Rect r, string s, GUIStyle st = null) { }
+        public static bool Button(Rect r, string s) => false;
+    }
+    public enum ScaleMode { StretchToFill, ScaleToFit }
+    public class GUISkin { public GUIStyle label = new GUIStyle(); }
+    public class GUIStyleState { public Color textColor; }
+    public class GUIStyle
+    {
+        public int fontSize; public FontStyle fontStyle; public TextAnchor alignment; public bool wordWrap;
+        public GUIStyleState normal = new GUIStyleState();
+        public GUIStyle() { } public GUIStyle(GUIStyle o) { }
+    }
+    public static class GUIUtility { public static void RotateAroundPivot(float a, Vector2 p) { } }
+    public static class Screen { public static int width = 1920; public static int height = 1080; }
+    public class Input
+    {
+        public static bool GetKey(KeyCode k) => false;
+        public static bool GetKeyDown(KeyCode k) => false;
+        public static bool GetMouseButtonDown(int b) => false;
+        public static Vector3 mousePosition => Vector3.zero;
+    }
+    public static class Resources { public static T Load<T>(string p) where T : Object => null; }
+    public class RequireComponent : Attribute { public RequireComponent(Type t) { } }
+    public class DisallowMultipleComponent : Attribute { }
+    public class TooltipAttribute : Attribute { public TooltipAttribute(string s) { } }
+    public class HeaderAttribute : Attribute { public HeaderAttribute(string s) { } }
+    public class RangeAttribute : Attribute { public RangeAttribute(float a, float b) { } }
+    public class SerializeField : Attribute { }
+}
+
+namespace KinectKids3D
+{
+    using UnityEngine;
+    public struct AimSample { public int PlayerIndex; public int HandId; public Vector2 Position; public bool Fire; public float GestureProgress; }
+    public enum GreveGastAction { None, Run, Jump, Duck, Left, Right }
+    public sealed class GreveGastBodyInput
+    {
+        public bool KinectConnected; public string Status;
+        public float HeightDelta; public float HorizontalDelta; public float RunEnergy;
+        public GreveGastAction Current;
+        public void Start() { } public void Update() { } public void Dispose() { }
+    }
+}
+namespace KinectKids3D.Platform
+{
+    using UnityEngine;
+    using System.Collections.Generic;
+    public struct PlayerInputFrame
+    {
+        public bool IsTracked; public float CenterX; public float HeadY;
+        public Vector2 RightHand; public Vector2 LeftHand;
+        public bool Jump; public bool Duck; public bool MoveLeft; public bool MoveRight; public bool Run; public bool Action;
+    }
+    public sealed class KinectKidsInputManager : MonoBehaviour
+    {
+        public static KinectKidsInputManager Instance;
+        public PlayerInputFrame Frame; public bool KinectConnected; public string Status;
+        public IReadOnlyList<KinectKids3D.AimSample> AimSamples => null;
+    }
+    public sealed class KinectKidsSceneLoader { public void LoadMenu() { } }
+    public sealed class KinectKidsPlatformRoot : MonoBehaviour { public static KinectKidsPlatformRoot Instance; public KinectKidsSceneLoader Scenes; }
+    public enum LearningGameMode { Math, Swedish, Shapes, Patterns }
+}
