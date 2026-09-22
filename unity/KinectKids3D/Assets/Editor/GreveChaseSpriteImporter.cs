@@ -37,6 +37,13 @@ namespace KinectKids3D.Editor
                 TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
                 if (importer == null) continue;
 
+                // Already configured? Skip to avoid needless reimports each build.
+                if (importer.textureType == TextureImporterType.Sprite
+                    && importer.spriteImportMode == SpriteImportMode.Single
+                    && Mathf.Approximately(importer.spritePixelsPerUnit, 280f)
+                    && !importer.mipmapEnabled)
+                    continue;
+
                 importer.textureType = TextureImporterType.Sprite;
                 importer.spriteImportMode = SpriteImportMode.Single;
                 importer.spritePixelsPerUnit = 280f;
@@ -58,9 +65,7 @@ namespace KinectKids3D.Editor
                 configured++;
             }
 
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-            Debug.Log($"Importerade {configured} chase-sprites som Sprite: {ChaseResources}");
+            Debug.Log($"Chase-sprites: {configured} omkonfigurerade som Sprite (av {guids.Length}).");
         }
     }
 }
