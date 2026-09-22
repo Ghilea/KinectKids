@@ -146,7 +146,7 @@ namespace KinectKids3D
             part.transform.localRotation = rotation ?? Quaternion.identity;
             part.GetComponent<Renderer>().material = new Material(material);
             Collider collider = part.GetComponent<Collider>();
-            if (collider != null) Object.Destroy(collider);
+            if (collider != null) Destroy(collider);
             return part;
         }
     }

@@ -51,7 +51,7 @@ namespace KinectKids3D
             body.transform.localPosition = new Vector3(0f, 1.5f, 0f);
             body.transform.localScale = new Vector3(1.35f, 1.55f, 1.15f);
             body.GetComponent<Renderer>().material = new Material(material);
-            Object.Destroy(body.GetComponent<Collider>());
+            Destroy(body.GetComponent<Collider>());
         }
     }
 }

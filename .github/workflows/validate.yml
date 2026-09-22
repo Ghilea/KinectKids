@@ -45,10 +45,20 @@ jobs:
             './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Hazards.cs',
             './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/DodgeAction.cs',
             './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/PlaceholderArt.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Scene25DBackdrop.cs',
             # Greve Gast 2.5D chase.
             './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/ChaseSceneDirector.cs',
             './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/ChaseEnvironmentBuilder.cs',
             './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/GreveGastSceneEntry.cs',
+            # Spokjakten 2.5D wagon-ride.
+            './unity/KinectKids3D/Assets/KinectKids/Games/GhostHunt/GhostRide25D.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Games/GhostHunt/SpokjaktenSceneEntry.cs',
+            # 2.5D larande- och rorelsespel.
+            './unity/KinectKids3D/Assets/KinectKids/Games/Learning/Scripts/Learning25DGame.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Games/Learning/Scripts/Movement25D.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Games/Learning/Scripts/LearningGameEntry.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Games/Learning/Scripts/SimonGameEntry.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Games/Learning/Scripts/BalloonGameEntry.cs',
             './THIRD_PARTY_NOTICES.md'
           )
           foreach ($path in $required) {

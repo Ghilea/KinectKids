@@ -135,7 +135,7 @@ namespace KinectKids3D
             part.transform.localPosition = position;
             part.transform.localScale = scale;
             part.GetComponent<Renderer>().sharedMaterial = material;
-            Object.Destroy(part.GetComponent<Collider>());
+            Destroy(part.GetComponent<Collider>());
         }
     }
 }

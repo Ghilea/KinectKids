@@ -883,7 +883,7 @@ namespace KinectKids3D
             value.transform.localScale = scale;
             value.transform.rotation = rotation ?? Quaternion.identity;
             value.GetComponent<Renderer>().sharedMaterial = material;
-            Object.Destroy(value.GetComponent<Collider>());
+            Destroy(value.GetComponent<Collider>());
             return value;
         }
 
@@ -897,7 +897,7 @@ namespace KinectKids3D
             value.transform.localScale = scale;
             value.transform.rotation = rotation ?? Quaternion.identity;
             value.GetComponent<Renderer>().sharedMaterial = material;
-            Object.Destroy(value.GetComponent<Collider>());
+            Destroy(value.GetComponent<Collider>());
             return value;
         }
 
@@ -909,7 +909,7 @@ namespace KinectKids3D
             value.transform.localPosition = position;
             value.transform.localScale = scale;
             value.GetComponent<Renderer>().sharedMaterial = material;
-            Object.Destroy(value.GetComponent<Collider>());
+            Destroy(value.GetComponent<Collider>());
         }
 
         private static void CreateChildPrimitive(Transform parent, PrimitiveType type, string name,
@@ -922,7 +922,7 @@ namespace KinectKids3D
             value.transform.localScale = scale;
             value.transform.localRotation = rotation ?? Quaternion.identity;
             value.GetComponent<Renderer>().sharedMaterial = material;
-            Object.Destroy(value.GetComponent<Collider>());
+            Destroy(value.GetComponent<Collider>());
         }
 
         private GameObject CreateSphere(string name, Vector3 position, Vector3 scale, Material material)
@@ -933,7 +933,7 @@ namespace KinectKids3D
             value.transform.position = position;
             value.transform.localScale = scale;
             value.GetComponent<Renderer>().sharedMaterial = material;
-            Object.Destroy(value.GetComponent<Collider>());
+            Destroy(value.GetComponent<Collider>());
             return value;
         }
 
