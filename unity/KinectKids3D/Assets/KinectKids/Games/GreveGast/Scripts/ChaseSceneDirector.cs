@@ -251,17 +251,18 @@ namespace KinectKids.Games.GreveGast
             if (hazardTimer > 0f) return;
             hazardTimer = hazardInterval;
 
-            HazardKind kind = (HazardKind)Random.Range(0, 4);
+            KinectKids.Scene25D.HazardKind kind =
+                (KinectKids.Scene25D.HazardKind)Random.Range(0, 4);
             HazardBase hazard = HazardFactory.Spawn(kind, transform, this);
             hazard.transform.localPosition = new Vector3(0, 0, LayerSorting.BandZ(SceneBand.Hazards));
 
             // Swap in real hazard art where a matching cut sprite exists.
             switch (kind)
             {
-                case HazardKind.LowBeam: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_1")); break; // hanging beam
-                case HazardKind.Falling: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_0")); break; // falling rock
-                case HazardKind.Side: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_4")); break;    // rolling barrel
-                case HazardKind.Jump: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_0")); break;    // rock/obstacle
+                case KinectKids.Scene25D.HazardKind.LowBeam: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_1")); break; // hanging beam
+                case KinectKids.Scene25D.HazardKind.Falling: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_0")); break; // falling rock
+                case KinectKids.Scene25D.HazardKind.Side: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_4")); break;    // rolling barrel
+                case KinectKids.Scene25D.HazardKind.Jump: hazard.OverrideSprite(GreveChaseSprites.Hazard("haz_0")); break;    // rock/obstacle
             }
 
             hazard.Resolved += OnHazardResolved;
