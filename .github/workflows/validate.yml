@@ -15,7 +15,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           [xml](Get-Content './src/KinectBridge/KinectBridge.csproj') | Out-Null
           Write-Host 'KinectBridge-projektfilen är giltig.'
-      - name: Validate Unity 3D prototype
+      - name: Validate Unity 2.5D platform
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -28,38 +28,30 @@ jobs:
           }
           $required = @(
             './unity/KinectKids3D/ProjectSettings/ProjectVersion.txt',
-            './unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.cs',
-            './unity/KinectKids3D/Assets/Scripts/DarkRideWorld.cs',
-            './unity/KinectKids3D/Assets/Scripts/GhostTarget.cs',
-            './unity/KinectKids3D/Assets/Scripts/KinectV1AimProvider.cs',
-            './unity/KinectKids3D/Assets/Scripts/KinectBridgeAimProvider.cs',
-            './unity/KinectKids3D/Assets/Scripts/HauntedTextureFactory.cs',
-            './unity/KinectKids3D/Assets/Scripts/LowPolyMeshFactory.cs',
-            './unity/KinectKids3D/Assets/Scripts/PlayerPose.cs',
-            './unity/KinectKids3D/Assets/Scripts/RideHazard.cs',
-            './unity/KinectKids3D/Assets/Scripts/SideScare.cs',
-            './unity/KinectKids3D/Assets/Scripts/HiddenMonster.cs',
-            './unity/KinectKids3D/Assets/Scripts/BossProjectile.cs',
-            './unity/KinectKids3D/Assets/Scripts/HauntedProp.cs',
-            './unity/KinectKids3D/Assets/Scripts/MagicBolt.cs',
-            './unity/KinectKids3D/Assets/Resources/Textures/CastleStone.jpg',
-            './unity/KinectKids3D/Assets/Resources/Textures/CastleRoad.jpg',
-            './unity/KinectKids3D/Assets/horror_music.mp3',
-            './unity/KinectKids3D/Assets/Editor/KinectKidsProjectSetup.cs',
-            './unity/KinectKids3D/Assets/Editor/KinectKidsWindowsBuild.cs',
-            './unity/KinectKids3D/Assets/Editor/KinectKidsMusicSetup.cs',
+            # Gemensam plattform.
+            './unity/KinectKids3D/Assets/KinectKids/Core/Bootstrap/KinectKidsPlatformRoot.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Input/KinectKidsInputManager.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Menu/Scripts/MainMenuController.cs',
+            './unity/KinectKids3D/Assets/Editor/KinectKidsPlatformBuilder.cs',
+            # Aterandvandbar 2.5D-pipeline.
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/ParallaxController.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/ParallaxLayer.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/LayerSorting.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/CameraDepthScaler.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/ScriptedCamera.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/PuppetRig.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/PuppetBuilder.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/HazardBase.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Hazards.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/DodgeAction.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/PlaceholderArt.cs',
+            # Greve Gast 2.5D chase.
+            './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/ChaseSceneDirector.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/ChaseEnvironmentBuilder.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/GreveGastSceneEntry.cs',
             './THIRD_PARTY_NOTICES.md'
           )
           foreach ($path in $required) {
             if (-not (Test-Path $path -PathType Leaf)) { throw "Unity-filen saknas: $path" }
           }
-          $parts = Get-ChildItem './unity/KinectKids3D/MusicSource/RideMusic.base64.part*' | Sort-Object Name
-          if ($parts.Count -ne 6) { throw "Förväntade 6 musikdelar men hittade $($parts.Count)." }
-          $encoded = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          $music = [Convert]::FromBase64String($encoded)
-          if ($music.Length -ne 1945137) { throw "Musiken har fel storlek: $($music.Length)." }
-          $sha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($music)).ToLowerInvariant()
-          if ($sha -ne '8006838cc5aceee5b79eb48139061309e7e95a7388d47de60a9a5cab05728ca7') {
-            throw "Musikens SHA-256 stämmer inte: $sha"
-          }
-          Write-Host 'Unity-prototypens struktur och manifest är giltiga.'
+          Write-Host 'Unity-plattformens 2.5D-pipeline och struktur är giltiga.'
