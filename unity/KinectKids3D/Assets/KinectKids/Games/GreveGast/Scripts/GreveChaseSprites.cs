@@ -123,6 +123,55 @@ namespace KinectKids.Games.GreveGast
             sr.sprite = frames[0];
         }
 
+        // Cached result of the real-frame probe: -1 = unknown, 0 = none, 1 = yes.
+        private int hasRealRunFrames = -1;
+        private string[] realRunFrameNames;
+
+        /// <summary>
+        /// Best run animation available: if the project ships REAL run-cycle
+        /// frames (run_1, run_2, ... — proper feet-swapping poses) they play as a
+        /// true frame animation. Otherwise it falls back to the procedural run
+        /// cycle so the game always animates. Dropping in the real frames later
+        /// needs no code change.
+        /// </summary>
+        public void PlaySmartRun(string fallbackPose, float cadence = 8f)
+        {
+            if (hasRealRunFrames < 0) ProbeRealRunFrames();
+
+            if (hasRealRunFrames == 1)
+            {
+                StopRunCycle(); // no procedural mirroring when we have real frames
+                PlayAnimation("run", realRunFrameNames, Mathf.Max(6f, cadence * 1.4f));
+            }
+            else
+            {
+                PlayRunCycle(fallbackPose, cadence);
+            }
+        }
+
+        /// <summary>Detect a contiguous real run-cycle frame set run_1, run_2, ...</summary>
+        private void ProbeRealRunFrames()
+        {
+            var found = new List<string>();
+            for (int i = 1; i <= 12; i++)
+            {
+                string name = "run_" + i;
+                Sprite s = resolver != null ? resolver(name) : null;
+                if (s == null) break; // frames must be contiguous from 1
+                found.Add(name);
+                poses[name] = s;      // cache so PlayAnimation reuses it
+            }
+            if (found.Count >= 2)
+            {
+                realRunFrameNames = found.ToArray();
+                hasRealRunFrames = 1;
+            }
+            else
+            {
+                hasRealRunFrames = 0;
+            }
+        }
+
         /// <summary>
         /// Play a procedural front-facing run cycle from a single run sprite:
         /// the sprite bobs, sways and mirrors left/right on each step so the feet

@@ -233,10 +233,9 @@ namespace KinectKids.Games.GreveGast
                 {
                     if (currentDodge == DodgeAction.None)
                     {
-                        // Front-facing run cycle: single sprite, feet swap via
-                        // mirror + bob + sway (no zoom from distance frames).
-                        playerSprite.SetPose("run_near");
-                        playerSprite.PlayRunCycle("run_near", 8f);
+                        // Uses REAL run frames (run_1..N) if present; otherwise a
+                        // procedural feet-swapping run cycle. No zoom either way.
+                        playerSprite.PlaySmartRun("run_near", 8f);
                     }
                     else
                     {

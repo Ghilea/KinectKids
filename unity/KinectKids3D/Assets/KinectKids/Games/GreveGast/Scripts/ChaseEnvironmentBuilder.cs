@@ -33,6 +33,13 @@ namespace KinectKids.Games.GreveGast
         private const string Torch = "env_10";        // wall torch (accent only)
         private const string FogA = "env_16";         // thin fog bank
         private const string FogB = "env_17";         // thick fog bank
+        private const string Window = "env_7";        // window with moon + castle (bg accent)
+        private const string Banner = "env_11";       // hanging banner / flag
+        private const string Statue = "env_12";       // knight statue with axe
+        private const string Rocks = "env_9";         // rubble / stone pile (foreground)
+        private const string Portrait = "env_8";      // framed Greve Gast portrait
+        private const string Arch = "env_4";          // stone archway (deep bg portal)
+        private const string DoorSprite = "env_5";    // haunted door (deep bg portal)
 
         // Sprites import at this PPU with a bottom-centre pivot, so a placed
         // sprite's localPos.y is its FLOOR line and it grows upward.
@@ -49,6 +56,7 @@ namespace KinectKids.Games.GreveGast
             bool art = GreveChaseSprites.Environment(Corridor) != null;
 
             BuildBackgroundCorridor(worldGo.transform, art);
+            BuildBackgroundDecor(worldGo.transform, art);
             BuildFloorLane(worldGo.transform, art);
             BuildSideFill(worldGo.transform, art);
             BuildSideWalls(worldGo.transform, art);
@@ -71,6 +79,12 @@ namespace KinectKids.Games.GreveGast
                 // where the lane and the count converge, reading as "deep hall".
                 PlaceSpriteByHeight(far, GreveChaseSprites.Environment(Corridor),
                     new Vector3(0f, -0.4f, 0f), 12.5f, SceneBand.FarBackground, 0.2f);
+
+                // Reference layer 2: a moonlit window (env_7) set into the back
+                // wall, off to one side so the moon/castle reads behind the hall.
+                PlaceSpriteByHeight(far, GreveChaseSprites.Environment(Window),
+                    new Vector3(-3.4f, 0.4f, 0.05f), 5.2f, SceneBand.FarBackground, 0.28f);
+
                 // A darker vignette band behind the lane grounds the foreground.
                 Quad(far, PlaceholderArt.SolidBlock(), new Color(0.05f, 0.05f, 0.12f, 0.55f),
                     new Vector3(0f, -6f, 0.2f), new Vector3(40f, 8f, 1f),
@@ -82,6 +96,42 @@ namespace KinectKids.Games.GreveGast
                     new Vector3(0f, 2f, 0f), new Vector3(40f, 24f, 1f),
                     SceneBand.FarBackground, 0.1f);
             }
+        }
+
+        // -------------------------------------------------------------------
+        // MODULE: recurring background decor that STREAMS toward the camera as
+        // the player runs (arches, doors, portraits) — so the deep corridor
+        // feels alive and varied instead of a single static backdrop. Placed on
+        // a mid-background treadmill layer with a gentle forward scroll.
+        // -------------------------------------------------------------------
+        private static void BuildBackgroundDecor(Transform world, bool art)
+        {
+            if (!art) return;
+
+            var decor = NewLayer(world, "BackgroundDecor", SceneBand.Background, 0.25f);
+
+            // Decor pieces recede deep along the corridor; alternate type + side
+            // so no two neighbours match and it never looks mirrored.
+            var pieces = new[] { Arch, Portrait, DoorSprite, Portrait, Arch };
+            const float spacing = 3.0f;
+            const float startY = -1.2f;
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                float side = (i % 2 == 0) ? -1f : 1f;
+                float x = side * (2.4f + (i % 3) * 0.4f);
+                float y = startY + i * spacing;
+                float height = 3.0f + (i % 2) * 0.8f;
+                var sr = PlaceSpriteByHeight(decor, GreveChaseSprites.Environment(pieces[i]),
+                    new Vector3(x, y, 0.05f), height, SceneBand.Background, 0.3f + i * 0.02f);
+                // Sink slightly into the cool background haze.
+                if (sr != null) sr.color = new Color(0.8f, 0.83f, 0.98f, 0.9f);
+            }
+
+            // Slow forward stream so the decor drifts toward the camera; loops on
+            // the piece spacing so it repeats seamlessly. Deliberately slower than
+            // the floor so it reads as "further away" (parallax by speed).
+            decor.forwardFactor = 0.35f;
+            decor.loopHeight = spacing;
         }
 
         // -------------------------------------------------------------------
@@ -185,6 +235,20 @@ namespace KinectKids.Games.GreveGast
                     x: -ScreenEdgeX, y: FloorLine, height: 10.5f, flip: false, depth01: 0.5f);
                 WallModule(rightEnv, WallRight, SceneBand.RightEnvironment,
                     x: ScreenEdgeX, y: FloorLine, height: 10.5f, flip: false, depth01: 0.5f);
+
+                // Reference layer 3 (left): a hanging banner high up + a knight
+                // statue standing on the floor in front of the wall.
+                PlaceSpriteByHeight(leftEnv, GreveChaseSprites.Environment(Banner),
+                    new Vector3(-6.6f, 1.4f, -0.05f), 3.2f, SceneBand.LeftEnvironment, 0.6f);
+                PlaceSpriteByHeight(leftEnv, GreveChaseSprites.Environment(Statue),
+                    new Vector3(-6.2f, FloorLine, -0.1f), 4.2f, SceneBand.LeftEnvironment, 0.7f);
+
+                // Reference layer 8 (right): banner + statue, deliberately NOT a
+                // mirror — different heights/positions to avoid stage-set symmetry.
+                PlaceSpriteByHeight(rightEnv, GreveChaseSprites.Environment(Banner),
+                    new Vector3(6.9f, 0.9f, -0.05f), 2.8f, SceneBand.RightEnvironment, 0.6f);
+                PlaceSpriteByHeight(rightEnv, GreveChaseSprites.Environment(Statue),
+                    new Vector3(6.4f, FloorLine + 0.3f, -0.1f), 3.8f, SceneBand.RightEnvironment, 0.7f);
             }
             else
             {
@@ -237,6 +301,13 @@ namespace KinectKids.Games.GreveGast
                 new Vector3(-8.9f, FloorLine, 0f), 9.5f, SceneBand.Foreground, 0.85f);
             PlaceSpriteByHeight(frame, GreveChaseSprites.Environment(Pillar),
                 new Vector3(9.1f, FloorLine + 0.8f, 0f), 7.5f, SceneBand.Foreground, 0.6f);
+
+            // Reference layer 9: rubble / stone piles at the base of the pillars,
+            // framing the foreground without crowding the run lane.
+            PlaceSpriteByHeight(frame, GreveChaseSprites.Environment(Rocks),
+                new Vector3(-7.4f, FloorLine, -0.1f), 2.0f, SceneBand.Foreground, 0.9f);
+            PlaceSpriteByHeight(frame, GreveChaseSprites.Environment(Rocks),
+                new Vector3(7.8f, FloorLine, -0.1f), 1.6f, SceneBand.Foreground, 0.7f);
         }
 
         // -------------------------------------------------------------------
