@@ -233,14 +233,14 @@ namespace KinectKids.Games.GreveGast
                 {
                     if (currentDodge == DodgeAction.None)
                     {
-                        // Real running animation: cycle the three run frames.
-                        playerSprite.PlayAnimation("run",
-                            new[] { "run_far", "run_mid", "run_near" }, 10f);
-                        playerSprite.SetBob(true);
+                        // Front-facing run cycle: single sprite, feet swap via
+                        // mirror + bob + sway (no zoom from distance frames).
+                        playerSprite.SetPose("run_near");
+                        playerSprite.PlayRunCycle("run_near", 8f);
                     }
                     else
                     {
-                        playerSprite.SetBob(false);
+                        playerSprite.StopRunCycle();
                         string pose = "run_near";
                         switch (currentDodge)
                         {
@@ -338,7 +338,7 @@ namespace KinectKids.Games.GreveGast
             {
                 if (useSpriteArt)
                 {
-                    playerSprite.SetBob(false);
+                    playerSprite.StopRunCycle();
                     playerSprite.SetPose("hit");
                 }
                 else playerRig.SetPose("hit");

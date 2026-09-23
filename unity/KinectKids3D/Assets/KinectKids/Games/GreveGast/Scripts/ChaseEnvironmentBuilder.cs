@@ -50,6 +50,7 @@ namespace KinectKids.Games.GreveGast
 
             BuildBackgroundCorridor(worldGo.transform, art);
             BuildFloorLane(worldGo.transform, art);
+            BuildSideFill(worldGo.transform, art);
             BuildSideWalls(worldGo.transform, art);
             BuildFramingPillars(worldGo.transform, art);
             BuildFogLayers(worldGo.transform, art);
@@ -92,23 +93,32 @@ namespace KinectKids.Games.GreveGast
             var floor = NewLayer(world, "FloorLane", SceneBand.Floor, 0.5f);
             if (art)
             {
-                // Overlapping perspective tiles: each nearer tile is bigger, sits
-                // lower and slightly wider, so they merge into one continuous lane
-                // instead of a thin floating strip. depth01 rises toward the camera.
-                // (segment 0 = deepest/back, last = closest/front)
-                var segments = new[]
+                // Treadmill lane: identical perspective tiles stacked along the
+                // run direction. The layer scrolls DOWN toward the camera and
+                // wraps every tileSpacing, so the floor streams past seamlessly
+                // and it reads as "running forward". forwardFactor is driven by
+                // the world speed via ParallaxController.forwardSpeed.
+                const float tileHeight = 4.6f;   // rendered height of one tile
+                const float tileSpacing = 3.1f;  // vertical gap between tiles (overlap)
+                const int tileCount = 6;         // enough to cover screen + wrap
+
+                for (int i = 0; i < tileCount; i++)
                 {
-                    // height, y (floor line),  widthScale, tile
-                    new LaneSeg(2.6f, -1.2f, 0.60f, FloorClean),
-                    new LaneSeg(3.4f, -2.2f, 0.78f, FloorCracked),
-                    new LaneSeg(4.3f, -3.4f, 1.00f, FloorClean),
-                    new LaneSeg(5.2f, -4.9f, 1.25f, FloorCracked),
-                };
-                for (int i = 0; i < segments.Length; i++)
-                {
-                    float depth01 = 0.4f + i * 0.15f; // nearer draws in front
-                    PlaceLaneSegment(floor, segments[i], depth01);
+                    // Alternate clean/cracked for a little variation.
+                    string tile = (i % 2 == 0) ? FloorClean : FloorCracked;
+                    float y = FloorLine + i * tileSpacing;
+                    SpriteRenderer sr = PlaceSpriteByHeight(floor, GreveChaseSprites.Environment(tile),
+                        new Vector3(0f, y, 0f), tileHeight, SceneBand.Floor, 0.5f - i * 0.03f);
+                    if (sr != null)
+                    {
+                        Vector3 s = sr.transform.localScale;
+                        s.x *= 1.35f; // widen so the lane fills the centre
+                        sr.transform.localScale = s;
+                    }
                 }
+
+                floor.forwardFactor = 1f;      // scroll with world forward travel
+                floor.loopHeight = tileSpacing; // wrap seamlessly every tile
             }
             else
             {
@@ -120,29 +130,39 @@ namespace KinectKids.Games.GreveGast
             }
         }
 
-        private readonly struct LaneSeg
+        // -------------------------------------------------------------------
+        // MODULE: side fill that ties the run lane into the background walls so
+        // there is no empty dark gap between the lane edges and the side walls
+        // (user feedback: "på sidorna av golvet finns inga bilder som knyter
+        // ihop den statiska bakgrundsbilden").
+        // -------------------------------------------------------------------
+        private static void BuildSideFill(Transform world, bool art)
         {
-            public readonly float height;
-            public readonly float y;
-            public readonly float widthScale;
-            public readonly string tile;
-            public LaneSeg(float height, float y, float widthScale, string tile)
+            var fill = NewLayer(world, "SideFill", SceneBand.Background, 0.35f);
+            if (art)
             {
-                this.height = height; this.y = y; this.widthScale = widthScale; this.tile = tile;
+                // Use cracked-floor tiles turned into low side ledges that meet
+                // the lane edges and recede toward the background vanishing point.
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    SpriteRenderer ledge = PlaceSpriteByHeight(fill,
+                        GreveChaseSprites.Environment(FloorCracked),
+                        new Vector3(side * 4.6f, FloorLine, 0.1f), 6.5f, SceneBand.Background, 0.35f);
+                    if (ledge != null)
+                    {
+                        Vector3 s = ledge.transform.localScale;
+                        s.x *= 1.4f * side; // widen + mirror so it slopes toward the wall
+                        ledge.transform.localScale = s;
+                        ledge.color = new Color(0.75f, 0.78f, 0.95f, 1f); // sink into the cool bg
+                    }
+                }
             }
-        }
-
-        private static void PlaceLaneSegment(Component parent, LaneSeg seg, float depth01)
-        {
-            Sprite sprite = GreveChaseSprites.Environment(seg.tile);
-            SpriteRenderer sr = PlaceSpriteByHeight(parent, sprite,
-                new Vector3(0f, seg.y, 0f), seg.height, SceneBand.Floor, depth01);
-            if (sr != null)
+            else
             {
-                // Stretch horizontally for the perspective widen toward camera.
-                Vector3 s = sr.transform.localScale;
-                s.x *= seg.widthScale * 1.6f;
-                sr.transform.localScale = s;
+                for (int side = -1; side <= 1; side += 2)
+                    Quad(fill, PlaceholderArt.SolidBlock(), new Color(0.14f, 0.13f, 0.22f),
+                        new Vector3(side * 5f, -3.5f, 0.1f), new Vector3(6f, 5f, 1f),
+                        SceneBand.Background, 0.35f);
             }
         }
 
@@ -157,18 +177,14 @@ namespace KinectKids.Games.GreveGast
 
             if (art)
             {
-                // Left side: two wall modules at different depths/heights.
+                // env_2 is authored as the LEFT wall (recedes left, torch faces
+                // inward) and env_3 as the RIGHT wall — so no flipping is needed.
+                // One tall module per side, pushed to the screen edge so the run
+                // lane in the middle stays clear and the walls frame the corridor.
                 WallModule(leftEnv, WallLeft, SceneBand.LeftEnvironment,
-                    x: -ScreenEdgeX, y: FloorLine, height: 10f, flip: false, depth01: 0.5f);
-                WallModule(leftEnv, WallLeft, SceneBand.LeftEnvironment,
-                    x: -ScreenEdgeX - 0.6f, y: FloorLine + 1.2f, height: 7.2f, flip: false, depth01: 0.4f);
-
-                // Right side: deliberately NOT a mirror — different heights, one
-                // module nudged inward, breaking the "stage set" symmetry.
+                    x: -ScreenEdgeX, y: FloorLine, height: 10.5f, flip: false, depth01: 0.5f);
                 WallModule(rightEnv, WallRight, SceneBand.RightEnvironment,
-                    x: ScreenEdgeX, y: FloorLine, height: 9.2f, flip: false, depth01: 0.5f);
-                WallModule(rightEnv, WallRight, SceneBand.RightEnvironment,
-                    x: ScreenEdgeX + 0.4f, y: FloorLine + 1.8f, height: 6.4f, flip: false, depth01: 0.4f);
+                    x: ScreenEdgeX, y: FloorLine, height: 10.5f, flip: false, depth01: 0.5f);
             }
             else
             {
@@ -221,10 +237,6 @@ namespace KinectKids.Games.GreveGast
                 new Vector3(-8.9f, FloorLine, 0f), 9.5f, SceneBand.Foreground, 0.85f);
             PlaceSpriteByHeight(frame, GreveChaseSprites.Environment(Pillar),
                 new Vector3(9.1f, FloorLine + 0.8f, 0f), 7.5f, SceneBand.Foreground, 0.6f);
-
-            // One lone extra torch accent, off-centre (not a mirrored pair).
-            PlaceSpriteByHeight(frame, GreveChaseSprites.Environment(Torch),
-                new Vector3(-6.9f, 1.4f, -0.1f), 1.7f, SceneBand.Foreground, 0.9f);
         }
 
         // -------------------------------------------------------------------

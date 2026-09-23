@@ -24,9 +24,18 @@ namespace KinectKids.Scene25D
         [Tooltip("How strongly this layer scrolls vertically with travel. Usually 0 for a chase.")]
         public float verticalFactor = 0f;
 
+        [Tooltip("How strongly this layer scrolls TOWARD the camera with forward travel. " +
+                 "Drives the 'running forward' treadmill: the floor uses a positive value so " +
+                 "it streams downward past the camera. Combine with loopHeight to make it seamless.")]
+        public float forwardFactor = 0f;
+
         [Tooltip("Optional looping width. When > 0 the layer wraps its horizontal offset " +
                  "so a tiled backdrop repeats seamlessly.")]
         public float loopWidth = 0f;
+
+        [Tooltip("Optional looping height. When > 0 the forward scroll wraps every loopHeight " +
+                 "units so a tiled floor/wall streams past the camera without gaps.")]
+        public float loopHeight = 0f;
 
         [Tooltip("Extra idle drift, e.g. slow fog motion, added on top of parallax scroll.")]
         public Vector2 driftPerSecond = Vector2.zero;
@@ -62,7 +71,17 @@ namespace KinectKids.Scene25D
                 if (x > loopWidth * 0.5f) x -= loopWidth;
             }
 
+            // Vertical scroll: legacy verticalFactor plus the "run forward"
+            // forwardFactor. A positive forwardFactor streams the layer DOWNWARD
+            // (toward the camera). loopHeight wraps it so a tiled floor repeats
+            // seamlessly, giving a treadmill "running forward" effect.
             float y = -verticalTravel * verticalFactor;
+            if (forwardFactor > 0.0001f)
+            {
+                float forward = verticalTravel * forwardFactor;
+                if (loopHeight > 0.0001f) forward = Mathf.Repeat(forward, loopHeight);
+                y -= forward; // subtract so the layer moves down/toward camera
+            }
 
             Vector3 drift = new Vector3(driftPerSecond.x, driftPerSecond.y, 0f) * driftTime;
             transform.localPosition = basePosition + new Vector3(x, y, 0f) + drift;

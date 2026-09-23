@@ -51,12 +51,16 @@ namespace KinectKids.Games.GreveGast
         private float frameTimer;
         private int frameIndex;
 
-        // Optional running "bob" so a single-frame pose still reads as alive.
-        private bool bob;
-        private float bobTime;
-        private float bobAmplitude;
-        private float bobSpeed;
-        private Vector3 bobBaseLocalPos;
+        // Procedural run cycle: a single run sprite is animated by alternating a
+        // horizontal flip (arms/legs visually swap sides), a vertical bob and a
+        // slight tilt — so it reads as taking steps instead of zooming.
+        private bool running;
+        private float runTime;
+        private float runCadence = 8f;      // steps per second feel
+        private float runBob = 0.10f;       // vertical bounce (local units)
+        private float runTilt = 6f;         // degrees of body sway
+        private Vector3 runBaseLocalPos;
+        private float baseScaleX;           // remembered so flipping keeps size
 
         public SpriteRenderer Renderer => sr;
 
@@ -83,14 +87,17 @@ namespace KinectKids.Games.GreveGast
         }
 
         /// <summary>
-        /// Play a looping frame animation built from several pose names (e.g.
-        /// run_far / run_mid / run_near). Frames that fail to resolve are skipped;
-        /// if none resolve the call is a no-op so the scene still runs.
+        /// Play a looping frame animation built from several pose names. Frames
+        /// that fail to resolve are skipped; if none resolve the call is a no-op
+        /// so the scene still runs. NOTE: for the player run we do NOT use this
+        /// with the far/mid/near distance images (that just zooms); use
+        /// <see cref="PlayRunCycle"/> instead.
         /// </summary>
         public void PlayAnimation(string animKey, string[] frameNames, float framesPerSecond)
         {
             if (animKey == current) return;
             current = animKey;
+            running = false;
 
             if (!animations.TryGetValue(animKey, out Sprite[] frames))
             {
@@ -116,20 +123,47 @@ namespace KinectKids.Games.GreveGast
             sr.sprite = frames[0];
         }
 
-        /// <summary>Enable a subtle vertical bob (used while running) for extra life.</summary>
-        public void SetBob(bool enabled, float amplitude = 0.06f, float speed = 9f)
+        /// <summary>
+        /// Play a procedural front-facing run cycle from a single run sprite:
+        /// the sprite bobs, sways and mirrors left/right on each step so the feet
+        /// and arms appear to swap — a real running motion rather than a zoom.
+        /// </summary>
+        public void PlayRunCycle(string runPose, float cadence = 8f)
         {
-            if (enabled && !bob)
+            if (current != runPose)
             {
-                bobBaseLocalPos = transform.localPosition;
+                current = runPose;
+                activeFrames = null;
+                if (!poses.TryGetValue(runPose, out Sprite sprite))
+                {
+                    sprite = resolver != null ? resolver(runPose) : null;
+                    poses[runPose] = sprite;
+                }
+                if (sprite != null) sr.sprite = sprite;
             }
-            else if (!enabled && bob)
+
+            if (!running)
             {
-                transform.localPosition = bobBaseLocalPos;
+                running = true;
+                runTime = 0f;
+                runBaseLocalPos = transform.localPosition;
+                baseScaleX = Mathf.Abs(transform.localScale.x);
             }
-            bob = enabled;
-            bobAmplitude = amplitude;
-            bobSpeed = speed;
+            runCadence = cadence;
+        }
+
+        /// <summary>Stop the run cycle and restore upright, unflipped transform.</summary>
+        public void StopRunCycle()
+        {
+            if (!running) return;
+            running = false;
+            Vector3 p = transform.localPosition;
+            p.y = runBaseLocalPos.y;
+            transform.localPosition = p;
+            transform.localRotation = Quaternion.identity;
+            Vector3 s = transform.localScale;
+            s.x = Mathf.Abs(s.x);
+            transform.localScale = s;
         }
 
         private void Update()
@@ -146,17 +180,30 @@ namespace KinectKids.Games.GreveGast
                 }
             }
 
-            if (bob)
+            if (running)
             {
-                bobTime += Time.deltaTime * bobSpeed;
-                // Re-anchor to the current base each frame in case gameplay moved us.
+                runTime += Time.deltaTime * runCadence;
+
+                // Vertical bounce, twice per stride (both feet plant per cycle).
                 Vector3 p = transform.localPosition;
-                float offset = Mathf.Abs(Mathf.Sin(bobTime)) * bobAmplitude;
-                // Only override the Y component contributed by the bob.
-                p.y = (bobBaseLocalPos.y) + offset;
-                bobBaseLocalPos.x = p.x; // track lateral movement driven elsewhere
-                bobBaseLocalPos.z = p.z;
+                float bounce = Mathf.Abs(Mathf.Sin(runTime * Mathf.PI)) * runBob;
+                p.y = runBaseLocalPos.y + bounce;
+                // Keep tracking lateral movement driven by gameplay.
+                runBaseLocalPos.x = p.x;
+                runBaseLocalPos.z = p.z;
                 transform.localPosition = p;
+
+                // Body sway (slight tilt) in sync with the stride.
+                float sway = Mathf.Sin(runTime * Mathf.PI) * runTilt;
+                transform.localRotation = Quaternion.Euler(0f, 0f, sway);
+
+                // Mirror the sprite each step so arms/legs swap sides — this is
+                // what makes the feet look like they change place.
+                bool mirror = Mathf.Sin(runTime * Mathf.PI) < 0f;
+                Vector3 s = transform.localScale;
+                float mag = baseScaleX > 0.0001f ? baseScaleX : Mathf.Abs(s.x);
+                s.x = mirror ? -mag : mag;
+                transform.localScale = s;
             }
         }
     }
