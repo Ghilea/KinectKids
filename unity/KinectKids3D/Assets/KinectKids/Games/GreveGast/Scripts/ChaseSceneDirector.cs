@@ -201,15 +201,26 @@ namespace KinectKids.Games.GreveGast
             {
                 if (useSpriteArt)
                 {
-                    string pose = "run_near";
-                    switch (currentDodge)
+                    if (currentDodge == DodgeAction.None)
                     {
-                        case DodgeAction.Jump: pose = "jump"; break;
-                        case DodgeAction.Duck: pose = "duck"; break;
-                        case DodgeAction.Left: pose = "sidestep_left"; break;
-                        case DodgeAction.Right: pose = "sidestep_right"; break;
+                        // Real running animation: cycle the three run frames.
+                        playerSprite.PlayAnimation("run",
+                            new[] { "run_far", "run_mid", "run_near" }, 10f);
+                        playerSprite.SetBob(true);
                     }
-                    playerSprite.SetPose(pose);
+                    else
+                    {
+                        playerSprite.SetBob(false);
+                        string pose = "run_near";
+                        switch (currentDodge)
+                        {
+                            case DodgeAction.Jump: pose = "jump"; break;
+                            case DodgeAction.Duck: pose = "duck"; break;
+                            case DodgeAction.Left: pose = "sidestep_left"; break;
+                            case DodgeAction.Right: pose = "sidestep_right"; break;
+                        }
+                        playerSprite.SetPose(pose);
+                    }
                 }
                 else
                 {

@@ -132,7 +132,6 @@ namespace KinectKids3D.Editor
             KinectKidsWindowsBuild.BuildBridge(root);
             KinectKidsWindowsBuild.CopyBridgeIntoProject(root);
             PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
-            PlayerSettings.defaultIsFullScreen = true;
             PlayerSettings.defaultScreenWidth = 1920;
             PlayerSettings.defaultScreenHeight = 1080;
 

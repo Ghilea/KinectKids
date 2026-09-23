@@ -55,7 +55,6 @@ namespace KinectKids3D.Editor
             EnsureGreveGastRuntimePrefab();
             ConfigureGreveGastMusic();
             PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
-            PlayerSettings.defaultIsFullScreen = true;
             PlayerSettings.defaultScreenWidth = 1920;
             PlayerSettings.defaultScreenHeight = 1080;
             BuildBridge(root);

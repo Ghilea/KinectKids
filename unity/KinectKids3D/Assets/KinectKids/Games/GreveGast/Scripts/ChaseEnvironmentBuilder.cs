@@ -63,22 +63,30 @@ namespace KinectKids.Games.GreveGast
             var rightEnv = NewLayer(worldGo.transform, "RightEnvironment", SceneBand.RightEnvironment, 0.6f);
             if (art)
             {
-                for (int i = 0; i < 3; i++)
+                // One solid wall per side. Sprites use a bottom-centre pivot, so
+                // localPos.y is the floor line; a 10-unit wall from the floor fills
+                // the visible height and frames the run at the screen edges.
+                const float wallEdgeX = 8.6f;   // just inside the 16:9 ortho edge
+                const float wallFloorY = -4.6f; // rests on the stone floor
+                const float wallHeight = 10f;
+                PlaceSpriteByHeight(leftEnv, GreveChaseSprites.Environment(WallLeft),
+                    new Vector3(-wallEdgeX, wallFloorY, 0f), wallHeight, SceneBand.LeftEnvironment, 0.5f);
+                PlaceSpriteByHeight(rightEnv, GreveChaseSprites.Environment(WallRight),
+                    new Vector3(wallEdgeX, wallFloorY, 0f), wallHeight, SceneBand.RightEnvironment, 0.5f);
+
+                // Two torches per wall, clearly separated along the corridor
+                // (different X and sorting depth) so they never stack up.
+                const float torchY = 1.8f;
+                var torchLeftX = new[] { -7.4f, -6.2f };
+                var torchDepths = new[] { 0.6f, 0.82f };
+                for (int i = 0; i < torchLeftX.Length; i++)
                 {
-                    float x = -7f - i * 0.2f;
-                    PlaceSpriteByHeight(leftEnv, GreveChaseSprites.Environment(WallLeft),
-                        new Vector3(x, 0f, 0), 12f, SceneBand.LeftEnvironment, 0.5f);
-                    PlaceSpriteByHeight(rightEnv, GreveChaseSprites.Environment(WallRight),
-                        new Vector3(-x, 0f, 0), 12f, SceneBand.RightEnvironment, 0.5f);
-                }
-                // Warm torches as accents.
-                for (int i = 0; i < 3; i++)
-                {
-                    float y = 2.5f - i * 1.8f;
                     PlaceSpriteByHeight(leftEnv, GreveChaseSprites.Environment(Torch),
-                        new Vector3(-4.6f, y, -0.1f), 2.2f, SceneBand.LeftEnvironment, 0.7f);
+                        new Vector3(torchLeftX[i], torchY, -0.1f), 1.8f,
+                        SceneBand.LeftEnvironment, torchDepths[i]);
                     PlaceSpriteByHeight(rightEnv, GreveChaseSprites.Environment(Torch),
-                        new Vector3(4.6f, y, -0.1f), 2.2f, SceneBand.RightEnvironment, 0.7f);
+                        new Vector3(-torchLeftX[i], torchY, -0.1f), 1.8f,
+                        SceneBand.RightEnvironment, torchDepths[i]);
                 }
             }
             else

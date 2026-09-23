@@ -42,7 +42,21 @@ namespace KinectKids.Games.GreveGast
         private SpriteRenderer sr;
         private System.Func<string, Sprite> resolver;
         private readonly Dictionary<string, Sprite> poses = new Dictionary<string, Sprite>();
+        private readonly Dictionary<string, Sprite[]> animations = new Dictionary<string, Sprite[]>();
         private string current;
+
+        // Frame-animation state for the active pose.
+        private Sprite[] activeFrames;
+        private float activeFps;
+        private float frameTimer;
+        private int frameIndex;
+
+        // Optional running "bob" so a single-frame pose still reads as alive.
+        private bool bob;
+        private float bobTime;
+        private float bobAmplitude;
+        private float bobSpeed;
+        private Vector3 bobBaseLocalPos;
 
         public SpriteRenderer Renderer => sr;
 
@@ -54,16 +68,96 @@ namespace KinectKids.Games.GreveGast
             LayerSorting.Apply(sr, band, depth01);
         }
 
+        /// <summary>Show a single static pose sprite (resolved as "player_&lt;pose&gt;" etc.).</summary>
         public void SetPose(string pose)
         {
             if (pose == current) return;
             current = pose;
+            activeFrames = null; // leaving any running animation
             if (!poses.TryGetValue(pose, out Sprite sprite))
             {
                 sprite = resolver != null ? resolver(pose) : null;
                 poses[pose] = sprite;
             }
             if (sprite != null) sr.sprite = sprite;
+        }
+
+        /// <summary>
+        /// Play a looping frame animation built from several pose names (e.g.
+        /// run_far / run_mid / run_near). Frames that fail to resolve are skipped;
+        /// if none resolve the call is a no-op so the scene still runs.
+        /// </summary>
+        public void PlayAnimation(string animKey, string[] frameNames, float framesPerSecond)
+        {
+            if (animKey == current) return;
+            current = animKey;
+
+            if (!animations.TryGetValue(animKey, out Sprite[] frames))
+            {
+                var resolved = new List<Sprite>();
+                if (frameNames != null)
+                {
+                    for (int i = 0; i < frameNames.Length; i++)
+                    {
+                        Sprite s = resolver != null ? resolver(frameNames[i]) : null;
+                        if (s != null) resolved.Add(s);
+                    }
+                }
+                frames = resolved.ToArray();
+                animations[animKey] = frames;
+            }
+
+            if (frames.Length == 0) return;
+
+            activeFrames = frames;
+            activeFps = Mathf.Max(0.01f, framesPerSecond);
+            frameTimer = 0f;
+            frameIndex = 0;
+            sr.sprite = frames[0];
+        }
+
+        /// <summary>Enable a subtle vertical bob (used while running) for extra life.</summary>
+        public void SetBob(bool enabled, float amplitude = 0.06f, float speed = 9f)
+        {
+            if (enabled && !bob)
+            {
+                bobBaseLocalPos = transform.localPosition;
+            }
+            else if (!enabled && bob)
+            {
+                transform.localPosition = bobBaseLocalPos;
+            }
+            bob = enabled;
+            bobAmplitude = amplitude;
+            bobSpeed = speed;
+        }
+
+        private void Update()
+        {
+            if (activeFrames != null && activeFrames.Length > 1)
+            {
+                frameTimer += Time.deltaTime;
+                float frameLength = 1f / activeFps;
+                while (frameTimer >= frameLength)
+                {
+                    frameTimer -= frameLength;
+                    frameIndex = (frameIndex + 1) % activeFrames.Length;
+                    sr.sprite = activeFrames[frameIndex];
+                }
+            }
+
+            if (bob)
+            {
+                bobTime += Time.deltaTime * bobSpeed;
+                // Re-anchor to the current base each frame in case gameplay moved us.
+                Vector3 p = transform.localPosition;
+                float offset = Mathf.Abs(Mathf.Sin(bobTime)) * bobAmplitude;
+                // Only override the Y component contributed by the bob.
+                p.y = (bobBaseLocalPos.y) + offset;
+                bobBaseLocalPos.x = p.x; // track lateral movement driven elsewhere
+                bobBaseLocalPos.z = p.z;
+                transform.localPosition = p;
+            }
         }
     }
 }
