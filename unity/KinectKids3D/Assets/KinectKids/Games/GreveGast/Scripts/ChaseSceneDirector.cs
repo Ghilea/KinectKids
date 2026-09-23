@@ -46,6 +46,10 @@ namespace KinectKids.Games.GreveGast
         private string feedback = "";
         private Color feedbackColor = Color.white;
 
+        private AudioSource music;
+        private bool gameOver;
+        private float gameOverTime;
+
         // IDodgeSource
         public DodgeAction CurrentDodge => currentDodge;
         public float LateralPosition => Mathf.Clamp(lateral, -1f, 1f);
@@ -95,6 +99,27 @@ namespace KinectKids.Games.GreveGast
             }
 
             hazardTimer = hazardInterval;
+            StartMusic();
+        }
+
+        private void StartMusic()
+        {
+            // Same chase track the legacy timeline uses. Loops under the run so
+            // the scene always has music; falls back silently if the clip is
+            // missing so gameplay still works.
+            AudioClip clip = Resources.Load<AudioClip>("Audio/Music/GreveGastsJakt");
+            if (clip == null)
+            {
+                Debug.LogWarning("Jaktmusiken 'Audio/Music/GreveGastsJakt' hittades inte i Resources.");
+                return;
+            }
+            music = gameObject.AddComponent<AudioSource>();
+            music.clip = clip;
+            music.loop = true;
+            music.playOnAwake = false;
+            music.volume = 0.82f;
+            music.spatialBlend = 0f;
+            music.Play();
         }
 
         private void EnsureInputManager()
@@ -140,6 +165,14 @@ namespace KinectKids.Games.GreveGast
         private void Update()
         {
             if (body == null) return;
+
+            if (gameOver)
+            {
+                body.Update();
+                HandleGameOverInput();
+                return;
+            }
+
             body.Update();
             ReadInput();
             DriveWorld();
@@ -183,10 +216,7 @@ namespace KinectKids.Games.GreveGast
 
             if (chase >= 0.99f)
             {
-                Feedback("GREVE GAST TOG DIG!", new Color(0.8f, 0.3f, 0.85f));
-                scriptedCamera?.BlendTo("Caught");
-                SetGrevePose("threaten");
-                chase = 0.55f; // reset for continued play
+                TriggerGameOver();
             }
             else if (scriptedCamera != null && chase < 0.9f)
             {
@@ -285,8 +315,74 @@ namespace KinectKids.Games.GreveGast
             else grevePuppet?.SetPose(pose);
         }
 
+        private void TriggerGameOver()
+        {
+            if (gameOver) return;
+            gameOver = true;
+            gameOverTime = Time.unscaledTime;
+            chase = 1f;
+
+            // Freeze the world and stop the music: the count caught the player.
+            if (parallax != null)
+            {
+                parallax.forwardSpeed = 0f;
+                parallax.lateralTarget = 0f;
+            }
+            if (music != null) music.Stop();
+
+            scriptedCamera?.BlendTo("Caught");
+            scriptedCamera?.Shake(0.5f);
+
+            // Player reacts as caught; Greve looms in triumphant.
+            if (playerTransform != null)
+            {
+                if (useSpriteArt)
+                {
+                    playerSprite.SetBob(false);
+                    playerSprite.SetPose("hit");
+                }
+                else playerRig.SetPose("hit");
+            }
+            SetGrevePose(useSpriteArt ? "threaten" : "reach");
+
+            Feedback("GREVE GAST TOG DIG!", new Color(0.85f, 0.25f, 0.35f));
+        }
+
+        private void HandleGameOverInput()
+        {
+            // Small delay so the caught beat lands before input is accepted.
+            if (Time.unscaledTime - gameOverTime < 0.6f) return;
+
+            bool restart = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)
+                || body.Current == GreveGastAction.Jump;
+            bool quit = Input.GetKeyDown(KeyCode.Escape);
+
+            if (restart)
+            {
+                RestartScene();
+            }
+            else if (quit)
+            {
+                LauncherReturnService.ReturnToLauncher();
+            }
+        }
+
+        private void RestartScene()
+        {
+            if (KinectKidsPlatformRoot.IsActive)
+            {
+                KinectKidsPlatformRoot.Instance.Scenes.Restart();
+            }
+            else
+            {
+                UnityEngine.SceneManagement.SceneManager.LoadScene(
+                    UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+            }
+        }
+
         private void OnHazardResolved(HazardBase hazard, bool avoided)
         {
+            if (gameOver) return;
             if (avoided)
             {
                 chase = Mathf.Clamp01(chase - 0.05f);
@@ -350,10 +446,33 @@ namespace KinectKids.Games.GreveGast
                 GUI.Label(new Rect(0, Screen.height * 0.4f, Screen.width, 120), feedback, bigStyle);
                 GUI.color = Color.white;
             }
+
+            if (gameOver)
+            {
+                DrawGameOverOverlay();
+            }
+        }
+
+        private void DrawGameOverOverlay()
+        {
+            // Dim the whole screen.
+            GUI.color = new Color(0f, 0f, 0f, 0.65f);
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+
+            GUI.color = new Color(0.9f, 0.3f, 0.4f);
+            GUI.Label(new Rect(0, Screen.height * 0.30f, Screen.width, 140), "GREVE GAST TOG DIG!", bigStyle);
+
+            GUI.color = Color.white;
+            var prompt = new GUIStyle(bigStyle) { fontSize = Mathf.Clamp(Screen.height / 22, 22, 46) };
+            GUI.Label(new Rect(0, Screen.height * 0.52f, Screen.width, 60),
+                "Tryck HOPP eller MELLANSLAG för att spela igen", prompt);
+            GUI.Label(new Rect(0, Screen.height * 0.52f + 56, Screen.width, 60),
+                "ESC för att gå till menyn", prompt);
         }
 
         private void OnDestroy()
         {
+            if (music != null) music.Stop();
             body?.Dispose();
         }
     }
