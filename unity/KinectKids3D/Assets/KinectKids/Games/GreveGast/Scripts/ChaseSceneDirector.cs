@@ -268,14 +268,21 @@ namespace KinectKids.Games.GreveGast
                 playerTransform.localPosition = p;
             }
 
-            // --- Greve Gast: scales / rises with chase closeness ---
+            // --- Greve Gast: recedes up the corridor when far, looms down the
+            // lane toward the player as the chase closes. A curved falloff makes
+            // him read as travelling ALONG the perspective corridor (small + high
+            // near the vanishing point → large + low, just behind the player).
             if (greveTransform != null)
             {
+                // Perspective curve on the chase distance for a stronger depth feel.
+                float t = chase * chase * (3f - 2f * chase);
                 float baseScale = useSpriteArt ? 3.0f : 1f;
-                float scale = Mathf.Lerp(0.5f, 1.3f, chase) * baseScale;
+                float scale = Mathf.Lerp(0.28f, 1.25f, t) * baseScale;
                 greveTransform.localScale = Vector3.one * scale;
                 Vector3 gp = greveTransform.localPosition;
-                gp.y = Mathf.Lerp(1.4f, 0.2f, chase);
+                // Far (chase≈0): high, near the corridor's horizon (~1.6).
+                // Close (chase≈1): drops down behind the player.
+                gp.y = Mathf.Lerp(1.55f, -0.4f, t);
                 gp.x = Mathf.Lerp(gp.x, lateral * 1.2f, 1f - Mathf.Exp(-4f * Time.deltaTime));
                 greveTransform.localPosition = gp;
 
