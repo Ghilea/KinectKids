@@ -1,0 +1,21 @@
+{
+  "source": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/GhostTarget.cs",
+  "class_decl_old": "    public sealed class GhostTarget : MonoBehaviour",
+  "class_decl_new": "    public sealed partial class GhostTarget : MonoBehaviour",
+  "shell_header": [
+    "using System.Collections.Generic;",
+    "using System.Linq;",
+    "using UnityEngine;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed partial class GhostTarget",
+    "    {"
+  ],
+  "shell_footer": ["    }", "}"],
+  "core_file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/GhostTarget.cs",
+  "core_ranges": [[1, 160], [346, 347]],
+  "parts": [
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/GhostTarget.Model.cs", "ranges": [[162, 345]]}
+  ]
+}

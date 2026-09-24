@@ -141,27 +141,27 @@ namespace KinectKids3D
 
         private void LoadPreferences()
         {
-            easyMode = PlayerPrefs.GetInt(PrefsKeys.EasyMode, 1) != 0;
-            requestedPlayers = Mathf.Clamp(PlayerPrefs.GetInt(PrefsKeys.Players, 1), 1, 2);
-            musicVolume = Mathf.Clamp(PlayerPrefs.GetFloat(PrefsKeys.MusicVolume, 0.90f), 0f, 1.2f);
-            musicMuted = PlayerPrefs.GetInt(PrefsKeys.MusicMuted, 0) != 0;
-            effectsVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(PrefsKeys.EffectsVolume, 0.86f));
-            voiceVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(PrefsKeys.VoiceVolume, 1f));
-            brightnessLevel = Mathf.Clamp(PlayerPrefs.GetFloat(PrefsKeys.Brightness, 1f), 0.65f, 1.55f);
-            bool fullscreen = PlayerPrefs.GetInt(PrefsKeys.Fullscreen, Screen.fullScreen ? 1 : 0) != 0;
+            easyMode = PlayerPrefs.GetInt("SpokjaktenEasyMode", 1) != 0;
+            requestedPlayers = Mathf.Clamp(PlayerPrefs.GetInt("SpokjaktenPlayers", 1), 1, 2);
+            musicVolume = Mathf.Clamp(PlayerPrefs.GetFloat("SpokjaktenMusicVolume", 0.90f), 0f, 1.2f);
+            musicMuted = PlayerPrefs.GetInt("SpokjaktenMusicMuted", 0) != 0;
+            effectsVolume = Mathf.Clamp01(PlayerPrefs.GetFloat("SpokjaktenEffectsVolume", 0.86f));
+            voiceVolume = Mathf.Clamp01(PlayerPrefs.GetFloat("SpokjaktenVoiceVolume", 1f));
+            brightnessLevel = Mathf.Clamp(PlayerPrefs.GetFloat("SpokjaktenBrightness", 1f), 0.65f, 1.55f);
+            bool fullscreen = PlayerPrefs.GetInt("SpokjaktenFullscreen", Screen.fullScreen ? 1 : 0) != 0;
             if (Screen.fullScreen != fullscreen) Screen.fullScreen = fullscreen;
         }
 
         private void SavePreferences()
         {
-            PlayerPrefs.SetInt(PrefsKeys.EasyMode, easyMode ? 1 : 0);
-            PlayerPrefs.SetInt(PrefsKeys.Players, requestedPlayers);
-            PlayerPrefs.SetFloat(PrefsKeys.MusicVolume, musicVolume);
-            PlayerPrefs.SetInt(PrefsKeys.MusicMuted, musicMuted ? 1 : 0);
-            PlayerPrefs.SetFloat(PrefsKeys.EffectsVolume, effectsVolume);
-            PlayerPrefs.SetFloat(PrefsKeys.VoiceVolume, voiceVolume);
-            PlayerPrefs.SetFloat(PrefsKeys.Brightness, brightnessLevel);
-            PlayerPrefs.SetInt(PrefsKeys.Fullscreen, Screen.fullScreen ? 1 : 0);
+            PlayerPrefs.SetInt("SpokjaktenEasyMode", easyMode ? 1 : 0);
+            PlayerPrefs.SetInt("SpokjaktenPlayers", requestedPlayers);
+            PlayerPrefs.SetFloat("SpokjaktenMusicVolume", musicVolume);
+            PlayerPrefs.SetInt("SpokjaktenMusicMuted", musicMuted ? 1 : 0);
+            PlayerPrefs.SetFloat("SpokjaktenEffectsVolume", effectsVolume);
+            PlayerPrefs.SetFloat("SpokjaktenVoiceVolume", voiceVolume);
+            PlayerPrefs.SetFloat("SpokjaktenBrightness", brightnessLevel);
+            PlayerPrefs.SetInt("SpokjaktenFullscreen", Screen.fullScreen ? 1 : 0);
             PlayerPrefs.Save();
         }
 

@@ -58,14 +58,14 @@ namespace KinectKids3D
             if (recordSaved) return;
             recordSaved = true;
             int totalScore = scores[0] + scores[1];
-            PlayerPrefs.SetInt(PrefsKeys.HighScore,
-                Mathf.Max(totalScore, PlayerPrefs.GetInt(PrefsKeys.HighScore, 0)));
-            PlayerPrefs.SetInt(PrefsKeys.BestCombo,
-                Mathf.Max(Mathf.Max(maxCombos[0], maxCombos[1]), PlayerPrefs.GetInt(PrefsKeys.BestCombo, 0)));
-            PlayerPrefs.SetInt(PrefsKeys.BestRelics,
-                Mathf.Max(collectedRelics, PlayerPrefs.GetInt(PrefsKeys.BestRelics, 0)));
-            PlayerPrefs.SetInt(PrefsKeys.BestMedals,
-                Mathf.Max(CountMedals(), PlayerPrefs.GetInt(PrefsKeys.BestMedals, 0)));
+            PlayerPrefs.SetInt("SpokjaktenHighScore",
+                Mathf.Max(totalScore, PlayerPrefs.GetInt("SpokjaktenHighScore", 0)));
+            PlayerPrefs.SetInt("SpokjaktenBestCombo",
+                Mathf.Max(Mathf.Max(maxCombos[0], maxCombos[1]), PlayerPrefs.GetInt("SpokjaktenBestCombo", 0)));
+            PlayerPrefs.SetInt("SpokjaktenBestRelics",
+                Mathf.Max(collectedRelics, PlayerPrefs.GetInt("SpokjaktenBestRelics", 0)));
+            PlayerPrefs.SetInt("SpokjaktenBestMedals",
+                Mathf.Max(CountMedals(), PlayerPrefs.GetInt("SpokjaktenBestMedals", 0)));
             PlayerPrefs.Save();
         }
 

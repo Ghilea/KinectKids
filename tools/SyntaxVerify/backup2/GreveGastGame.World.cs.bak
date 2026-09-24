@@ -150,7 +150,7 @@ namespace KinectKids3D
             playerRightLeg = Limb("Hoger ben", playerAvatarVisual.transform, new Vector3(0.24f, 0.58f, 0f), 0.82f, shoes, true);
 
             BuildSkeletonCharacter();
-            skeletonMode = PlayerPrefs.GetInt(PrefsKeys.GreveGastPlayerView, 0) == 1;
+            skeletonMode = PlayerPrefs.GetInt("GreveGastPlayerView", 0) == 1;
             ApplyPlayerView();
         }
 
@@ -181,7 +181,7 @@ namespace KinectKids3D
         private void TogglePlayerView()
         {
             skeletonMode = !skeletonMode;
-            PlayerPrefs.SetInt(PrefsKeys.GreveGastPlayerView, skeletonMode ? 1 : 0);
+            PlayerPrefs.SetInt("GreveGastPlayerView", skeletonMode ? 1 : 0);
             PlayerPrefs.Save();
             ApplyPlayerView();
         }

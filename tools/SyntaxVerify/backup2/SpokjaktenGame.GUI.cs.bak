@@ -174,13 +174,13 @@ namespace KinectKids3D
                     + "\nBästa combo: " + Mathf.Max(maxCombos[0], maxCombos[1])
                     + "   Reliker: " + collectedRelics + "/" + TotalRelics
                     + "   Vagn: " + (easyMode ? "SÄKER" : wagonHealth.ToString())
-                    + "\nREKORD  Poäng: " + PlayerPrefs.GetInt(PrefsKeys.HighScore, 0)
-                    + "   Combo: " + PlayerPrefs.GetInt(PrefsKeys.BestCombo, 0)
-                    + "   Reliker: " + PlayerPrefs.GetInt(PrefsKeys.BestRelics, 0)
+                    + "\nREKORD  Poäng: " + PlayerPrefs.GetInt("SpokjaktenHighScore", 0)
+                    + "   Combo: " + PlayerPrefs.GetInt("SpokjaktenBestCombo", 0)
+                    + "   Reliker: " + PlayerPrefs.GetInt("SpokjaktenBestRelics", 0)
                     + "\nHemligheter: " + secretsFound + "   Krossat: " + breakablesDestroyed
                     + "   Extra skräckhändelser: " + directorEvents
                     + "\nMEDALJER: " + MedalText(accuracy)
-                    + "\nBästa antal medaljer: " + PlayerPrefs.GetInt(PrefsKeys.BestMedals, 0)
+                    + "\nBästa antal medaljer: " + PlayerPrefs.GetInt("SpokjaktenBestMedals", 0)
                     + "\nVälj vad ni vill göra här nedanför", centerStyle);
                 float endButtonX = Screen.width * 0.5f - 175f;
                 float endButtonY = Screen.height * 0.5f + 85f;

@@ -57,8 +57,15 @@ namespace KinectKids3D
         private void Add(PrimitiveType type, string partName, Vector3 position, Vector3 scale,
             Material material, Quaternion rotation)
         {
-            GameObject part = PrimitiveBuilder.Create(type, partName, transform, position, scale, rotation);
+            GameObject part = GameObject.CreatePrimitive(type);
+            part.name = partName;
+            part.transform.SetParent(transform, false);
+            part.transform.localPosition = position;
+            part.transform.localScale = scale;
+            part.transform.localRotation = rotation;
             part.GetComponent<Renderer>().material = new Material(material);
+            Collider collider = part.GetComponent<Collider>();
+            if (collider != null) Destroy(collider);
         }
     }
 }

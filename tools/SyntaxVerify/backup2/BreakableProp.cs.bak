@@ -56,8 +56,14 @@ namespace KinectKids3D
 
         private void Add(PrimitiveType type, string partName, Vector3 position, Vector3 scale, Material material)
         {
-            GameObject part = PrimitiveBuilder.Create(type, partName, transform, position, scale);
+            GameObject part = GameObject.CreatePrimitive(type);
+            part.name = partName;
+            part.transform.SetParent(transform, false);
+            part.transform.localPosition = position;
+            part.transform.localScale = scale;
             part.GetComponent<Renderer>().material = new Material(material);
+            Collider collider = part.GetComponent<Collider>();
+            if (collider != null) Destroy(collider);
         }
     }
 }

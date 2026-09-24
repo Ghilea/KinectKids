@@ -13,8 +13,11 @@ namespace KinectKids3D
     /// Tar emot enbart ledpositioner från KinectBridge.exe via en lokal Windows-pipe.
     /// Bryggan är x86 så att Kinect SDK 1.8 fungerar även när Unity körs som 64-bitarsprogram.
     /// </summary>
-    public sealed class KinectBridgeAimProvider : KinectAimProviderBase
+    public sealed class KinectBridgeAimProvider : IAimProvider
     {
+        private readonly object sync = new object();
+        private readonly List<AimSample> latest = new List<AimSample>(4);
+        private readonly List<PlayerPose> latestPoses = new List<PlayerPose>(2);
         private readonly Dictionary<int, HandGestureState> gestures = new Dictionary<int, HandGestureState>();
         private readonly ManualResetEvent ready = new ManualResetEvent(false);
         private NamedPipeServerStream pipe;
@@ -24,13 +27,11 @@ namespace KinectKids3D
         private volatile bool stopping;
         private bool disposed;
         private DateTime lastTrackedFrameAt = DateTime.MinValue;
+        private string status = "Startar Kinect-bryggan…";
 
+        public bool IsAvailable { get; private set; }
         public bool HasFailed { get; private set; }
-
-        public KinectBridgeAimProvider()
-        {
-            status = "Startar Kinect-bryggan…";
-        }
+        public string Status => status;
 
         public bool TryStart()
         {
@@ -103,6 +104,16 @@ namespace KinectKids3D
                 status = "Kinect-bryggan stängdes: " + DeepestMessage(exception);
             }
             ready.Set();
+        }
+
+        public IReadOnlyList<AimSample> GetAimSamples()
+        {
+            lock (sync) return latest.ToArray();
+        }
+
+        public IReadOnlyList<PlayerPose> GetPlayerPoses()
+        {
+            lock (sync) return latestPoses.ToArray();
         }
 
         private void ReceiveLoop()
@@ -351,7 +362,7 @@ namespace KinectKids3D
             return compact.Length <= 260 ? compact : compact.Substring(0, 257) + "…";
         }
 
-        public override void Dispose()
+        public void Dispose()
         {
             if (disposed) return;
             disposed = true;
@@ -382,6 +393,19 @@ namespace KinectKids3D
                 latest.Clear();
                 latestPoses.Clear();
             }
+        }
+
+        private sealed class HandGestureState
+        {
+            public bool Initialized;
+            public bool PunchReady;
+            public float LastDepth;
+            public float SmoothedForwardSpeed;
+            public Vector2 LastAim;
+            public Vector2 LockedAim;
+            public DateTime LastAt;
+            public DateTime CooldownUntil;
+            public DateTime AimLockedUntil;
         }
     }
 }

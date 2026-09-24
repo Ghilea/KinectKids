@@ -13,8 +13,11 @@ namespace KinectKids3D
     /// Läser Kinect SDK 1.8 med reflection. Unity-projektet kan därför öppnas
     /// och köras med mus även när Kinect SDK inte är installerat.
     /// </summary>
-    public sealed class KinectV1AimProvider : KinectAimProviderBase
+    public sealed class KinectV1AimProvider : IAimProvider
     {
+        private readonly object sync = new object();
+        private readonly List<AimSample> latest = new List<AimSample>(4);
+        private readonly List<PlayerPose> latestPoses = new List<PlayerPose>(2);
         private readonly Dictionary<long, DateTime> firstSeen = new Dictionary<long, DateTime>();
         private readonly Dictionary<int, HandGestureState> handGestures = new Dictionary<int, HandGestureState>();
         private Assembly assembly;
@@ -26,11 +29,10 @@ namespace KinectKids3D
         private Delegate skeletonHandler;
         private Type skeletonType;
         private Type jointType;
+        private string status = "Letar efter Kinect 360…";
 
-        public KinectV1AimProvider()
-        {
-            status = "Letar efter Kinect 360…";
-        }
+        public bool IsAvailable { get; private set; }
+        public string Status => status;
 
         public bool TryStart()
         {
@@ -89,6 +91,16 @@ namespace KinectKids3D
                 Dispose();
                 return false;
             }
+        }
+
+        public IReadOnlyList<AimSample> GetAimSamples()
+        {
+            lock (sync) return latest.ToArray();
+        }
+
+        public IReadOnlyList<PlayerPose> GetPlayerPoses()
+        {
+            lock (sync) return latestPoses.ToArray();
         }
 
         private void OnSkeletonFrame(object sender, object eventArgs)
@@ -305,7 +317,7 @@ namespace KinectKids3D
             return "Kinect kunde inte starta: " + message;
         }
 
-        public override void Dispose()
+        public void Dispose()
         {
             IsAvailable = false;
             if (sensor == null) return;
@@ -325,6 +337,19 @@ namespace KinectKids3D
                 latest.Clear();
                 latestPoses.Clear();
             }
+        }
+
+        private sealed class HandGestureState
+        {
+            public bool Initialized;
+            public bool PunchReady;
+            public float LastDepth;
+            public float SmoothedForwardSpeed;
+            public Vector2 LastAim;
+            public Vector2 LockedAim;
+            public DateTime LastAt;
+            public DateTime CooldownUntil;
+            public DateTime AimLockedUntil;
         }
     }
 }

@@ -129,8 +129,13 @@ namespace KinectKids3D
         private static void AddPart(Transform parent, string name, Vector3 position, Vector3 scale,
             Material material, PrimitiveType type = PrimitiveType.Cube)
         {
-            GameObject part = PrimitiveBuilder.Create(type, name, parent, position, scale);
+            GameObject part = GameObject.CreatePrimitive(type);
+            part.name = name;
+            part.transform.SetParent(parent, false);
+            part.transform.localPosition = position;
+            part.transform.localScale = scale;
             part.GetComponent<Renderer>().sharedMaterial = material;
+            Destroy(part.GetComponent<Collider>());
         }
     }
 }

@@ -1,0 +1,32 @@
+{
+  "header": [
+    "using System.Collections.Generic;",
+    "using System.Linq;",
+    "using UnityEngine;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed partial class GhostTarget",
+    "    {"
+  ],
+  "footer": ["    }", "}"],
+  "header_core": [
+    "using System.Collections.Generic;",
+    "using System.Linq;",
+    "using UnityEngine;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public enum TargetKind",
+    "    {",
+    "        Ghost,",
+    "        Zombie,",
+    "        ConductorBoss",
+    "    }",
+    "",
+    "    public sealed partial class GhostTarget : MonoBehaviour",
+    "    {"
+  ],
+  "footer_core": ["    }", "}"],
+  "core_file": "Scripts/GhostTarget.cs"
+}
