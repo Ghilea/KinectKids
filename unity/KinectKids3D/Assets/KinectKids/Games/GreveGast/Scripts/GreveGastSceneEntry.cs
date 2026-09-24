@@ -6,14 +6,10 @@ namespace KinectKids3D.Platform
     /// <summary>
     /// Scene entry for the Greve Gast game.
     ///
-    /// By default it boots the proven 2.5D perspective CORRIDOR chase
-    /// (<see cref="ChaseSceneDirector"/> + <see cref="ChaseEnvironmentBuilder"/>),
-    /// which is the "first playable corridor" from follow.md goal #17: the player
-    /// runs toward the camera with a real run cycle, Greve Gast chases down a
-    /// true receding corridor (background wash + vanishing point + receding
-    /// floor/walls + framing pillars), and hazards come at the player. This is
-    /// the layout that actually reads with DEPTH instead of a flat pile of
-    /// sprites.
+    /// By default it boots <see cref="CorridorRunnerDirector"/>: a perspective
+    /// camera looking through reusable physical 3D corridor segments. Player,
+    /// Greve Gast and decorations remain illustrated 2D/2.5D sprites in that
+    /// world; their Z positions provide real perspective without manual scaling.
     ///
     /// Two alternative directors are available behind toggles:
     ///   * <see cref="useRunner"/> — the modular, section-based runner
@@ -22,8 +18,7 @@ namespace KinectKids3D.Platform
     ///     structure. This is the long-term architecture, but its perspective
     ///     LAYOUT is still WIP: it currently clumps modules near screen-centre
     ///     with no deep-background anchor ("gröt av assets"), so it is OFF until
-    ///     its layout math matches ChaseEnvironmentBuilder's corridor. Kept in the
-    ///     codebase for that multi-room work.
+    ///     its old layout math is retained only as a legacy fallback.
     ///   * <see cref="useLegacySlice"/> — the earlier immediate-mode Style C+
     ///     slice (<see cref="GreveGastStyleCGame"/>), kept as a fallback.
     /// </summary>
@@ -72,13 +67,10 @@ namespace KinectKids3D.Platform
                 return;
             }
 
-            // Default: the rebuilt 2.5D endless-runner corridor (follow.md).
-            // The world streams past a chest-height camera down a converging
-            // corridor; the player runs toward the camera in the center lane and
-            // Greve Gast chases from behind.
+            // Default: physical 3D corridor skeleton with 2.5D actors.
             if (FindFirstObjectByType<CorridorRunnerDirector>() == null)
             {
-                GameObject game = new GameObject("Greve Gast - 2.5D Corridor Runner");
+                GameObject game = new GameObject("Greve Gast - 3D Corridor Runner");
                 game.AddComponent<CorridorRunnerDirector>();
             }
         }

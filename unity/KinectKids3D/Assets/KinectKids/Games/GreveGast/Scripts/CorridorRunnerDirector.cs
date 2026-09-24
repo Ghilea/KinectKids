@@ -1,280 +1,267 @@
 using System.Collections.Generic;
 using UnityEngine;
 using KinectKids.Scene25D;
-using KinectKids.Scene25D.Sections;
 using KinectKids3D;
 using KinectKids3D.Platform;
 
 namespace KinectKids.Games.GreveGast
 {
     /// <summary>
-    /// A ground-up 2.5D endless-runner corridor for Greve Gast, following
-    /// <c>src/problems/follow.md</c>.
-    ///
-    /// KEY INSIGHT (from inspecting the runtime video + the real art): the
-    /// project already ships DRAWN, perspective-correct art — the floor tiles
-    /// (env_0/env_1) are receding trapezoid stone strips, the wall module (env_2)
-    /// is a full corridor wall with pillar + banner + torch drawn at an angle,
-    /// and the player/Greve are finished character illustrations. The earlier
-    /// attempt built the corridor out of dark tinted boxes, which read as a black
-    /// ladder. This version instead STREAMS THE REAL SPRITES at full brightness
-    /// and lets their built-in perspective do the work.
-    ///
-    /// THE MOTION: the environment moves, not the player. Every piece (floor
-    /// rows, left/right wall modules) carries a normalised depth d in [0..1]
-    /// (1 = far at the vanishing point, 0 = at the camera). Each frame d advances
-    /// toward 0 by the world speed; the piece is re-placed and re-scaled through
-    /// <see cref="PerspectiveModel"/> and recycled to the far plane when it passes
-    /// the camera. Remove the characters and the corridor alone still reads as
-    /// fast forward travel.
-    ///
-    /// The player runs TOWARD the camera (front-facing run art) in the CENTER of
-    /// three lanes and side-steps LEFT/RIGHT; Greve Gast floats further back and
-    /// grows/approaches as the chase meter rises; a jump-hole and a sidestep-block
-    /// hazard scale up with perspective. A swappable room palette morphs
-    /// CastleCorridor into the Kitchen mid-run without a reload.
+    /// Endless runner built on a small real 3D corridor. Perspective, apparent
+    /// scale and depth come exclusively from the perspective camera and world Z.
+    /// The illustrated characters and decorations remain flat sprites.
     /// </summary>
     public sealed class CorridorRunnerDirector : MonoBehaviour, IDodgeSource
     {
-        // ---- Tuning ------------------------------------------------------
-        [Header("World motion")]
-        public float baseWorldSpeed = 0.55f;
-        public float idleWorldSpeed = 0.34f;
+        public enum EnvironmentTheme { CastleCorridor, GreatHall, Kitchen, Passage }
+        public enum Lane { Left, Center, Right }
+
+        [Header("3D corridor")]
+        [Range(4, 6)] public int segmentCount = 6;
+        public float segmentLength = 12f;
+        public float corridorWidth = 12f;
+        public float corridorHeight = 7f;
+        public float runningSpeed = 14f;
+        public float idleSpeed = 8f;
+
+        [Header("Perspective camera")]
+        [Range(40f, 80f)] public float fieldOfView = 62f;
+        public Vector3 cameraPosition = new Vector3(0f, 2.8f, -8f);
+
+        [Header("Actors and lanes")]
+        public float laneSpacing = 3.1f;
+        public float playerZ = 2.5f;
+        public float playerStartZ = 5.5f;
+        public float playerHeight = 3.2f;
+        public float greveFarZ = 18f;
+        public float greveNearZ = 6f;
+        public float greveHeight = 3.4f;
 
         [Header("Chase")]
         public float catchOnHit = 0.14f;
         public float recoverPerSecond = 0.05f;
         public float runDrainPerSecond = 0.05f;
 
-        [Header("Lanes")]
-        public float laneNearOffset = 3.6f;
+        [Header("Theme demonstration")]
+        [Tooltip("Streams Kitchen segments in behind CastleCorridor after this many seconds.")]
+        public float kitchenTransitionAt = 10f;
+        public bool cycleAllThemes = true;
+        public bool showIllustratedVista = true;
 
-        [Header("Motion")]
-        [Tooltip("If true, decor recedes AWAY from the camera (0->1). If false, it " +
-             "streams from the vanishing point toward the lens (1->0). " +
-             "The environment should recede while hazards approach the player.")]
-        public bool environmentRecedes = true;
-
-        // ---- Perspective / corridor -------------------------------------
-        // A WIDER corridor than the default so the floor fills the bottom of the
-        // screen (follow.md: "MYCKET BRETT längst ner") and three lanes read
-        // clearly near the camera. Vanishing point stays in the upper third.
-        private PerspectiveModel model = new PerspectiveModel
-        {
-            floorLine = -4.9f,
-            horizon = 1.7f,
-            nearHalfWidth = 6.6f,   // near edge close to the screen sides (±~8.9)
-            farHalfWidth = 0.7f,
-            nearScale = 1.0f,
-            farScale = 0.14f,
-        };
-        private const float CameraZ = -15f;
-
-        private const int FloorRows = 10;   // overlapping stone strips -> solid floor
-        private const int WallModules = 14; // dense overlapping wall sections down each side
-
-        // ---- Runtime ----------------------------------------------------
-        private Camera cam;
-        private ScriptedCamera scriptedCamera;
-        private Transform worldRoot;
-
-        private readonly List<Segment> floor = new List<Segment>();
-        private readonly List<Segment> leftWall = new List<Segment>();
-        private readonly List<Segment> rightWall = new List<Segment>();
+        private Camera worldCamera;
+        private Transform corridorRoot;
+        private Transform hazardRoot;
+        private readonly List<EnvironmentSegment3D> segments = new List<EnvironmentSegment3D>();
         private readonly List<RunHazard> hazards = new List<RunHazard>();
+        private readonly Dictionary<EnvironmentTheme, ThemeStyle> themeStyles = new Dictionary<EnvironmentTheme, ThemeStyle>();
 
         private SpriteRenderer player;
         private SpriteRenderer greve;
-        private float playerRunCycle;
-
+        private SpriteRenderer illustratedVista;
         private GreveGastBodyInput body;
         private AudioSource music;
-
-        private RoomPalette palette;
-        private RoomPalette targetPalette;
-        private float paletteBlend = 1f;
-
-        private float chase = 0.35f;
+        private EnvironmentTheme requestedTheme = EnvironmentTheme.CastleCorridor;
+        private Lane lane = Lane.Center;
+        private DodgeAction currentDodge = DodgeAction.None;
         private float lateral;
-        private int laneIndex = 1;
         private float worldSpeed;
+        private float chase = 0.35f;
+        private float elapsed;
         private float hazardTimer = 2.2f;
         private int hazardCounter;
-        private DodgeAction currentDodge = DodgeAction.None;
+        private float playerRunCycle;
 
-        private float elapsed;
-        private bool swapTriggered;
-
-        // IDodgeSource ----------------------------------------------------
         public DodgeAction CurrentDodge => currentDodge;
         public float LateralPosition => Mathf.Clamp(lateral, -1f, 1f);
+        public EnvironmentTheme CurrentTheme => requestedTheme;
 
-        // =================================================================
         private void Start()
         {
             EnsureInputManager();
             body = new GreveGastBodyInput();
             body.Start();
-
-            palette = RoomPalette.CastleCorridor();
-            targetPalette = palette;
-
             BuildCamera();
-            BuildBackdrop();
+            BuildThemeStyles();
+            BuildLighting();
             BuildCorridor();
+            BuildIllustratedVista();
             BuildCharacters();
             StartMusic();
-
-            worldSpeed = idleWorldSpeed;
+            worldSpeed = idleSpeed;
         }
 
-        // ---- Camera: chest height, looking down the corridor ------------
         private void BuildCamera()
         {
-            var camGo = new GameObject("CorridorCamera");
-            camGo.transform.SetParent(transform, false);
-            cam = camGo.AddComponent<Camera>();
-            cam.orthographic = true;
-            cam.orthographicSize = 5f;               // visible y in [-5, +5]
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            // A muted blue-grey so the corridor never sits on pure black.
-            cam.backgroundColor = new Color(0.18f, 0.19f, 0.28f);
-            cam.transform.position = new Vector3(0f, 0f, CameraZ);
-            cam.nearClipPlane = 0.1f;
-            cam.farClipPlane = 100f;
+            GameObject cameraGo = new GameObject("Locked Perspective Camera");
+            cameraGo.tag = "MainCamera";
+            cameraGo.transform.SetParent(transform, false);
+            cameraGo.transform.localPosition = cameraPosition;
+            cameraGo.transform.localRotation = Quaternion.identity;
 
-            scriptedCamera = camGo.AddComponent<ScriptedCamera>();
-            scriptedCamera.shots.Clear();
-            scriptedCamera.shots.Add(new ScriptedCamera.Shot
-            {
-                name = "Run",
-                position = new Vector3(0f, 0f, CameraZ),
-                eulerAngles = Vector3.zero,
-                orthographicSize = 5f,
-                blendSeconds = 0.6f,
-            });
+            worldCamera = cameraGo.AddComponent<Camera>();
+            worldCamera.orthographic = false;
+            worldCamera.fieldOfView = fieldOfView;
+            worldCamera.nearClipPlane = 0.1f;
+            worldCamera.farClipPlane = 150f;
+            worldCamera.clearFlags = CameraClearFlags.SolidColor;
+            worldCamera.backgroundColor = new Color(0.035f, 0.045f, 0.07f, 1f);
+
+            if (FindFirstObjectByType<AudioListener>() == null)
+                cameraGo.AddComponent<AudioListener>();
         }
 
-        // ---- Deep background: a lit far wall so the corridor mouth glows -
-        private void BuildBackdrop()
+        private void BuildThemeStyles()
         {
-            var go = new GameObject("Backdrop");
-            go.transform.SetParent(transform, false);
+            Texture2D floorTexture = Resources.Load<Texture2D>("Textures/CastleRoad");
+            Texture2D wallTexture = Resources.Load<Texture2D>("Textures/CastleStone");
+            if (floorTexture != null)
+            {
+                floorTexture.wrapMode = TextureWrapMode.Repeat;
+                floorTexture.anisoLevel = 4;
+            }
+            if (wallTexture != null)
+            {
+                wallTexture.wrapMode = TextureWrapMode.Repeat;
+                wallTexture.anisoLevel = 4;
+            }
 
-            // Full back panel (lighter than the clear colour) behind everything.
-            SpriteRenderer backWall = PlaceholderArt.NewSpriteObject("BackWall",
-                PlaceholderArt.SolidBlock(), new Color(0.26f, 0.28f, 0.42f, 1f),
-                go.transform, SceneBand.Sky, 0f);
-            backWall.transform.localPosition = new Vector3(0f, 2.5f, LayerSorting.BandZ(SceneBand.Sky));
-            backWall.transform.localScale = new Vector3(40f, 14f, 1f);
+            // Cube primitives keep their normal UVs. Repeating the textures per
+            // segment gives the floor and walls a stable stone size instead of
+            // stretching a single photograph over twelve world metres.
+            Vector2 floorTiling = new Vector2(corridorWidth / 3f, segmentLength / 3f);
+            Vector2 wallTiling = new Vector2(segmentLength / 3f, corridorHeight / 2f);
+            Vector2 accentTiling = new Vector2(2f, 2f);
 
-            // A soft warm glow at the vanishing point (a distant light / moon).
-            SpriteRenderer vault = PlaceholderArt.NewSpriteObject("FarGlow",
-                PlaceholderArt.Glow(), new Color(0.6f, 0.6f, 0.85f, 0.9f),
-                go.transform, SceneBand.FarBackground, 0f);
-            vault.transform.localPosition = new Vector3(0f, model.horizon, LayerSorting.BandZ(SceneBand.FarBackground));
-            vault.transform.localScale = new Vector3(5f, 4f, 1f);
+            themeStyles[EnvironmentTheme.CastleCorridor] = new ThemeStyle(EnvironmentTheme.CastleCorridor,
+                CreateTiledMaterial(new Color(0.72f, 0.76f, 0.86f), floorTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.68f, 0.72f, 0.84f), wallTexture, wallTiling),
+                CreateTiledMaterial(new Color(0.48f, 0.52f, 0.64f), wallTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.82f, 0.84f, 0.94f), wallTexture, accentTiling),
+                new Color(1f, 0.55f, 0.24f), "env_10", "env_11");
+            themeStyles[EnvironmentTheme.GreatHall] = new ThemeStyle(EnvironmentTheme.GreatHall,
+                CreateTiledMaterial(new Color(0.84f, 0.70f, 0.58f), floorTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.78f, 0.62f, 0.58f), wallTexture, wallTiling),
+                CreateTiledMaterial(new Color(0.48f, 0.36f, 0.40f), wallTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.86f, 0.68f, 0.34f), wallTexture, accentTiling, 0.18f),
+                new Color(1f, 0.72f, 0.35f), "env_12", "env_11");
+            themeStyles[EnvironmentTheme.Kitchen] = new ThemeStyle(EnvironmentTheme.Kitchen,
+                CreateTiledMaterial(new Color(0.82f, 0.68f, 0.54f), floorTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.90f, 0.78f, 0.62f), wallTexture, wallTiling),
+                CreateTiledMaterial(new Color(0.56f, 0.46f, 0.38f), wallTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.66f, 0.48f, 0.30f), wallTexture, accentTiling),
+                new Color(1f, 0.64f, 0.30f), "haz_4", "env_10");
+            themeStyles[EnvironmentTheme.Passage] = new ThemeStyle(EnvironmentTheme.Passage,
+                CreateTiledMaterial(new Color(0.60f, 0.72f, 0.74f), floorTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.54f, 0.68f, 0.72f), wallTexture, wallTiling),
+                CreateTiledMaterial(new Color(0.34f, 0.46f, 0.50f), wallTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.58f, 0.74f, 0.76f), wallTexture, accentTiling),
+                new Color(0.40f, 0.72f, 0.78f), "env_7", "env_8");
         }
 
-        // ---- Corridor: pools of depth-carrying segments -----------------
+        private static Material CreateTiledMaterial(Color tint, Texture2D texture, Vector2 tiling, float metallic = 0f)
+        {
+            if (texture == null) return MaterialFactory.Solid(tint, metallic);
+            Material material = MaterialFactory.Textured(tint, texture, metallic);
+            if (material.HasProperty("_MainTex")) material.SetTextureScale("_MainTex", tiling);
+            if (material.HasProperty("_BaseMap")) material.SetTextureScale("_BaseMap", tiling);
+            return material;
+        }
+
+        private void BuildLighting()
+        {
+            RenderSettings.ambientLight = new Color(0.20f, 0.21f, 0.27f);
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = worldCamera.backgroundColor;
+            RenderSettings.fogStartDistance = 45f;
+            RenderSettings.fogEndDistance = 90f;
+
+            GameObject lightGo = new GameObject("Corridor Key Light");
+            lightGo.transform.SetParent(transform, false);
+            lightGo.transform.localRotation = Quaternion.Euler(42f, -28f, 0f);
+            Light key = lightGo.AddComponent<Light>();
+            key.type = LightType.Directional;
+            key.color = new Color(0.78f, 0.82f, 1f);
+            key.intensity = 0.75f;
+            key.shadows = LightShadows.Soft;
+        }
+
         private void BuildCorridor()
         {
-            var go = new GameObject("Corridor");
-            go.transform.SetParent(transform, false);
-            worldRoot = go.transform;
+            corridorRoot = new GameObject("3D Environment Segments").transform;
+            corridorRoot.SetParent(transform, false);
+            hazardRoot = new GameObject("3D Hazards").transform;
+            hazardRoot.SetParent(transform, false);
 
-            for (int i = 0; i < FloorRows; i++)
+            segmentCount = Mathf.Clamp(segmentCount, 4, 6);
+            for (int i = 0; i < segmentCount; i++)
             {
-                float d = (float)i / FloorRows;
-                Segment seg = MakeSegment("FloorRow", SegmentKind.Floor, SceneBand.Floor);
-                seg.depth = d;
-                seg.variant = i;
-                floor.Add(seg);
+                GameObject go = new GameObject("EnvironmentSegment_" + i);
+                go.transform.SetParent(corridorRoot, false);
+                // One segment already sits behind the lens. As all geometry moves
+                // along +Z, it enters the view from the camera and continues away.
+                float firstCenterZ = cameraPosition.z - segmentLength * 0.5f;
+                go.transform.localPosition = new Vector3(0f, 0f, firstCenterZ + i * segmentLength);
+                EnvironmentSegment3D segment = go.AddComponent<EnvironmentSegment3D>();
+                segment.Build(segmentLength, corridorWidth, corridorHeight, i);
+                segment.ApplyTheme(themeStyles[EnvironmentTheme.CastleCorridor], worldCamera);
+                segments.Add(segment);
             }
-
-            for (int i = 0; i < WallModules; i++)
-            {
-                float d = (float)i / WallModules;
-                leftWall.Add(MakeWall("WallL", -1f, d, i));
-                rightWall.Add(MakeWall("WallR", 1f, d, i));
-            }
-
-            LayoutAll();
         }
 
-        private Segment MakeSegment(string name, SegmentKind kind, SceneBand band)
+        private void BuildIllustratedVista()
         {
-            SpriteRenderer sr = PlaceholderArt.NewSpriteObject(name,
-                PlaceholderArt.SolidBlock(), Color.white, worldRoot, band, 0.5f);
-            return new Segment { kind = kind, band = band, sr = sr, t = sr.transform };
+            if (!showIllustratedVista) return;
+            // env_18 is the open castle/moon illustration without a painted
+            // corridor floor or two complete corridor walls. It is a distant
+            // billboard skin only; the 3D primitives still define perspective.
+            Sprite sprite = GreveChaseSprites.Environment("env_18");
+            if (sprite == null) return;
+
+            GameObject go = new GameObject("Illustrated open-castle vista (env_18)");
+            go.transform.SetParent(corridorRoot, false);
+            go.transform.localPosition = new Vector3(0f, 0f, 38f);
+            go.transform.localRotation = worldCamera.transform.localRotation;
+            illustratedVista = go.AddComponent<SpriteRenderer>();
+            illustratedVista.sprite = sprite;
+            illustratedVista.sortingOrder = -10;
+            SizeSpriteToHeight(illustratedVista, corridorHeight * 0.95f);
         }
 
-        private Segment MakeWall(string name, float side, float depth, int index)
-        {
-            Segment seg = MakeSegment(name, SegmentKind.Wall,
-                side < 0 ? SceneBand.LeftEnvironment : SceneBand.RightEnvironment);
-            seg.side = side;
-            seg.depth = depth;
-            seg.variant = index;
-            return seg;
-        }
-
-        // ---- Characters: the finished drawn sprites at proper size ------
         private void BuildCharacters()
         {
-            // Player: front-facing run art, CENTER lane, large, ~62% down screen.
-            var pGo = new GameObject("Player");
-            pGo.transform.SetParent(transform, false);
-            player = pGo.AddComponent<SpriteRenderer>();
-            player.sprite = ResolvePlayer("run_near");
-            LayerSorting.Apply(player, SceneBand.Actors, 0.9f);
-            SizeSpriteToHeight(player, 3.4f); // world units tall
-            player.transform.localPosition = new Vector3(0f, -1.6f, LayerSorting.BandZ(SceneBand.Actors));
-
-            // Greve Gast: chase art, further back (higher, smaller), floating.
-            var gGo = new GameObject("GreveGast");
-            gGo.transform.SetParent(transform, false);
-            greve = gGo.AddComponent<SpriteRenderer>();
-            greve.sprite = ResolveGreve("chase");
-            LayerSorting.Apply(greve, SceneBand.Actors, 0.4f);
-            SizeSpriteToHeight(greve, 3.0f);
-            greve.transform.localPosition = new Vector3(0f, 1.1f, LayerSorting.BandZ(SceneBand.Actors, 0.2f));
+            player = BuildActor("Player", ResolvePlayer("run_near"), playerHeight,
+                new Vector3(0f, 0f, Mathf.Max(playerZ, playerStartZ)));
+            greve = BuildActor("Greve Gast", ResolveGreve("chase"), greveHeight,
+                new Vector3(0f, 0.25f, greveFarZ));
         }
 
-        private void StartMusic()
+        private SpriteRenderer BuildActor(string actorName, Sprite sprite, float height, Vector3 position)
         {
-            AudioClip clip = Resources.Load<AudioClip>("Audio/Music/GreveGastsJakt");
-            if (clip == null) clip = Resources.Load<AudioClip>("Audio/CustomRideMusic");
-            if (clip == null) return;
-            music = gameObject.AddComponent<AudioSource>();
-            music.clip = clip;
-            music.loop = true;
-            music.playOnAwake = false;
-            music.volume = 0.8f;
-            music.spatialBlend = 0f;
-            music.Play();
+            GameObject go = new GameObject(actorName + " 2.5D Billboard");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = position;
+            go.transform.localRotation = worldCamera.transform.localRotation;
+            SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.sortingOrder = 20;
+            SizeSpriteToHeight(renderer, height);
+            return renderer;
         }
 
-        private void EnsureInputManager()
-        {
-            if (KinectKidsInputManager.Instance == null)
-                new GameObject("KinectKidsInputManager").AddComponent<KinectKidsInputManager>();
-        }
-
-        // =================================================================
         private void Update()
         {
             if (body == null) return;
             float dt = Time.deltaTime;
             elapsed += dt;
-
             body.Update();
             ReadInput();
             DriveWorld(dt);
             StreamSegments(dt);
+            MoveIllustratedVista(dt);
             DriveCharacters(dt);
             TickHazards(dt);
-            TickPaletteSwap(dt);
+            TickThemeSequence();
         }
 
         private void ReadInput()
@@ -287,159 +274,68 @@ namespace KinectKids.Games.GreveGast
                 case GreveGastAction.Left: currentDodge = DodgeAction.Left; break;
                 case GreveGastAction.Right: currentDodge = DodgeAction.Right; break;
             }
+            if (body.Current == GreveGastAction.Left) lane = Lane.Left;
+            else if (body.Current == GreveGastAction.Right) lane = Lane.Right;
+            else if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow)) lane = Lane.Center;
 
-            int wantLane = 1;
-            if (body.Current == GreveGastAction.Left) wantLane = 0;
-            else if (body.Current == GreveGastAction.Right) wantLane = 2;
-            laneIndex = wantLane;
-
-            float laneTarget = (laneIndex - 1);
-            laneTarget += Mathf.Clamp(body.HorizontalDelta * 2.5f, -0.5f, 0.5f);
-            lateral = Mathf.Lerp(lateral, Mathf.Clamp(laneTarget, -1f, 1f),
-                1f - Mathf.Exp(-10f * Time.deltaTime));
+            float target = LaneX(lane);
+            if (Mathf.Abs(body.HorizontalDelta) > 0.05f)
+                target = Mathf.Clamp(body.HorizontalDelta * laneSpacing * 2f, -laneSpacing, laneSpacing);
+            lateral = Mathf.Lerp(lateral, target / laneSpacing, 1f - Mathf.Exp(-10f * Time.deltaTime));
         }
 
         private void DriveWorld(float dt)
         {
-            bool running = body.Current == GreveGastAction.Run
-                || body.RunEnergy > 0.4f
-                || Input.GetKey(KeyCode.W)
-                || Input.GetKey(KeyCode.LeftShift);
-
-            float target = running ? baseWorldSpeed : idleWorldSpeed;
-            worldSpeed = Mathf.Lerp(worldSpeed, target, 1f - Mathf.Exp(-4f * dt));
-
-            chase += (running ? -runDrainPerSecond : recoverPerSecond) * dt;
-            chase = Mathf.Clamp01(chase);
+            bool running = body.Current == GreveGastAction.Run || body.RunEnergy > 0.4f ||
+                           Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.LeftShift);
+            worldSpeed = Mathf.Lerp(worldSpeed, running ? runningSpeed : idleSpeed, 1f - Mathf.Exp(-4f * dt));
+            chase = Mathf.Clamp01(chase + (running ? -runDrainPerSecond : recoverPerSecond) * dt);
         }
 
-        // ---- Streaming: advance depth, re-place, recycle ----------------
         private void StreamSegments(float dt)
         {
-            float step = worldSpeed * dt;
-            AdvanceList(floor, step);
-            AdvanceList(leftWall, step);
-            AdvanceList(rightWall, step);
-            LayoutAll();
-        }
+            float move = worldSpeed * dt;
+            for (int i = 0; i < segments.Count; i++)
+                segments[i].transform.localPosition += Vector3.forward * move;
 
-        private void AdvanceList(List<Segment> list, float step)
-        {
-            // Direction of the environment stream.
-            //
-            // The player runs TOWARD the camera (toward the bottom of the frame).
-            // Relative to the player, the world he has passed must fall BEHIND
-            // him — i.e. environment should RECEDE away from the camera: born
-            // large/near at the bottom, then shrink and rise toward the vanishing
-            // point, then recycle. If the world instead came from the vanishing
-            // point toward the lens, it would look like the player is running
-            // BACKWARD (the world overtaking him toward the camera).
-            //
-            // depth: 1 = far (vanishing point, small), 0 = near (camera, large).
-            // Receding away therefore means depth INCREASES (0 -> 1).
-            float dir = environmentRecedes ? +1f : -1f;
-            for (int i = 0; i < list.Count; i++)
+            // The segment behind the camera feeds new geometry into the view.
+            // Once its camera-side edge has passed the lens, recycle the farthest
+            // segment behind the queue. Nothing visibly travels toward the camera.
+            for (int recycle = 0; recycle < segmentCount; recycle++)
             {
-                Segment s = list[i];
-                s.depth += step * dir;
-                while (s.depth < 0f) s.depth += 1f;
-                while (s.depth >= 1f) s.depth -= 1f;
+                int nearestIndex = 0;
+                int farthestIndex = 0;
+                for (int i = 1; i < segments.Count; i++)
+                {
+                    if (segments[i].transform.localPosition.z < segments[nearestIndex].transform.localPosition.z) nearestIndex = i;
+                    if (segments[i].transform.localPosition.z > segments[farthestIndex].transform.localPosition.z) farthestIndex = i;
+                }
+
+                float nearestZ = segments[nearestIndex].transform.localPosition.z;
+                if (nearestZ - segmentLength * 0.5f < cameraPosition.z) break;
+
+                EnvironmentSegment3D recycled = segments[farthestIndex];
+                Vector3 p = recycled.transform.localPosition;
+                p.z = nearestZ - segmentLength;
+                recycled.transform.localPosition = p;
+                recycled.ApplyTheme(themeStyles[requestedTheme], worldCamera);
             }
         }
 
-        private void LayoutAll()
+        private void MoveIllustratedVista(float dt)
         {
-            for (int i = 0; i < floor.Count; i++) LayoutFloor(floor[i]);
-            for (int i = 0; i < leftWall.Count; i++) LayoutWall(leftWall[i]);
-            for (int i = 0; i < rightWall.Count; i++) LayoutWall(rightWall[i]);
+            if (illustratedVista == null) return;
+            Vector3 p = illustratedVista.transform.localPosition;
+            p.z += worldSpeed * 0.25f * dt;
+            // Reset while hidden in the distance; its visible motion is always +Z.
+            if (p.z > 72f) p.z = 38f;
+            illustratedVista.transform.localPosition = p;
         }
 
-        private float WeaveX(float depth) => -lateral * laneNearOffset * (1f - PerspectiveModel.Curve(depth));
-
-        private void LayoutFloor(Segment s)
-        {
-            float d = s.depth;
-
-            // Ensure the real floor sprite (env_0/env_1) is applied.
-            Sprite spr = palette.FloorSprite(s.variant);
-            if (spr == null) spr = PlaceholderArt.SolidBlock();
-            if (s.sr.sprite != spr) s.sr.sprite = spr;
-
-            // Width spans the full corridor at this depth, plus a margin so the
-            // drawn stone reaches all the way out to the wall bases (no gap).
-            float halfW = model.HalfWidth(d);
-            float w = halfW * 2.35f;
-            float rowH = Mathf.Lerp(2.8f, 0.25f, PerspectiveModel.Curve(d)); // tall + overlapping
-
-            // NEAR-CAMERA SWEEP: the smoothstep perspective compresses motion at
-            // the camera, which makes the ground look slow / like it's floating
-            // toward a fixed lens. To sell RUNNING FORWARD, the closest rows must
-            // rush down and OFF the bottom of the screen. We push low-depth rows
-            // further down (below the floor line) so the nearest stone sweeps
-            // past the camera instead of stalling at the bottom edge.
-            float y = model.Y(d);
-            float nearBoost = Mathf.Clamp01((0.28f - d) / 0.28f); // 0 above d=0.28, ->1 at d=0
-            y -= nearBoost * nearBoost * 3.2f;                    // accelerate off the bottom
-            w *= 1f + nearBoost * 0.6f;                           // and grow as it passes
-
-            float sw = SafeW(s.sr.sprite);
-            float sh = SafeH(s.sr.sprite);
-            float scaleX = sw > 0.001f ? w / sw : 1f;
-            float scaleY = sh > 0.001f ? rowH / sh : 1f;
-
-            s.t.localPosition = new Vector3(WeaveX(d) * 0.35f, y, LayerSorting.BandZ(SceneBand.Floor));
-            s.t.localScale = new Vector3(scaleX, scaleY, 1f);
-
-            // Brighten toward the camera, only mild darkening far away.
-            s.sr.color = FloorColor(d);
-            s.sr.sortingOrder = LayerSorting.OrderInBand(SceneBand.Floor, 1f - d);
-        }
-
-        private void LayoutWall(Segment s)
-        {
-            float d = s.depth;
-
-            Sprite spr = palette.WallSprite(s.side, s.variant);
-            if (spr == null) spr = PlaceholderArt.SolidBlock();
-            if (s.sr.sprite != spr) s.sr.sprite = spr;
-
-            // Wall height fills from the floor line up; sits just outside the
-            // floor edge so the drawn walls line the corridor and converge.
-            float wallHeight = Mathf.Lerp(9.5f, 1.1f, PerspectiveModel.Curve(d)) * 1.2f;
-            float sw = SafeW(s.sr.sprite);
-            float sh = SafeH(s.sr.sprite);
-            float scaleY = sh > 0.001f ? wallHeight / sh : 1f;
-            float scaleX = scaleY; // keep the drawn wall's aspect ratio
-            float wallW = sw * scaleX;
-
-            // Anchor the wall so its inner edge sits AT the floor edge (a slight
-            // inward overlap) so walls rise straight off the floor with no gap.
-            float floorEdge = model.HalfWidth(d);
-            float x = s.side * (floorEdge + wallW * 0.5f - 0.9f) + WeaveX(d);
-            float y = model.Y(d) + wallHeight * 0.5f - 1.4f;
-
-            // NEAR-CAMERA SWEEP: closest wall sections rush OUTWARD and down past
-            // the lens, matching the floor, so the corridor visibly streams by.
-            float nearBoost = Mathf.Clamp01((0.28f - d) / 0.28f);
-            x += s.side * nearBoost * nearBoost * 3.0f;
-            y -= nearBoost * nearBoost * 1.6f;
-
-            // Both walls must face into the corridor instead of exposing the
-            // outside edge of the authored wall art.
-            s.t.localScale = new Vector3(-scaleX, scaleY, 1f);
-            s.t.localPosition = new Vector3(x, y, LayerSorting.BandZ(s.band));
-
-            s.sr.color = WallColor(d);
-            s.sr.sortingOrder = LayerSorting.OrderInBand(s.band, 1f - d);
-        }
-
-        // ---- Characters -------------------------------------------------
         private void DriveCharacters(float dt)
         {
             if (player != null)
             {
-                // Choose the front-run art by default; swap to a pose sprite for
-                // jump/duck/sidestep. A subtle vertical bob sells the run.
                 string pose = "run_near";
                 switch (currentDodge)
                 {
@@ -448,223 +344,170 @@ namespace KinectKids.Games.GreveGast
                     case DodgeAction.Left: pose = "sidestep_left"; break;
                     case DodgeAction.Right: pose = "sidestep_right"; break;
                 }
-                Sprite spr = ResolvePlayer(pose);
-                if (spr != null && player.sprite != spr) player.sprite = spr;
-
+                Sprite sprite = ResolvePlayer(pose);
+                if (sprite != null && player.sprite != sprite) player.sprite = sprite;
                 playerRunCycle += dt * 9f;
-                float bob = (currentDodge == DodgeAction.None || currentDodge == DodgeAction.Left || currentDodge == DodgeAction.Right)
-                    ? Mathf.Abs(Mathf.Sin(playerRunCycle)) * 0.12f : 0f;
-
                 Vector3 p = player.transform.localPosition;
-                p.x = Mathf.Lerp(p.x, lateral * laneNearOffset, 1f - Mathf.Exp(-12f * dt));
-                p.y = -1.6f + bob;
+                p.x = Mathf.Lerp(p.x, lateral * laneSpacing, 1f - Mathf.Exp(-12f * dt));
+                // Chase sprites use a bottom-centre pivot, so y=0 plants the feet on the floor.
+                p.y = Mathf.Abs(Mathf.Sin(playerRunCycle)) * 0.10f;
+                // The player is the only non-chaser object allowed to advance
+                // toward the camera. It settles at a stable gameplay depth.
+                p.z = Mathf.MoveTowards(p.z, playerZ, 1.2f * dt);
                 player.transform.localPosition = p;
             }
-
             if (greve != null)
             {
-                float t = PerspectiveModel.Curve(chase);
-                // Swap Greve art by distance band + reach when very close.
-                string gp = chase > 0.72f ? "reach" : (chase > 0.4f ? "chase_near" : "chase");
-                Sprite gs = ResolveGreve(gp);
-                if (gs != null && greve.sprite != gs) greve.sprite = gs;
-
-                SizeSpriteToHeight(greve, Mathf.Lerp(1.6f, 4.2f, t));
-
-                Vector3 g = greve.transform.localPosition;
-                g.y = Mathf.Lerp(1.8f, -0.4f, t);
-                g.x = Mathf.Lerp(g.x, lateral * laneNearOffset * 0.6f, 1f - Mathf.Exp(-4f * dt));
-                greve.transform.localPosition = g;
-
-                // A gentle float bob.
-                g = greve.transform.localPosition;
-                g.y += Mathf.Sin(elapsed * 2f) * 0.08f;
-                greve.transform.localPosition = g;
+                Sprite sprite = ResolveGreve(chase > 0.72f ? "reach" : "chase");
+                if (sprite != null && greve.sprite != sprite) greve.sprite = sprite;
+                Vector3 p = greve.transform.localPosition;
+                p.x = Mathf.Lerp(p.x, lateral * laneSpacing * 0.65f, 1f - Mathf.Exp(-4f * dt));
+                p.y = 0.25f + Mathf.Sin(elapsed * 2f) * 0.08f;
+                p.z = Mathf.Lerp(greveFarZ, greveNearZ, chase);
+                greve.transform.localPosition = p;
             }
         }
 
-        // ---- Hazards ----------------------------------------------------
         private void TickHazards(float dt)
         {
             for (int i = hazards.Count - 1; i >= 0; i--)
             {
-                RunHazard h = hazards[i];
-                h.depth -= worldSpeed * dt;
-                LayoutHazard(h);
-
-                if (!h.resolved && h.depth <= h.resolveDepth)
+                RunHazard hazard = hazards[i];
+                hazard.root.localPosition += Vector3.forward * (worldSpeed * dt);
+                if (!hazard.resolved && hazard.root.localPosition.z >= player.transform.localPosition.z - 0.35f)
                 {
-                    h.resolved = true;
-                    OnHazardResolved(h, EvaluateHazard(h));
+                    hazard.resolved = true;
+                    ResolveHazard(hazard, Avoided(hazard));
                 }
-                if (h.depth <= -0.05f)
+                if (hazard.root.localPosition.z > 82f)
                 {
-                    if (h.sr != null) Destroy(h.sr.gameObject);
+                    if (hazard.root != null) Destroy(hazard.root.gameObject);
                     hazards.RemoveAt(i);
                 }
             }
-
             hazardTimer -= dt;
             if (hazardTimer > 0f) return;
-            hazardTimer = Mathf.Lerp(2.6f, 1.4f, chase);
+            hazardTimer = Mathf.Lerp(2.8f, 1.5f, chase);
             SpawnHazard(hazardCounter++);
         }
 
         private void SpawnHazard(int index)
         {
-            HazardType type = (index % 2 == 0) ? HazardType.JumpHole : HazardType.SideBlock;
-            var h = new RunHazard { type = type, depth = 1f, resolveDepth = 0.12f };
-            SpriteRenderer sr = PlaceholderArt.NewSpriteObject("Hazard_" + type,
-                PlaceholderArt.SolidBlock(), Color.white, worldRoot, SceneBand.Hazards, 0.5f);
-            h.sr = sr;
-
-            if (type == HazardType.JumpHole)
+            bool jump = index % 2 == 0;
+            Lane obstacleLane = (Lane)(index % 3);
+            GameObject root = new GameObject(jump ? "Jump obstacle" : "Lane obstacle");
+            root.transform.SetParent(hazardRoot, false);
+            // Obstacles belong to the environment: they enter from just behind
+            // the camera and move away from it on the same +Z axis as the track.
+            root.transform.localPosition = new Vector3(LaneX(obstacleLane), 0f, cameraPosition.z - 1.5f);
+            RunHazard hazard = new RunHazard { root = root.transform, lane = obstacleLane, jump = jump };
+            if (jump)
             {
-                h.requiredAction = DodgeAction.Jump;
-                h.side = 0f;
-                Sprite real = palette.HazardSprite(type);
-                if (real != null) sr.sprite = real; else sr.color = new Color(0.02f, 0.02f, 0.05f, 1f);
+                GameObject obstacle = CreatePrimitive("Low obstacle", PrimitiveType.Cube, root.transform,
+                    new Vector3(0f, 0.55f, 0f), new Vector3(2.2f, 1.1f, 0.9f), themeStyles[requestedTheme].accentMaterial);
+                obstacle.transform.localRotation = Quaternion.Euler(0f, 18f, 0f);
             }
             else
             {
-                h.requiredAction = (Random.value < 0.5f) ? DodgeAction.Left : DodgeAction.Right;
-                h.side = h.requiredAction == DodgeAction.Left ? 1f : -1f;
-                Sprite real = palette.HazardSprite(type);
-                if (real != null) sr.sprite = real; else sr.color = new Color(0.5f, 0.33f, 0.18f, 1f);
+                CreatePrimitive("Tall obstacle", PrimitiveType.Cube, root.transform,
+                    new Vector3(0f, 1.25f, 0f), new Vector3(2.0f, 2.5f, 1.2f), themeStyles[requestedTheme].accentMaterial);
             }
-
-            hazards.Add(h);
-            LayoutHazard(h);
+            hazards.Add(hazard);
         }
 
-        private void LayoutHazard(RunHazard h)
+        private bool Avoided(RunHazard hazard)
         {
-            float d = Mathf.Clamp01(h.depth);
-            float y = model.Y(d);
-            float sw = SafeW(h.sr.sprite);
-            float sh = SafeH(h.sr.sprite);
-
-            if (h.type == HazardType.JumpHole)
-            {
-                float w = model.HalfWidth(d) * 1.5f;
-                float ht = Mathf.Lerp(1.6f, 0.15f, PerspectiveModel.Curve(d));
-                float scaleX = sw > 0.001f ? w / sw : w;
-                float scaleY = sh > 0.001f ? ht / sh : ht;
-                h.sr.transform.localScale = new Vector3(scaleX, scaleY, 1f);
-                h.sr.transform.localPosition = new Vector3(WeaveX(d) * 0.35f, y, LayerSorting.BandZ(SceneBand.Hazards));
-            }
-            else
-            {
-                float ht = Mathf.Lerp(2.4f, 0.25f, PerspectiveModel.Curve(d));
-                float scaleY = sh > 0.001f ? ht / sh : ht;
-                float scaleX = scaleY;
-                float laneX = h.side * model.HalfWidth(d) * 0.55f;
-                h.sr.transform.localScale = new Vector3(scaleX, scaleY, 1f);
-                h.sr.transform.localPosition = new Vector3(laneX + WeaveX(d), y + ht * 0.4f, LayerSorting.BandZ(SceneBand.Hazards));
-            }
-            h.sr.sortingOrder = LayerSorting.OrderInBand(SceneBand.Hazards, 1f - d);
+            bool sameLane = Mathf.Abs(lateral * laneSpacing - LaneX(hazard.lane)) < laneSpacing * 0.45f;
+            if (!sameLane) return true;
+            return hazard.jump && currentDodge == DodgeAction.Jump;
         }
 
-        private bool EvaluateHazard(RunHazard h)
+        private void ResolveHazard(RunHazard hazard, bool avoided)
         {
-            if (h.type == HazardType.JumpHole) return currentDodge == DodgeAction.Jump;
-            if (currentDodge == h.requiredAction) return true;
-            return h.requiredAction == DodgeAction.Left ? lateral < -0.3f : lateral > 0.3f;
+            if (avoided) { chase = Mathf.Clamp01(chase - 0.05f); return; }
+            chase = Mathf.Clamp01(chase + catchOnHit);
+            Renderer[] renderers = hazard.root.GetComponentsInChildren<Renderer>();
+            for (int i = 0; i < renderers.Length; i++) renderers[i].material.color = new Color(0.9f, 0.15f, 0.12f);
         }
 
-        private void OnHazardResolved(RunHazard h, bool avoided)
+        /// <summary>Streams a new theme in on recycled far segments without interrupting play.</summary>
+        public void RequestTheme(EnvironmentTheme theme) { requestedTheme = theme; }
+
+        private void TickThemeSequence()
         {
-            if (avoided) chase = Mathf.Clamp01(chase - 0.05f);
-            else
-            {
-                chase = Mathf.Clamp01(chase + catchOnHit);
-                scriptedCamera?.Shake(0.35f);
-                if (h.sr != null && palette.HazardSprite(h.type) == null)
-                    h.sr.color = new Color(0.9f, 0.2f, 0.2f, 1f);
-            }
+            if (elapsed >= kitchenTransitionAt && requestedTheme == EnvironmentTheme.CastleCorridor)
+                RequestTheme(EnvironmentTheme.Kitchen);
+            if (!cycleAllThemes) return;
+            if (elapsed >= kitchenTransitionAt + 34f) RequestTheme(EnvironmentTheme.Passage);
+            else if (elapsed >= kitchenTransitionAt + 17f) RequestTheme(EnvironmentTheme.GreatHall);
         }
 
-        // ---- Palette swap: CastleCorridor -> Kitchen mid-run ------------
-        private void TickPaletteSwap(float dt)
+        private float LaneX(Lane value) { return ((int)value - 1) * laneSpacing; }
+
+        private void StartMusic()
         {
-            if (!swapTriggered && elapsed > 9f)
-            {
-                swapTriggered = true;
-                targetPalette = RoomPalette.Kitchen();
-                paletteBlend = 0f;
-            }
-            if (paletteBlend < 1f)
-            {
-                paletteBlend = Mathf.Clamp01(paletteBlend + dt / 2.0f);
-                if (paletteBlend >= 1f) palette = targetPalette;
-            }
+            AudioClip clip = Resources.Load<AudioClip>("Audio/Music/GreveGastsJakt");
+            if (clip == null) clip = Resources.Load<AudioClip>("Audio/CustomRideMusic");
+            if (clip == null) return;
+            music = gameObject.AddComponent<AudioSource>();
+            music.clip = clip; music.loop = true; music.playOnAwake = false; music.volume = 0.8f; music.spatialBlend = 0f; music.Play();
         }
 
-        // ---- Colour helpers: keep art bright, only mild depth shading ---
-        private Color FloorColor(float d)
+        private static void EnsureInputManager()
         {
-            // Near = full bright; far = ~70% so it recedes into a little haze.
-            float shade = Mathf.Lerp(1f, 0.72f, PerspectiveModel.Curve(d));
-            Color tint = Color.Lerp(palette.floorTint, targetPalette.floorTint, SwapT);
-            return new Color(tint.r * shade, tint.g * shade, tint.b * shade, 1f);
+            if (KinectKidsInputManager.Instance == null)
+                new GameObject("KinectKidsInputManager").AddComponent<KinectKidsInputManager>();
         }
 
-        private Color WallColor(float d)
-        {
-            float shade = Mathf.Lerp(1f, 0.68f, PerspectiveModel.Curve(d));
-            Color tint = Color.Lerp(palette.wallTint, targetPalette.wallTint, SwapT);
-            return new Color(tint.r * shade, tint.g * shade, tint.b * shade, 1f);
-        }
-
-        private float SwapT => (targetPalette == palette) ? 0f : paletteBlend;
-
-        // ---- Sprite utilities -------------------------------------------
-        private static float SafeW(Sprite s) => s != null && s.bounds.size.x > 0.0001f ? s.bounds.size.x : 1f;
-        private static float SafeH(Sprite s) => s != null && s.bounds.size.y > 0.0001f ? s.bounds.size.y : 1f;
-
-        private static void SizeSpriteToHeight(SpriteRenderer sr, float worldHeight)
-        {
-            if (sr == null || sr.sprite == null) return;
-            float h = SafeH(sr.sprite);
-            float scale = h > 0.0001f ? worldHeight / h : 1f;
-            float sign = Mathf.Sign(sr.transform.localScale.x == 0 ? 1 : sr.transform.localScale.x);
-            sr.transform.localScale = new Vector3(scale * (sign == 0 ? 1 : sign), scale, 1f);
-        }
-
-        // Real art with a clearly-visible bright fallback if a sprite is missing.
         private Sprite ResolvePlayer(string pose)
         {
-            Sprite s = GreveChaseSprites.Player(pose);
-            if (s == null) s = GreveChaseSprites.Player("run_near");
-            if (s == null) s = GreveChaseSprites.Player("idle");
-            return s; // may be null -> handled by caller keeping previous sprite
+            Sprite sprite = GreveChaseSprites.Player(pose);
+            if (sprite == null) sprite = GreveChaseSprites.Player("run_near");
+            if (sprite == null) sprite = GreveChaseSprites.Player("idle");
+            return sprite;
         }
 
         private Sprite ResolveGreve(string pose)
         {
-            Sprite s = GreveChaseSprites.Greve(pose);
-            if (s == null) s = GreveChaseSprites.Greve("chase");
-            if (s == null) s = GreveChaseSprites.Greve("idle");
-            return s;
+            Sprite sprite = GreveChaseSprites.Greve(pose);
+            if (sprite == null) sprite = GreveChaseSprites.Greve("chase");
+            if (sprite == null) sprite = GreveChaseSprites.Greve("idle");
+            return sprite;
         }
 
-        // ---- HUD --------------------------------------------------------
+        private static void SizeSpriteToHeight(SpriteRenderer renderer, float height)
+        {
+            if (renderer == null || renderer.sprite == null) return;
+            float spriteHeight = renderer.sprite.bounds.size.y;
+            float scale = spriteHeight > 0.001f ? height / spriteHeight : 1f;
+            renderer.transform.localScale = Vector3.one * scale;
+        }
+
+        internal static GameObject CreatePrimitive(string objectName, PrimitiveType type, Transform parent,
+            Vector3 localPosition, Vector3 localScale, Material material)
+        {
+            GameObject go = GameObject.CreatePrimitive(type);
+            go.name = objectName;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPosition;
+            go.transform.localScale = localScale;
+            Renderer renderer = go.GetComponent<Renderer>();
+            if (renderer != null) renderer.sharedMaterial = material;
+            Collider collider = go.GetComponent<Collider>();
+            if (collider != null) Destroy(collider);
+            return go;
+        }
+
         private GUIStyle hud;
         private void OnGUI()
         {
             if (hud == null)
             {
-                hud = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = Mathf.Clamp(Screen.height / 40, 16, 30),
-                    fontStyle = FontStyle.Bold,
-                };
+                hud = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Clamp(Screen.height / 40, 16, 30), fontStyle = FontStyle.Bold };
                 hud.normal.textColor = Color.white;
             }
-            string room = paletteBlend < 1f ? (palette.name + " -> " + targetPalette.name) : palette.name;
-            GUI.Label(new Rect(30, 24, 900, 34),
-                "GREVE GAST NÄRMAR SIG  |  RUM: " + room +
-                "  |  Spring (W), sidsteg (A/D), hoppa (Space)", hud);
+            GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + requestedTheme + "  |  BANA: " + lane +
+                "  |  Spring (W), byt bana (A/D), center (S), hoppa (Space)", hud);
         }
 
         private void OnDestroy()
@@ -673,91 +516,95 @@ namespace KinectKids.Games.GreveGast
             body?.Dispose();
         }
 
-        // =================================================================
-        private enum SegmentKind { Floor, Wall }
+        private sealed class RunHazard { public Transform root; public Lane lane; public bool jump; public bool resolved; }
 
-        private sealed class Segment
+        internal sealed class ThemeStyle
         {
-            public SegmentKind kind;
-            public SceneBand band;
-            public SpriteRenderer sr;
-            public Transform t;
-            public float depth;
-            public float side;
-            public int variant;
+            public readonly EnvironmentTheme theme;
+            public readonly Material floorMaterial, wallMaterial, ceilingMaterial, accentMaterial;
+            public readonly Color lightColor;
+            public readonly string decorationA, decorationB;
+            public ThemeStyle(EnvironmentTheme theme, Material floor, Material wall, Material ceiling, Material accent,
+                Color lightColor, string decorationA, string decorationB)
+            {
+                this.theme = theme; floorMaterial = floor; wallMaterial = wall; ceilingMaterial = ceiling;
+                accentMaterial = accent; this.lightColor = lightColor; this.decorationA = decorationA; this.decorationB = decorationB;
+            }
+        }
+    }
+
+    /// <summary>A reusable physical corridor segment that only translates on the Z axis.</summary>
+    internal sealed class EnvironmentSegment3D : MonoBehaviour
+    {
+        private readonly List<Renderer> floorRenderers = new List<Renderer>();
+        private readonly List<Renderer> wallRenderers = new List<Renderer>();
+        private readonly List<Renderer> ceilingRenderers = new List<Renderer>();
+        private readonly List<Renderer> accentRenderers = new List<Renderer>();
+        private readonly List<SpriteRenderer> decorations = new List<SpriteRenderer>();
+        private Light practicalLight;
+        private int variant;
+        public CorridorRunnerDirector.EnvironmentTheme Theme { get; private set; }
+
+        public void Build(float length, float width, float height, int segmentVariant)
+        {
+            variant = segmentVariant;
+            Material placeholder = MaterialFactory.Solid(Color.gray);
+            floorRenderers.Add(AddBox("Floor", new Vector3(0f, -0.12f, 0f), new Vector3(width, 0.24f, length + 0.08f), placeholder));
+            wallRenderers.Add(AddBox("Left wall", new Vector3(-width * 0.5f, height * 0.5f, 0f), new Vector3(0.24f, height, length + 0.08f), placeholder));
+            wallRenderers.Add(AddBox("Right wall", new Vector3(width * 0.5f, height * 0.5f, 0f), new Vector3(0.24f, height, length + 0.08f), placeholder));
+            ceilingRenderers.Add(AddBox("Ceiling", new Vector3(0f, height + 0.12f, 0f), new Vector3(width, 0.24f, length + 0.08f), placeholder));
+
+            float boundaryZ = -length * 0.5f + 0.18f;
+            accentRenderers.Add(AddBox("Arch left", new Vector3(-width * 0.5f + 0.35f, height * 0.5f, boundaryZ), new Vector3(0.48f, height, 0.52f), placeholder));
+            accentRenderers.Add(AddBox("Arch right", new Vector3(width * 0.5f - 0.35f, height * 0.5f, boundaryZ), new Vector3(0.48f, height, 0.52f), placeholder));
+            accentRenderers.Add(AddBox("Arch crown", new Vector3(0f, height - 0.28f, boundaryZ), new Vector3(width, 0.56f, 0.52f), placeholder));
+
+            GameObject lightGo = new GameObject("Theme practical light");
+            lightGo.transform.SetParent(transform, false);
+            lightGo.transform.localPosition = new Vector3(0f, height - 0.8f, 0f);
+            practicalLight = lightGo.AddComponent<Light>();
+            practicalLight.type = LightType.Point; practicalLight.range = length * 0.9f; practicalLight.intensity = 1.1f;
+            practicalLight.shadows = LightShadows.None;
         }
 
-        private enum HazardType { JumpHole, SideBlock }
-
-        private sealed class RunHazard
+        public void ApplyTheme(CorridorRunnerDirector.ThemeStyle style, Camera camera)
         {
-            public HazardType type;
-            public SpriteRenderer sr;
-            public float depth;
-            public float resolveDepth;
-            public bool resolved;
-            public DodgeAction requiredAction;
-            public float side;
+            Theme = style.theme;
+            SetMaterials(floorRenderers, style.floorMaterial); SetMaterials(wallRenderers, style.wallMaterial);
+            SetMaterials(ceilingRenderers, style.ceilingMaterial); SetMaterials(accentRenderers, style.accentMaterial);
+            practicalLight.color = style.lightColor;
+            ClearDecorations();
+            float side = variant % 2 == 0 ? -1f : 1f;
+            AddDecoration(style.decorationA, new Vector3(side * 4.7f, 3.0f, -2.2f), 2.0f, camera);
+            AddDecoration(style.decorationB, new Vector3(-side * 4.7f, 3.3f, 2.8f), 2.2f, camera);
         }
 
-        /// <summary>
-        /// A swappable ROOM PALETTE: sprite keys + tints. The streaming system is
-        /// identical for every room, so switching palette mid-run morphs the
-        /// corridor into the kitchen with no reload. Real art fills in through
-        /// <see cref="GreveChaseSprites"/>; unmapped keys fall back to tinted
-        /// placeholders.
-        /// </summary>
-        private sealed class RoomPalette
+        private Renderer AddBox(string objectName, Vector3 position, Vector3 scale, Material material)
         {
-            public string name;
-            public Color floorTint;
-            public Color wallTint;
-            public string[] floorKeys;
-            public string[] wallKeys;
-            public string holeKey;
-            public string blockKey;
+            return CorridorRunnerDirector.CreatePrimitive(objectName, PrimitiveType.Cube, transform, position, scale, material).GetComponent<Renderer>();
+        }
 
-            public Sprite FloorSprite(int variant)
-            {
-                if (floorKeys == null || floorKeys.Length == 0) return null;
-                return GreveChaseSprites.Environment(floorKeys[((variant % floorKeys.Length) + floorKeys.Length) % floorKeys.Length]);
-            }
+        private void AddDecoration(string spriteKey, Vector3 position, float height, Camera camera)
+        {
+            Sprite sprite = spriteKey.StartsWith("haz_") ? GreveChaseSprites.Hazard(spriteKey) : GreveChaseSprites.Environment(spriteKey);
+            if (sprite == null) return;
+            GameObject go = new GameObject("Billboard " + spriteKey);
+            go.transform.SetParent(transform, false); go.transform.localPosition = position; go.transform.rotation = camera.transform.rotation;
+            SpriteRenderer renderer = go.AddComponent<SpriteRenderer>(); renderer.sprite = sprite; renderer.sortingOrder = 10;
+            float spriteHeight = sprite.bounds.size.y;
+            go.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? height / spriteHeight : 1f);
+            decorations.Add(renderer);
+        }
 
-            public Sprite WallSprite(float side, int variant)
-            {
-                if (wallKeys == null || wallKeys.Length == 0) return null;
-                int wallIndex = side < 0f ? 0 : 1;
-                string key = wallKeys[Mathf.Min(wallIndex, wallKeys.Length - 1)];
-                return GreveChaseSprites.Environment(key);
-            }
+        private void ClearDecorations()
+        {
+            for (int i = 0; i < decorations.Count; i++) if (decorations[i] != null) Destroy(decorations[i].gameObject);
+            decorations.Clear();
+        }
 
-            public Sprite HazardSprite(HazardType type)
-            {
-                string key = type == HazardType.JumpHole ? holeKey : blockKey;
-                return string.IsNullOrEmpty(key) ? null : GreveChaseSprites.Hazard(key);
-            }
-
-            public static RoomPalette CastleCorridor() => new RoomPalette
-            {
-                name = "CastleCorridor",
-                floorTint = new Color(1f, 0.98f, 0.92f),   // near-white: show the art's own colour
-                wallTint = new Color(1f, 0.98f, 0.92f),
-                floorKeys = new[] { "env_0", "env_1" },     // drawn stone floor strips
-                wallKeys = new[] { "env_2", "env_3" },      // authored left and right corridor walls
-                holeKey = "haz_0",
-                blockKey = "haz_4",
-            };
-
-            public static RoomPalette Kitchen() => new RoomPalette
-            {
-                name = "Kitchen",
-                floorTint = new Color(1f, 0.9f, 0.78f),     // warmer wash for the kitchen
-                wallTint = new Color(1f, 0.88f, 0.74f),
-                floorKeys = new[] { "env_1", "env_0" },
-                wallKeys = new[] { "env_2", "env_3" },
-                holeKey = "haz_0",
-                blockKey = "haz_4",
-            };
+        private static void SetMaterials(List<Renderer> renderers, Material material)
+        {
+            for (int i = 0; i < renderers.Count; i++) renderers[i].sharedMaterial = material;
         }
     }
 }
