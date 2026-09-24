@@ -1,0 +1,29 @@
+{
+  "header": [
+    "using System.Collections;",
+    "using System.Collections.Generic;",
+    "using System.Linq;",
+    "using UnityEngine;",
+    "using UnityEngine.SceneManagement;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed partial class SpokjaktenGame",
+    "    {"
+  ],
+  "footer": ["    }", "}"],
+  "header_core": [
+    "using System.Collections;",
+    "using System.Collections.Generic;",
+    "using System.Linq;",
+    "using UnityEngine;",
+    "using UnityEngine.SceneManagement;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed class SpokjaktenGame : MonoBehaviour",
+    "    {"
+  ],
+  "footer_core": ["    }", "}"],
+  "core_file": "Scripts/SpokjaktenGame.cs"
+}

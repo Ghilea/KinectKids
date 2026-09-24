@@ -1,0 +1,23 @@
+{
+  "header": [
+    "using System.Collections.Generic;",
+    "using UnityEngine;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed partial class GreveGastGame",
+    "    {"
+  ],
+  "footer": ["    }", "}"],
+  "header_core": [
+    "using System.Collections.Generic;",
+    "using UnityEngine;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed class GreveGastGame : MonoBehaviour",
+    "    {"
+  ],
+  "footer_core": ["    }", "}"],
+  "core_file": "GreveGast/GreveGastGame.cs"
+}

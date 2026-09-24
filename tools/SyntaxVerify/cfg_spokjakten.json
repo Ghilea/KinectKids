@@ -1,0 +1,30 @@
+{
+  "source": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.cs",
+  "class_decl_old": "    public sealed class SpokjaktenGame : MonoBehaviour",
+  "class_decl_new": "    public sealed partial class SpokjaktenGame : MonoBehaviour",
+  "shell_header": [
+    "using System.Collections;",
+    "using System.Collections.Generic;",
+    "using System.Linq;",
+    "using UnityEngine;",
+    "using UnityEngine.SceneManagement;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed partial class SpokjaktenGame",
+    "    {"
+  ],
+  "shell_footer": ["    }", "}"],
+  "core_file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.cs",
+  "core_ranges": [[1, 195], [479, 580], [2700, 2738]],
+  "parts": [
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.Setup.cs", "ranges": [[197, 477]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.Menu.cs", "ranges": [[582, 841]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.Systems.cs", "ranges": [[843, 964]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.Gameplay.cs", "ranges": [[966, 1466]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.Aim.cs", "ranges": [[1468, 1775]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.Boss.cs", "ranges": [[1777, 1911]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.GUI.cs", "ranges": [[1913, 2463]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/SpokjaktenGame.Audio.cs", "ranges": [[2465, 2698]]}
+  ]
+}

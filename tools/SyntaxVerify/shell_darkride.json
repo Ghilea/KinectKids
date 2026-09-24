@@ -1,0 +1,21 @@
+{
+  "header": [
+    "using UnityEngine;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed partial class DarkRideWorld",
+    "    {"
+  ],
+  "footer": ["    }", "}"],
+  "header_core": [
+    "using UnityEngine;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed class DarkRideWorld",
+    "    {"
+  ],
+  "footer_core": ["    }", "}"],
+  "core_file": "Scripts/DarkRideWorld.cs"
+}

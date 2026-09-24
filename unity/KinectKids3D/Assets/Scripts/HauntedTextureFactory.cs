@@ -80,6 +80,15 @@ namespace KinectKids3D
             });
         }
 
+        /// <summary>Reusable 1x1 solid-color texture (e.g. for GUI fills).</summary>
+        public static Texture2D Solid(Color color)
+        {
+            var texture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            texture.SetPixel(0, 0, color);
+            texture.Apply();
+            return texture;
+        }
+
         private static Texture2D Create(string name, System.Func<int, int, Color> pixel)
         {
             var texture = new Texture2D(Size, Size, TextureFormat.RGB24, true)

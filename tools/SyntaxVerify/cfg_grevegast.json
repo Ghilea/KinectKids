@@ -1,0 +1,26 @@
+{
+  "source": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/GreveGast/GreveGastGame.cs",
+  "class_decl_old": "    public sealed class GreveGastGame : MonoBehaviour",
+  "class_decl_new": "    public sealed partial class GreveGastGame : MonoBehaviour",
+  "shell_header": [
+    "using System.Collections.Generic;",
+    "using UnityEngine;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed partial class GreveGastGame",
+    "    {"
+  ],
+  "shell_footer": [
+    "    }",
+    "}"
+  ],
+  "core_file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/GreveGast/GreveGastGame.cs",
+  "core_ranges": [[1, 341], [1189, 1190]],
+  "parts": [
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/GreveGast/GreveGastGame.Run.cs", "ranges": [[343, 727]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/GreveGast/GreveGastGame.GUI.cs", "ranges": [[729, 830], [1153, 1188]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/GreveGast/GreveGastGame.World.cs", "ranges": [[832, 1069]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/GreveGast/GreveGastGame.Chaser.cs", "ranges": [[1071, 1151]]}
+  ]
+}

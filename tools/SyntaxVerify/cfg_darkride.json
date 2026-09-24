@@ -1,0 +1,22 @@
+{
+  "source": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/DarkRideWorld.cs",
+  "class_decl_old": "    public sealed class DarkRideWorld",
+  "class_decl_new": "    public sealed partial class DarkRideWorld",
+  "shell_header": [
+    "using UnityEngine;",
+    "",
+    "namespace KinectKids3D",
+    "{",
+    "    public sealed partial class DarkRideWorld",
+    "    {"
+  ],
+  "shell_footer": ["    }", "}"],
+  "core_file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/DarkRideWorld.cs",
+  "core_ranges": [[1, 233], [973, 974]],
+  "parts": [
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/DarkRideWorld.Sections.cs", "ranges": [[235, 414]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/DarkRideWorld.Props.cs", "ranges": [[416, 832]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/DarkRideWorld.RideCar.cs", "ranges": [[834, 938]]},
+    {"file": "c:/Users/ernekda/KinectKids/unity/KinectKids3D/Assets/Scripts/DarkRideWorld.Materials.cs", "ranges": [[940, 972]]}
+  ]
+}
