@@ -49,6 +49,50 @@ var hazard = HazardFactory.Spawn(HazardKind.LowBeam, root, dodgeSource);
 hazard.Resolved += (h, avoided) => { /* poäng/feedback */ };
 ```
 
+## Modulär, sektionsbaserad runner (`Sections/`)
+
+Ovanpå kärnmotorn ligger ett datadrivet lager som delar världen i **sektioner /
+rum** (korridor, stora salen, köket, källaren, vinden) byggda av **återanvändbara
+moduler**. Rummen byts i takt med **låtens struktur**.
+
+| Fil | Ansvar |
+|---|---|
+| `EnvironmentModule.cs` | `ModuleKind` (golvsegment, väggdel, valv, prop, overhead, hinder, FX, framing) + `EnvironmentModule`-data. Art-agnostiskt: en modul namnger en sprite-nyckel + geometri, aldrig baked grafik. |
+| `ModuleLibrary.cs` | Den enda kopplingen till grafik: en `Resolver` (nyckel → Sprite) med platshållar-fallback. Byt sprite utan att röra spelregler. |
+| `PerspectiveModel.cs` | Delad perspektivmodell (`Default`/`Wide`/`Tight`) så alla moduler konvergerar mot samma flyktpunkt. |
+| `SectionDefinition.cs` | `RoomKind` + ett rum som ren data (golv/väggar/props/FX/tillåtna hinder/längd/tema) med flytande bygg-API. |
+| `SectionStreamer.cs` | Strömmar rum mot kameran i perspektiv, återvinner lager, gör cross-fade-övergångar. Driver `ParallaxController`. |
+| `SongStructureDriver.cs` | `SongStructure`/`SongSection` + driver som byter rum beat-kvantiserat och sätter intensitet. |
+| `RoomCatalog.cs` | Konkreta rum (Korridor/Stora salen/Köket/Källaren/Vinden) + `SampleSong()` som kedjar ihop dem. |
+
+Regidirektören `Games/GreveGast/Scripts/RunnerSceneDirector.cs` binder ihop allt
+(kamera + parallax + streamer + låtdriver + puppets + hinder från aktivt rum).
+Den lämnar `ChaseSceneDirector` orörd. Scenen `GreveGast.unity` bootar runnern via
+`GreveGastSceneEntry` (`useRunner = 1`); sätt `useRunner = 0` för den enkla
+korridoren eller `useLegacySlice = 1` för Style C+-slicen.
+
+### Bygga en ny runner-scen
+
+```csharp
+var parallax = worldGo.AddComponent<ParallaxController>();
+var library  = new ModuleLibrary(GreveChaseSprites.Environment); // seam till riktig art
+
+var streamer = worldGo.AddComponent<SectionStreamer>();
+streamer.Init(parallax, library, PerspectiveModel.Default);
+
+var driver = worldGo.AddComponent<SongStructureDriver>();
+driver.Init(streamer, RoomCatalog.SampleSong(), () => music.time, RoomCatalog.Build);
+// gameplay sätter bara streamer.forwardSpeed / streamer.lateralTarget varje frame
+```
+
+### Lägga till ett rum
+
+1. Lägg ett värde i `RoomKind`.
+2. Skriv en byggmetod i `RoomCatalog` (`.Floor(...).Walls(...).Prop(...).Effect(...).Hazards(...)`).
+3. Koppla in det i `RoomCatalog.Build` + `PerspectiveFor`, och referera det i en `SongStructure`.
+
+Inga ändringar behövs i streamer, motor eller spelregler.
+
 ## Verifiering
 
 Skripten kompilerar rent (Roslyn mot en UnityEngine-stub, 0 fel). Full

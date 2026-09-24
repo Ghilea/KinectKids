@@ -148,6 +148,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e85d4ab5b8fbfeb4baa66f20c57c7860, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  useRunner: 1
   useLegacySlice: 0
 --- !u!4 &792400726
 Transform:

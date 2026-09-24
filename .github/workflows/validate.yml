@@ -46,9 +46,18 @@ jobs:
             './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/DodgeAction.cs',
             './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/PlaceholderArt.cs',
             './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Scene25DBackdrop.cs',
+            # Modulär, sektionsbaserad 2.5D-runner.
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Sections/EnvironmentModule.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Sections/ModuleLibrary.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Sections/PerspectiveModel.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Sections/SectionDefinition.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Sections/SectionStreamer.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Sections/SongStructureDriver.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Core/Scene25D/Sections/RoomCatalog.cs',
             # Greve Gast 2.5D chase.
             './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/ChaseSceneDirector.cs',
             './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/ChaseEnvironmentBuilder.cs',
+            './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/RunnerSceneDirector.cs',
             './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/GreveGastSceneEntry.cs',
             './unity/KinectKids3D/Assets/KinectKids/Games/GreveGast/Scripts/GreveChaseSprites.cs',
             # Riktiga chase-sprites (utskurna ur asset-arken).

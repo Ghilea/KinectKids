@@ -38,8 +38,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Build.ps1
 
 - Greve Gast – Style C+ vertical slice med musikstyrd jakt.
 
-Följande äldre spel finns ännu bara i WPF-källkoden och visas därför inte i
-slutkundens Unity-meny förrän de har porterats och verifierats:
+Följande äldre spel är ännu inte porterade till Unity och visas därför inte i
+slutkundens Unity-meny förrän de har återskapats och verifierats:
 
 - Matematikbanan
 - Bokstavsjakten
@@ -63,19 +63,6 @@ unity/KinectKids3D/Assets/KinectKids/
   SharedAudio/delat ljud
 
 src/KinectBridge/  x86-brygga mellan Kinect SDK 1.8 och 64-bitars Unity
-src/KinectKids/    legacy WPF-referens; inte ett slutkundsprogram
-```
-
-## Legacy WPF
-
-WPF-koden ligger kvar endast som beteende- och innehållsreferens tills varje
-spel har porterats. Den byggs inte av standardkommandona och får inte användas
-som gemensam meny.
-
-Om en utvecklare uttryckligen behöver jämföra mot referensen kan den byggas med:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Build-LegacyWpf.ps1
 ```
 
 ## Krav för Kinect
