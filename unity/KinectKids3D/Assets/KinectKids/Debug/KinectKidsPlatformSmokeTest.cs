@@ -1,11 +1,17 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using KinectKids.Games.GreveGast;
+using KinectKids.Games.GhostHunt;
+using KinectKids.Games.Learning;
+using KinectKids.Games.Movement;
 
 namespace KinectKids3D.Platform
 {
     public sealed class KinectKidsPlatformSmokeTest : MonoBehaviour
     {
+        private int failures;
+
         private IEnumerator Start()
         {
             yield return WaitForScene(KinectKidsSceneLoader.MainMenuScene);
@@ -14,8 +20,8 @@ namespace KinectKids3D.Platform
             KinectKidsPlatformRoot.Instance.Scenes.LoadGame("GreveGast");
             yield return WaitForScene("GreveGast");
             yield return null;
-            if (FindFirstObjectByType<GreveGastStyleCGame>() == null)
-                Debug.LogError("PLATFORM_SMOKE: GreveGastStyleCGame missing");
+            if (FindFirstObjectByType<RunnerSceneDirector>() == null)
+                Fail("Greve Gast runner missing");
             else Debug.Log("PLATFORM_SMOKE: Greve Gast loaded");
             yield return new WaitForSecondsRealtime(2f);
             KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
@@ -25,8 +31,8 @@ namespace KinectKids3D.Platform
             KinectKidsPlatformRoot.Instance.Scenes.LoadGame("Spokjakten");
             yield return WaitForScene("Spokjakten");
             yield return null;
-            if (FindFirstObjectByType<SpokjaktenGame>() == null)
-                Debug.LogError("PLATFORM_SMOKE: SpokjaktenGame missing");
+            if (FindFirstObjectByType<GhostRide25D>() == null)
+                Fail("Spokjakten ride missing");
             else Debug.Log("PLATFORM_SMOKE: Spokjakten loaded");
             yield return new WaitForSecondsRealtime(2f);
             KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
@@ -40,19 +46,26 @@ namespace KinectKids3D.Platform
                 yield return WaitForScene(learningScene);
                 yield return null;
                 bool gameFound = learningScene == "SimonSager"
-                    ? FindFirstObjectByType<SimonGameUnity>() != null
+                    ? FindFirstObjectByType<Simon25DGame>() != null
                     : learningScene == "Ballongjakten"
-                        ? FindFirstObjectByType<BalloonGameUnity>() != null
-                        : FindFirstObjectByType<LearningChoiceGameUnity>() != null;
+                        ? FindFirstObjectByType<Balloon25DGame>() != null
+                        : FindFirstObjectByType<Learning25DGame>() != null;
                 if (!gameFound)
-                    Debug.LogError("PLATFORM_SMOKE: learning game missing in " + learningScene);
+                    Fail("learning game missing in " + learningScene);
                 else Debug.Log("PLATFORM_SMOKE: " + learningScene + " loaded");
                 yield return new WaitForSecondsRealtime(0.7f);
                 KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
                 yield return WaitForScene(KinectKidsSceneLoader.MainMenuScene);
                 Debug.Log("PLATFORM_SMOKE: " + learningScene + " return succeeded");
             }
-            Application.Quit(0);
+            if (failures == 0) Debug.Log("PLATFORM_SMOKE: all scenes passed");
+            Application.Quit(failures == 0 ? 0 : 1);
+        }
+
+        private void Fail(string message)
+        {
+            failures++;
+            Debug.LogError("PLATFORM_SMOKE: " + message);
         }
 
         private static IEnumerator WaitForScene(string sceneName)

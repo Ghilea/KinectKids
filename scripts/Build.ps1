@@ -56,18 +56,20 @@ for ($attempt = 1; $attempt -le 3 -and -not $verified; $attempt++) {
         '-logFile', ('"' + $verifyLog + '"')
     )
     $verification = Start-Process -FilePath $output -ArgumentList $verifyArguments -PassThru -WindowStyle Hidden
-    if (-not $verification.WaitForExit(90000)) {
+    $timedOut = -not $verification.WaitForExit(90000)
+    if ($timedOut) {
         Stop-Process -Id $verification.Id -Force
+        $verification.WaitForExit()
     }
 
     $verificationText = if (Test-Path -LiteralPath $verifyLog) {
         Get-Content -LiteralPath $verifyLog -Raw
     } else { '' }
-    $hasAllScenes = $verificationText.Contains('PLATFORM_SMOKE: Ballongjakten return succeeded')
+    $hasAllScenes = $verificationText.Contains('PLATFORM_SMOKE: all scenes passed')
     $hasFailure = $verificationText -match 'corrupted|Crash!!!|Exception|MissingReference|NullReference|PLATFORM_SMOKE: .*missing|PLATFORM_SMOKE: timeout'
-    $verified = $hasAllScenes -and -not $hasFailure
+    $verified = -not $timedOut -and $verification.ExitCode -eq 0 -and $hasAllScenes -and -not $hasFailure
     if (-not $verified) {
-        Write-Warning "Unity skapade en ofullstandig eller korrupt scenfil. Bygger automatiskt om hela paketet."
+        Write-Warning "Speltestet misslyckades (exitkod $($verification.ExitCode)). Se $verifyLog. Bygger om paketet."
     }
 }
 
