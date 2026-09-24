@@ -72,7 +72,7 @@ namespace KinectKids3D
             if (!warned && gap <= revealDistance + 5.5f && gap > -1f)
             {
                 warned = true;
-                SpokjaktenGame.ReportThreatCue(side);
+                HauntedRideGame.ReportThreatCue(side);
             }
             if (warned && !revealed && warningLight != null)
                 warningLight.intensity = 1.1f + Mathf.Abs(Mathf.Sin(Time.time * 9f)) * 2.3f;

@@ -20,16 +20,16 @@ namespace KinectKids3D
             string activeScene = SceneManager.GetActiveScene().name;
             if (activeScene == "00_Bootstrap" || activeScene == "01_MainMenu" || activeScene == "GreveGast"
                 || global::KinectKids3D.Platform.KinectKidsPlatformRoot.IsActive) return;
-            if (UnityEngine.Object.FindFirstObjectByType<SpokjaktenGame>() != null
-                || UnityEngine.Object.FindFirstObjectByType<GreveGastGame>() != null
+            if (UnityEngine.Object.FindFirstObjectByType<HauntedRideGame>() != null
+                || UnityEngine.Object.FindFirstObjectByType<ChaseGame>() != null
                 || UnityEngine.Object.FindFirstObjectByType<global::GreveGast2D.GreveGastDrawnTestPanel>() != null
                 || SceneManager.GetActiveScene().name == "GreveGastDrawnTest") return;
             bool greveGast = IsGreveGastBuild();
             GameObject root = new GameObject(greveGast
                 ? "KinectKids 3D - Greve Gasts teckningsjakt"
                 : "KinectKids 3D - Spokjakten");
-            if (greveGast) root.AddComponent<GreveGastGame>();
-            else root.AddComponent<SpokjaktenGame>();
+            if (greveGast) root.AddComponent<ChaseGame>();
+            else root.AddComponent<HauntedRideGame>();
             // Spelet hör till scenen. En riktig scenomladdning ska ta bort hela
             // runtime-världen så dörrar, monster och fällor byggs om från noll.
         }

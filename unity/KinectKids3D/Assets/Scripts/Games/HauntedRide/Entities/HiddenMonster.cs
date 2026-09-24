@@ -65,7 +65,7 @@ namespace KinectKids3D
                     && Time.time - targetableSince >= 2.25f)
                 {
                     escaped = true;
-                    SpokjaktenGame.ReportMonsterEscape();
+                    HauntedRideGame.ReportMonsterEscape();
                 }
                 enabled = false;
             }

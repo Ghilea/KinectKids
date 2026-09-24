@@ -23,11 +23,7 @@ namespace KinectKids3D
             motion.startedAt = Time.time;
             bolt.transform.position = start;
 
-            Light light = bolt.AddComponent<Light>();
-            light.color = color;
-            light.intensity = 2.5f;
-            light.range = 3.5f;
-            light.shadows = LightShadows.None;
+            LightFactory.AddPoint(bolt, color, 2.5f, 3.5f);
         }
 
         public static void CreateImpact(Vector3 position, bool boss)
@@ -41,11 +37,7 @@ namespace KinectKids3D
             impact.GetComponent<Renderer>().material = DarkRideWorld.GlowMaterial(color, 5f);
             MagicImpact animation = impact.AddComponent<MagicImpact>();
             animation.Configure(boss ? 0.75f : 0.48f);
-            Light light = impact.AddComponent<Light>();
-            light.color = color;
-            light.intensity = boss ? 4.5f : 3.2f;
-            light.range = boss ? 6f : 4f;
-            light.shadows = LightShadows.None;
+            LightFactory.AddPoint(impact, color, boss ? 4.5f : 3.2f, boss ? 6f : 4f);
         }
 
         private void Update()

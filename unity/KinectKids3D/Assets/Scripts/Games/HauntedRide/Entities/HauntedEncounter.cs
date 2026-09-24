@@ -54,7 +54,7 @@ namespace KinectKids3D
             }
             if (age > (kind == HauntedEncounterKind.SwingingChain ? 2.2f : 3.1f))
             {
-                if (shootable != null && shootable.Health > 0) SpokjaktenGame.ReportMonsterEscape();
+                if (shootable != null && shootable.Health > 0) HauntedRideGame.ReportMonsterEscape();
                 Destroy(gameObject);
             }
         }

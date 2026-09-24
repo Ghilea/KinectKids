@@ -32,7 +32,7 @@ namespace KinectKids3D
             if (gap >= -2f) return;
             if (punishIfMissed && target.Health > 0 && activated
                 && Time.time - activatedAt >= 2.25f)
-                SpokjaktenGame.ReportMonsterEscape();
+                HauntedRideGame.ReportMonsterEscape();
             Destroy(gameObject);
         }
     }

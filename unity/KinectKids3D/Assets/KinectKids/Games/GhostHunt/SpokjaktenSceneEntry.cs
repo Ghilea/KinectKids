@@ -5,7 +5,7 @@ namespace KinectKids3D.Platform
 {
     /// <summary>
     /// Scene entry for Spökjakten. Boots the new 2.5D wagon dark-ride
-    /// (<see cref="GhostRide25D"/>). The legacy full-3D <see cref="SpokjaktenGame"/>
+    /// (<see cref="GhostRide25D"/>). The legacy full-3D <see cref="HauntedRideGame"/>
     /// stays available behind <see cref="useLegacy3D"/> as a fallback until the
     /// 2.5D ride is fully art-complete.
     /// </summary>
@@ -18,10 +18,10 @@ namespace KinectKids3D.Platform
         {
             if (useLegacy3D)
             {
-                if (FindFirstObjectByType<SpokjaktenGame>() == null)
+                if (FindFirstObjectByType<HauntedRideGame>() == null)
                 {
                     GameObject game = new GameObject("Spökjakten");
-                    game.AddComponent<SpokjaktenGame>();
+                    game.AddComponent<HauntedRideGame>();
                 }
                 return;
             }

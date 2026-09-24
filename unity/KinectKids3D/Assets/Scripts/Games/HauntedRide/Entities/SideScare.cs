@@ -52,7 +52,7 @@ namespace KinectKids3D
             transform.localScale = Vector3.one * Mathf.Lerp(0.66f, 1.08f, amount);
             if (age >= 2.62f)
             {
-                if (shootable != null && shootable.Health > 0) SpokjaktenGame.ReportMonsterEscape();
+                if (shootable != null && shootable.Health > 0) HauntedRideGame.ReportMonsterEscape();
                 Destroy(gameObject);
             }
         }

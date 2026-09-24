@@ -157,7 +157,7 @@ namespace KinectKids3D
                     && Time.time - targetableSince >= 2.25f)
                 {
                     escaped = true;
-                    SpokjaktenGame.ReportMonsterEscape();
+                    HauntedRideGame.ReportMonsterEscape();
                 }
                 SetCreatureVisible(false);
                 enabled = false;
@@ -170,10 +170,10 @@ namespace KinectKids3D
             scareAudio.pitch = Random.Range(0.92f, 1.04f);
             if (revealSounds != null && revealSounds.Length > 0)
                 scareAudio.PlayOneShot(revealSounds[Random.Range(0, revealSounds.Length)],
-                    0.72f * SpokjaktenGame.CurrentEffectsVolume);
+                    0.72f * HauntedRideGame.CurrentEffectsVolume);
             if (creatureSounds != null && creatureSounds.Length > 0)
                 scareAudio.PlayOneShot(creatureSounds[Random.Range(0, creatureSounds.Length)],
-                    0.62f * SpokjaktenGame.CurrentEffectsVolume);
+                    0.62f * HauntedRideGame.CurrentEffectsVolume);
         }
 
         private void SetCreatureVisible(bool visible)

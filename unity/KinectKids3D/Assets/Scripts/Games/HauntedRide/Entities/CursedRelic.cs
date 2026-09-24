@@ -46,12 +46,7 @@ namespace KinectKids3D
                     Quaternion.Euler(i * 18f, i * 90f, i * 25f));
             }
 
-            Light light = gameObject.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = color;
-            light.intensity = 2.2f;
-            light.range = 4.2f;
-            light.shadows = LightShadows.None;
+            LightFactory.AddPoint(gameObject, color, 2.2f, 4.2f);
         }
 
         private void Add(PrimitiveType type, string partName, Vector3 position, Vector3 scale,

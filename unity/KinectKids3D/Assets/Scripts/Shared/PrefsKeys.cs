@@ -5,28 +5,29 @@ namespace KinectKids3D
     /// stavfel blir ett kompileringsfel istället för tyst dataförlust, och att
     /// alla sparade inställningar/rekord kan hittas på ett ställe.
     ///
-    /// Värdena är <c>const string</c>, så kompilatorn infogar exakt samma
-    /// strängliteraler som tidigare – runtime-beteendet är oförändrat.
+    /// OBS: Nyckelvärdena döptes om från "Spokjakten*"/"GreveGast*" till
+    /// "HauntedRide*"/"Chase*". Tidigare sparade highscores och inställningar
+    /// nollställs därför en gång (medvetet val vid namnbytet till engelska).
     /// </summary>
     public static class PrefsKeys
     {
-        // Spökjakten – inställningar
-        public const string EasyMode = "SpokjaktenEasyMode";
-        public const string Players = "SpokjaktenPlayers";
-        public const string MusicVolume = "SpokjaktenMusicVolume";
-        public const string MusicMuted = "SpokjaktenMusicMuted";
-        public const string EffectsVolume = "SpokjaktenEffectsVolume";
-        public const string VoiceVolume = "SpokjaktenVoiceVolume";
-        public const string Brightness = "SpokjaktenBrightness";
-        public const string Fullscreen = "SpokjaktenFullscreen";
+        // Haunted Ride – inställningar
+        public const string EasyMode = "HauntedRideEasyMode";
+        public const string Players = "HauntedRidePlayers";
+        public const string MusicVolume = "HauntedRideMusicVolume";
+        public const string MusicMuted = "HauntedRideMusicMuted";
+        public const string EffectsVolume = "HauntedRideEffectsVolume";
+        public const string VoiceVolume = "HauntedRideVoiceVolume";
+        public const string Brightness = "HauntedRideBrightness";
+        public const string Fullscreen = "HauntedRideFullscreen";
 
-        // Spökjakten – rekord
-        public const string HighScore = "SpokjaktenHighScore";
-        public const string BestCombo = "SpokjaktenBestCombo";
-        public const string BestRelics = "SpokjaktenBestRelics";
-        public const string BestMedals = "SpokjaktenBestMedals";
+        // Haunted Ride – rekord
+        public const string HighScore = "HauntedRideHighScore";
+        public const string BestCombo = "HauntedRideBestCombo";
+        public const string BestRelics = "HauntedRideBestRelics";
+        public const string BestMedals = "HauntedRideBestMedals";
 
-        // Greve Gast
-        public const string GreveGastPlayerView = "GreveGastPlayerView";
+        // Chase
+        public const string ChasePlayerView = "ChasePlayerView";
     }
 }

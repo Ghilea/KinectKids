@@ -33,13 +33,9 @@ namespace KinectKids3D
                 Material body = DarkRideWorld.MaterialOf(new Color(0.16f, 0.035f, 0.075f), 0.25f);
                 AddFallback(root.transform, body);
             }
-            Light light = root.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = kind == MiniBossKind.PossessedArmor
+            Color lightColor = kind == MiniBossKind.PossessedArmor
                 ? new Color(0.15f, 0.42f, 1f) : new Color(0.82f, 0.025f, 0.035f);
-            light.intensity = 2.4f;
-            light.range = 5.5f;
-            light.shadows = LightShadows.None;
+            LightFactory.AddPoint(root, lightColor, 2.4f, 5.5f);
             return GhostTarget.AttachExisting(root, 6, new Vector3(0f, 1.55f, 0f), 3.7f, 1.22f);
         }
 
