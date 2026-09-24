@@ -166,7 +166,16 @@ namespace KinectKids3D.Platform
         {
             if (registry == null || registry.games == null || selected >= registry.games.Length) return;
             GameDefinition game = registry.games[selected];
-            if (game != null && game.isAvailable) KinectKidsPlatformRoot.Instance.Scenes.LoadGame(game.sceneName);
+            if (game == null || !game.isAvailable) return;
+
+            KinectKidsPlatformRoot platform = KinectKidsPlatformRoot.Instance;
+            if (platform == null)
+            {
+                GameObject platformObject = new GameObject("KinectKids Platform");
+                platform = platformObject.AddComponent<KinectKidsPlatformRoot>();
+            }
+
+            platform.Scenes.LoadGame(game.sceneName);
         }
 
         private void OnGUI()

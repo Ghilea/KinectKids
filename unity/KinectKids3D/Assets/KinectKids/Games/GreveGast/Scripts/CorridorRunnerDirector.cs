@@ -51,9 +51,9 @@ namespace KinectKids.Games.GreveGast
 
         [Header("Motion")]
         [Tooltip("If true, decor recedes AWAY from the camera (0->1). If false, it " +
-                 "streams from the vanishing point toward the lens (1->0), which is " +
-                 "what lets obstacles approach the player to be dodged. Default false.")]
-        public bool environmentRecedes = false;
+             "streams from the vanishing point toward the lens (1->0). " +
+             "The environment should recede while hazards approach the player.")]
+        public bool environmentRecedes = true;
 
         // ---- Perspective / corridor -------------------------------------
         // A WIDER corridor than the default so the floor fills the bottom of the
@@ -71,7 +71,7 @@ namespace KinectKids.Games.GreveGast
         private const float CameraZ = -15f;
 
         private const int FloorRows = 10;   // overlapping stone strips -> solid floor
-        private const int WallModules = 6;  // drawn wall sections down each side
+        private const int WallModules = 14; // dense overlapping wall sections down each side
 
         // ---- Runtime ----------------------------------------------------
         private Camera cam;
@@ -399,13 +399,13 @@ namespace KinectKids.Games.GreveGast
         {
             float d = s.depth;
 
-            Sprite spr = palette.WallSprite(s.variant);
+            Sprite spr = palette.WallSprite(s.side, s.variant);
             if (spr == null) spr = PlaceholderArt.SolidBlock();
             if (s.sr.sprite != spr) s.sr.sprite = spr;
 
             // Wall height fills from the floor line up; sits just outside the
             // floor edge so the drawn walls line the corridor and converge.
-            float wallHeight = Mathf.Lerp(9.5f, 1.1f, PerspectiveModel.Curve(d));
+            float wallHeight = Mathf.Lerp(9.5f, 1.1f, PerspectiveModel.Curve(d)) * 1.2f;
             float sw = SafeW(s.sr.sprite);
             float sh = SafeH(s.sr.sprite);
             float scaleY = sh > 0.001f ? wallHeight / sh : 1f;
@@ -424,8 +424,9 @@ namespace KinectKids.Games.GreveGast
             x += s.side * nearBoost * nearBoost * 3.0f;
             y -= nearBoost * nearBoost * 1.6f;
 
-            // Mirror the right wall so the drawn pillar faces inward on both sides.
-            s.t.localScale = new Vector3(scaleX * -s.side, scaleY, 1f);
+            // Both walls must face into the corridor instead of exposing the
+            // outside edge of the authored wall art.
+            s.t.localScale = new Vector3(-scaleX, scaleY, 1f);
             s.t.localPosition = new Vector3(x, y, LayerSorting.BandZ(s.band));
 
             s.sr.color = WallColor(d);
@@ -722,10 +723,12 @@ namespace KinectKids.Games.GreveGast
                 return GreveChaseSprites.Environment(floorKeys[((variant % floorKeys.Length) + floorKeys.Length) % floorKeys.Length]);
             }
 
-            public Sprite WallSprite(int variant)
+            public Sprite WallSprite(float side, int variant)
             {
                 if (wallKeys == null || wallKeys.Length == 0) return null;
-                return GreveChaseSprites.Environment(wallKeys[((variant % wallKeys.Length) + wallKeys.Length) % wallKeys.Length]);
+                int wallIndex = side < 0f ? 0 : 1;
+                string key = wallKeys[Mathf.Min(wallIndex, wallKeys.Length - 1)];
+                return GreveChaseSprites.Environment(key);
             }
 
             public Sprite HazardSprite(HazardType type)
@@ -740,7 +743,7 @@ namespace KinectKids.Games.GreveGast
                 floorTint = new Color(1f, 0.98f, 0.92f),   // near-white: show the art's own colour
                 wallTint = new Color(1f, 0.98f, 0.92f),
                 floorKeys = new[] { "env_0", "env_1" },     // drawn stone floor strips
-                wallKeys = new[] { "env_2" },                // drawn corridor wall + pillar + torch
+                wallKeys = new[] { "env_2", "env_3" },      // authored left and right corridor walls
                 holeKey = "haz_0",
                 blockKey = "haz_4",
             };
@@ -751,7 +754,7 @@ namespace KinectKids.Games.GreveGast
                 floorTint = new Color(1f, 0.9f, 0.78f),     // warmer wash for the kitchen
                 wallTint = new Color(1f, 0.88f, 0.74f),
                 floorKeys = new[] { "env_1", "env_0" },
-                wallKeys = new[] { "env_2" },
+                wallKeys = new[] { "env_2", "env_3" },
                 holeKey = "haz_0",
                 blockKey = "haz_4",
             };
