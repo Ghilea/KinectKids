@@ -29,13 +29,16 @@ namespace KinectKids3D.Platform
     /// </summary>
     public sealed class GreveGastSceneEntry : MonoBehaviour
     {
-        [Tooltip("WIP: boot the modular section-based room streamer instead of the corridor. " +
-                 "Its perspective layout is not finished yet (assets clump center-screen), " +
-                 "so leave OFF until fixed. Default corridor = ChaseSceneDirector.")]
+        [Tooltip("Boot the OLD modular section-based room streamer (SectionStreamer). " +
+                 "Its perspective layout is unfinished (assets clump center-screen). " +
+                 "Superseded by the rebuilt CorridorRunnerDirector; leave OFF.")]
         public bool useRunner = false;
 
         [Tooltip("Use the old immediate-mode Style C+ slice instead of the 2.5D corridor chase.")]
         public bool useLegacySlice = false;
+
+        [Tooltip("Boot the old hard-coded ChaseSceneDirector corridor instead of the rebuilt runner.")]
+        public bool useLegacyChase = false;
 
         private void Awake()
         {
@@ -53,17 +56,30 @@ namespace KinectKids3D.Platform
             {
                 if (FindFirstObjectByType<RunnerSceneDirector>() == null)
                 {
-                    GameObject game = new GameObject("Greve Gast - 2.5D Runner (WIP)");
+                    GameObject game = new GameObject("Greve Gast - 2.5D Runner (legacy WIP)");
                     game.AddComponent<RunnerSceneDirector>();
                 }
                 return;
             }
 
-            // Default: the working perspective corridor slice (follow.md goal #17).
-            if (FindFirstObjectByType<ChaseSceneDirector>() == null)
+            if (useLegacyChase)
             {
-                GameObject game = new GameObject("Greve Gast - 2.5D Corridor Chase");
-                game.AddComponent<ChaseSceneDirector>();
+                if (FindFirstObjectByType<ChaseSceneDirector>() == null)
+                {
+                    GameObject game = new GameObject("Greve Gast - 2.5D Corridor Chase (legacy)");
+                    game.AddComponent<ChaseSceneDirector>();
+                }
+                return;
+            }
+
+            // Default: the rebuilt 2.5D endless-runner corridor (follow.md).
+            // The world streams past a chest-height camera down a converging
+            // corridor; the player runs toward the camera in the center lane and
+            // Greve Gast chases from behind.
+            if (FindFirstObjectByType<CorridorRunnerDirector>() == null)
+            {
+                GameObject game = new GameObject("Greve Gast - 2.5D Corridor Runner");
+                game.AddComponent<CorridorRunnerDirector>();
             }
         }
     }
