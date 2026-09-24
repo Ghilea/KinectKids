@@ -47,10 +47,27 @@ namespace KinectKids.Games.GreveGast
         public float runDrainPerSecond = 0.05f;
 
         [Header("Lanes")]
-        public float laneNearOffset = 2.6f;
+        public float laneNearOffset = 3.6f;
+
+        [Header("Motion")]
+        [Tooltip("If true, decor recedes AWAY from the camera (0->1). If false, it " +
+                 "streams from the vanishing point toward the lens (1->0), which is " +
+                 "what lets obstacles approach the player to be dodged. Default false.")]
+        public bool environmentRecedes = false;
 
         // ---- Perspective / corridor -------------------------------------
-        private PerspectiveModel model = PerspectiveModel.Default;
+        // A WIDER corridor than the default so the floor fills the bottom of the
+        // screen (follow.md: "MYCKET BRETT längst ner") and three lanes read
+        // clearly near the camera. Vanishing point stays in the upper third.
+        private PerspectiveModel model = new PerspectiveModel
+        {
+            floorLine = -4.9f,
+            horizon = 1.7f,
+            nearHalfWidth = 6.6f,   // near edge close to the screen sides (±~8.9)
+            farHalfWidth = 0.7f,
+            nearScale = 1.0f,
+            farScale = 0.14f,
+        };
         private const float CameraZ = -15f;
 
         private const int FloorRows = 10;   // overlapping stone strips -> solid floor
@@ -308,11 +325,25 @@ namespace KinectKids.Games.GreveGast
 
         private void AdvanceList(List<Segment> list, float step)
         {
+            // Direction of the environment stream.
+            //
+            // The player runs TOWARD the camera (toward the bottom of the frame).
+            // Relative to the player, the world he has passed must fall BEHIND
+            // him — i.e. environment should RECEDE away from the camera: born
+            // large/near at the bottom, then shrink and rise toward the vanishing
+            // point, then recycle. If the world instead came from the vanishing
+            // point toward the lens, it would look like the player is running
+            // BACKWARD (the world overtaking him toward the camera).
+            //
+            // depth: 1 = far (vanishing point, small), 0 = near (camera, large).
+            // Receding away therefore means depth INCREASES (0 -> 1).
+            float dir = environmentRecedes ? +1f : -1f;
             for (int i = 0; i < list.Count; i++)
             {
                 Segment s = list[i];
-                s.depth -= step;
+                s.depth += step * dir;
                 while (s.depth < 0f) s.depth += 1f;
+                while (s.depth >= 1f) s.depth -= 1f;
             }
         }
 
@@ -334,13 +365,22 @@ namespace KinectKids.Games.GreveGast
             if (spr == null) spr = PlaceholderArt.SolidBlock();
             if (s.sr.sprite != spr) s.sr.sprite = spr;
 
-            // Width = full corridor width at this depth. Height is generous and
-            // rows overlap so the floor reads as ONE continuous stone surface,
-            // not separated rungs.
+            // Width spans the full corridor at this depth, plus a margin so the
+            // drawn stone reaches all the way out to the wall bases (no gap).
             float halfW = model.HalfWidth(d);
+            float w = halfW * 2.35f;
+            float rowH = Mathf.Lerp(2.8f, 0.25f, PerspectiveModel.Curve(d)); // tall + overlapping
+
+            // NEAR-CAMERA SWEEP: the smoothstep perspective compresses motion at
+            // the camera, which makes the ground look slow / like it's floating
+            // toward a fixed lens. To sell RUNNING FORWARD, the closest rows must
+            // rush down and OFF the bottom of the screen. We push low-depth rows
+            // further down (below the floor line) so the nearest stone sweeps
+            // past the camera instead of stalling at the bottom edge.
             float y = model.Y(d);
-            float w = halfW * 2f;
-            float rowH = Mathf.Lerp(2.6f, 0.25f, PerspectiveModel.Curve(d)); // tall + overlapping
+            float nearBoost = Mathf.Clamp01((0.28f - d) / 0.28f); // 0 above d=0.28, ->1 at d=0
+            y -= nearBoost * nearBoost * 3.2f;                    // accelerate off the bottom
+            w *= 1f + nearBoost * 0.6f;                           // and grow as it passes
 
             float sw = SafeW(s.sr.sprite);
             float sh = SafeH(s.sr.sprite);
@@ -372,10 +412,17 @@ namespace KinectKids.Games.GreveGast
             float scaleX = scaleY; // keep the drawn wall's aspect ratio
             float wallW = sw * scaleX;
 
-            // Anchor the wall so its inner edge meets the floor edge.
+            // Anchor the wall so its inner edge sits AT the floor edge (a slight
+            // inward overlap) so walls rise straight off the floor with no gap.
             float floorEdge = model.HalfWidth(d);
-            float x = s.side * (floorEdge + wallW * 0.5f - 0.2f) + WeaveX(d);
-            float y = model.Y(d) + wallHeight * 0.5f - 0.8f;
+            float x = s.side * (floorEdge + wallW * 0.5f - 0.9f) + WeaveX(d);
+            float y = model.Y(d) + wallHeight * 0.5f - 1.4f;
+
+            // NEAR-CAMERA SWEEP: closest wall sections rush OUTWARD and down past
+            // the lens, matching the floor, so the corridor visibly streams by.
+            float nearBoost = Mathf.Clamp01((0.28f - d) / 0.28f);
+            x += s.side * nearBoost * nearBoost * 3.0f;
+            y -= nearBoost * nearBoost * 1.6f;
 
             // Mirror the right wall so the drawn pillar faces inward on both sides.
             s.t.localScale = new Vector3(scaleX * -s.side, scaleY, 1f);
