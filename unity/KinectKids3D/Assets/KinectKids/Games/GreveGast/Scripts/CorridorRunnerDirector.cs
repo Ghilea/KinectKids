@@ -18,18 +18,19 @@ namespace KinectKids.Games.GreveGast
 
         [Header("3D corridor")]
         [Range(4, 6)] public int segmentCount = 6;
-        public float segmentLength = 12f;
-        public float corridorWidth = 12f;
-        public float corridorHeight = 7f;
+        public float segmentLength = 16f;
+        public float corridorWidth = 22f;
+        public float corridorHeight = 18f;
         public float runningSpeed = 14f;
         public float idleSpeed = 8f;
 
         [Header("Perspective camera")]
-        [Range(40f, 80f)] public float fieldOfView = 62f;
-        public Vector3 cameraPosition = new Vector3(0f, 2.8f, -8f);
+        [Range(40f, 80f)] public float fieldOfView = 70f;
+        public Vector3 cameraPosition = new Vector3(0f, 4.2f, -10f);
 
         [Header("Actors and lanes")]
-        public float laneSpacing = 3.1f;
+        public float laneSpacing = 4.2f;
+        public float laneChangeSharpness = 6f;
         public float playerZ = 2.5f;
         public float playerStartZ = 5.5f;
         public float playerHeight = 3.2f;
@@ -70,6 +71,8 @@ namespace KinectKids.Games.GreveGast
         private float hazardTimer = 2.2f;
         private int hazardCounter;
         private float playerRunCycle;
+        private int previousSideDirection;
+        private int laneMoveDirection;
 
         public DodgeAction CurrentDodge => currentDodge;
         public float LateralPosition => Mathf.Clamp(lateral, -1f, 1f);
@@ -143,19 +146,19 @@ namespace KinectKids.Games.GreveGast
                 CreateTiledMaterial(new Color(0.78f, 0.62f, 0.58f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.48f, 0.36f, 0.40f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.86f, 0.68f, 0.34f), wallTexture, accentTiling, 0.18f),
-                new Color(1f, 0.72f, 0.35f), "env_12", "env_11");
+                new Color(1f, 0.72f, 0.35f), "env_8", "env_11");
             themeStyles[EnvironmentTheme.Kitchen] = new ThemeStyle(EnvironmentTheme.Kitchen,
                 CreateTiledMaterial(new Color(0.82f, 0.68f, 0.54f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.90f, 0.78f, 0.62f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.56f, 0.46f, 0.38f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.66f, 0.48f, 0.30f), wallTexture, accentTiling),
-                new Color(1f, 0.64f, 0.30f), "haz_4", "env_10");
+                new Color(1f, 0.64f, 0.30f), "env_10", "env_8");
             themeStyles[EnvironmentTheme.Passage] = new ThemeStyle(EnvironmentTheme.Passage,
                 CreateTiledMaterial(new Color(0.60f, 0.72f, 0.74f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.54f, 0.68f, 0.72f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.34f, 0.46f, 0.50f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.58f, 0.74f, 0.76f), wallTexture, accentTiling),
-                new Color(0.40f, 0.72f, 0.78f), "env_7", "env_8");
+                new Color(0.40f, 0.72f, 0.78f), "env_7", "env_10");
         }
 
         private static Material CreateTiledMaterial(Color tint, Texture2D texture, Vector2 tiling, float metallic = 0f)
@@ -173,8 +176,8 @@ namespace KinectKids.Games.GreveGast
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = worldCamera.backgroundColor;
-            RenderSettings.fogStartDistance = 45f;
-            RenderSettings.fogEndDistance = 90f;
+            RenderSettings.fogStartDistance = 65f;
+            RenderSettings.fogEndDistance = 115f;
 
             GameObject lightGo = new GameObject("Corridor Key Light");
             lightGo.transform.SetParent(transform, false);
@@ -204,7 +207,7 @@ namespace KinectKids.Games.GreveGast
                 go.transform.localPosition = new Vector3(0f, 0f, firstCenterZ + i * segmentLength);
                 EnvironmentSegment3D segment = go.AddComponent<EnvironmentSegment3D>();
                 segment.Build(segmentLength, corridorWidth, corridorHeight, i);
-                segment.ApplyTheme(themeStyles[EnvironmentTheme.CastleCorridor], worldCamera);
+                segment.ApplyTheme(themeStyles[EnvironmentTheme.CastleCorridor]);
                 segments.Add(segment);
             }
         }
@@ -274,14 +277,26 @@ namespace KinectKids.Games.GreveGast
                 case GreveGastAction.Left: currentDodge = DodgeAction.Left; break;
                 case GreveGastAction.Right: currentDodge = DodgeAction.Right; break;
             }
-            if (body.Current == GreveGastAction.Left) lane = Lane.Left;
-            else if (body.Current == GreveGastAction.Right) lane = Lane.Right;
-            else if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow)) lane = Lane.Center;
+            int sideDirection = 0;
+            if (body.Current == GreveGastAction.Left) sideDirection = -1;
+            else if (body.Current == GreveGastAction.Right) sideDirection = 1;
+
+            // One fresh gesture/key press means exactly ONE lane. Moving from
+            // Left to Right therefore requires Left -> Center -> Right instead
+            // of teleporting across the middle lane. Holding a gesture is latched
+            // until it returns to neutral, so it cannot repeat every frame.
+            if (sideDirection != 0 && sideDirection != previousSideDirection)
+            {
+                int oldLane = (int)lane;
+                int nextLane = Mathf.Clamp((int)lane + sideDirection, (int)Lane.Left, (int)Lane.Right);
+                lane = (Lane)nextLane;
+                if (nextLane != oldLane) laneMoveDirection = nextLane > oldLane ? 1 : -1;
+            }
+            previousSideDirection = sideDirection;
 
             float target = LaneX(lane);
-            if (Mathf.Abs(body.HorizontalDelta) > 0.05f)
-                target = Mathf.Clamp(body.HorizontalDelta * laneSpacing * 2f, -laneSpacing, laneSpacing);
-            lateral = Mathf.Lerp(lateral, target / laneSpacing, 1f - Mathf.Exp(-10f * Time.deltaTime));
+            lateral = Mathf.Lerp(lateral, target / laneSpacing,
+                1f - Mathf.Exp(-laneChangeSharpness * Time.deltaTime));
         }
 
         private void DriveWorld(float dt)
@@ -318,7 +333,7 @@ namespace KinectKids.Games.GreveGast
                 Vector3 p = recycled.transform.localPosition;
                 p.z = nearestZ - segmentLength;
                 recycled.transform.localPosition = p;
-                recycled.ApplyTheme(themeStyles[requestedTheme], worldCamera);
+                recycled.ApplyTheme(themeStyles[requestedTheme]);
             }
         }
 
@@ -337,20 +352,32 @@ namespace KinectKids.Games.GreveGast
             if (player != null)
             {
                 string pose = "run_near";
-                switch (currentDodge)
-                {
-                    case DodgeAction.Jump: pose = "jump"; break;
-                    case DodgeAction.Duck: pose = "duck"; break;
-                    case DodgeAction.Left: pose = "sidestep_left"; break;
-                    case DodgeAction.Right: pose = "sidestep_right"; break;
-                }
+                if (currentDodge == DodgeAction.Jump) pose = "jump";
+                else if (currentDodge == DodgeAction.Duck) pose = "duck";
+                else if (laneMoveDirection < 0) pose = "sidestep_left";
+                else if (laneMoveDirection > 0) pose = "sidestep_right";
                 Sprite sprite = ResolvePlayer(pose);
                 if (sprite != null && player.sprite != sprite) player.sprite = sprite;
-                playerRunCycle += dt * 9f;
+                playerRunCycle += dt * 7.5f;
+                bool regularRun = currentDodge != DodgeAction.Jump && currentDodge != DodgeAction.Duck && laneMoveDirection == 0;
+                float stride = Mathf.Sin(playerRunCycle * Mathf.PI);
+                // With only one front-facing run drawing, alternating flipX makes
+                // the leading arm/leg swap every step. Bob and a slight opposing
+                // torso sway make the feet read as an actual running cycle.
+                player.flipX = regularRun && (Mathf.FloorToInt(playerRunCycle) & 1) != 0;
+                player.transform.localRotation = regularRun
+                    ? Quaternion.Euler(0f, 0f, stride * 4f)
+                    : Quaternion.identity;
                 Vector3 p = player.transform.localPosition;
                 p.x = Mathf.Lerp(p.x, lateral * laneSpacing, 1f - Mathf.Exp(-12f * dt));
+                float finalLaneX = LaneX(lane);
+                if (Mathf.Abs(finalLaneX - p.x) < 0.08f)
+                {
+                    p.x = finalLaneX;
+                    laneMoveDirection = 0;
+                }
                 // Chase sprites use a bottom-centre pivot, so y=0 plants the feet on the floor.
-                p.y = Mathf.Abs(Mathf.Sin(playerRunCycle)) * 0.10f;
+                p.y = regularRun ? Mathf.Abs(stride) * 0.13f : 0f;
                 // The player is the only non-chaser object allowed to advance
                 // toward the camera. It settles at a stable gameplay depth.
                 p.z = Mathf.MoveTowards(p.z, playerZ, 1.2f * dt);
@@ -374,6 +401,20 @@ namespace KinectKids.Games.GreveGast
             {
                 RunHazard hazard = hazards[i];
                 hazard.root.localPosition += Vector3.forward * (worldSpeed * dt);
+                if (hazard.warning != null)
+                {
+                    hazard.warningTime += dt;
+                    float pulse = 0.82f + Mathf.Abs(Mathf.Sin(hazard.warningTime * 7f)) * 0.18f;
+                    hazard.warning.transform.localScale = hazard.warningBaseScale * pulse;
+                    Color warningColor = hazard.warning.color;
+                    warningColor.a = 0.62f + Mathf.Abs(Mathf.Sin(hazard.warningTime * 7f)) * 0.38f;
+                    hazard.warning.color = warningColor;
+
+                    // The marker warns first, then disappears once the physical
+                    // obstacle itself has travelled clearly into the corridor.
+                    if (hazard.root.localPosition.z > cameraPosition.z + 6f)
+                        hazard.warning.gameObject.SetActive(false);
+                }
                 if (!hazard.resolved && hazard.root.localPosition.z >= player.transform.localPosition.z - 0.35f)
                 {
                     hazard.resolved = true;
@@ -382,6 +423,7 @@ namespace KinectKids.Games.GreveGast
                 if (hazard.root.localPosition.z > 82f)
                 {
                     if (hazard.root != null) Destroy(hazard.root.gameObject);
+                    if (hazard.warning != null) Destroy(hazard.warning.gameObject);
                     hazards.RemoveAt(i);
                 }
             }
@@ -401,6 +443,7 @@ namespace KinectKids.Games.GreveGast
             // the camera and move away from it on the same +Z axis as the track.
             root.transform.localPosition = new Vector3(LaneX(obstacleLane), 0f, cameraPosition.z - 1.5f);
             RunHazard hazard = new RunHazard { root = root.transform, lane = obstacleLane, jump = jump };
+            BuildHazardWarning(hazard);
             if (jump)
             {
                 GameObject obstacle = CreatePrimitive("Low obstacle", PrimitiveType.Cube, root.transform,
@@ -415,6 +458,23 @@ namespace KinectKids.Games.GreveGast
             hazards.Add(hazard);
         }
 
+        private void BuildHazardWarning(RunHazard hazard)
+        {
+            Sprite warningSprite = GreveChaseSprites.Hazard(hazard.jump ? "haz_20" : "haz_10");
+            if (warningSprite == null) return;
+
+            GameObject go = new GameObject(hazard.jump ? "Jump warning" : "Lane warning");
+            go.transform.SetParent(hazardRoot, false);
+            go.transform.localPosition = new Vector3(LaneX(hazard.lane), 0.18f, playerZ + 3.2f);
+            go.transform.localRotation = worldCamera.transform.localRotation;
+            SpriteRenderer warning = go.AddComponent<SpriteRenderer>();
+            warning.sprite = warningSprite;
+            warning.sortingOrder = 40;
+            SizeSpriteToHeight(warning, 1.35f);
+            hazard.warning = warning;
+            hazard.warningBaseScale = go.transform.localScale;
+        }
+
         private bool Avoided(RunHazard hazard)
         {
             bool sameLane = Mathf.Abs(lateral * laneSpacing - LaneX(hazard.lane)) < laneSpacing * 0.45f;
@@ -424,6 +484,7 @@ namespace KinectKids.Games.GreveGast
 
         private void ResolveHazard(RunHazard hazard, bool avoided)
         {
+            if (hazard.warning != null) hazard.warning.gameObject.SetActive(false);
             if (avoided) { chase = Mathf.Clamp01(chase - 0.05f); return; }
             chase = Mathf.Clamp01(chase + catchOnHit);
             Renderer[] renderers = hazard.root.GetComponentsInChildren<Renderer>();
@@ -516,7 +577,16 @@ namespace KinectKids.Games.GreveGast
             body?.Dispose();
         }
 
-        private sealed class RunHazard { public Transform root; public Lane lane; public bool jump; public bool resolved; }
+        private sealed class RunHazard
+        {
+            public Transform root;
+            public Lane lane;
+            public bool jump;
+            public bool resolved;
+            public SpriteRenderer warning;
+            public Vector3 warningBaseScale;
+            public float warningTime;
+        }
 
         internal sealed class ThemeStyle
         {
@@ -543,21 +613,31 @@ namespace KinectKids.Games.GreveGast
         private readonly List<SpriteRenderer> decorations = new List<SpriteRenderer>();
         private Light practicalLight;
         private int variant;
+        private float halfWidth;
         public CorridorRunnerDirector.EnvironmentTheme Theme { get; private set; }
 
         public void Build(float length, float width, float height, int segmentVariant)
         {
             variant = segmentVariant;
+            halfWidth = width * 0.5f;
             Material placeholder = MaterialFactory.Solid(Color.gray);
             floorRenderers.Add(AddBox("Floor", new Vector3(0f, -0.12f, 0f), new Vector3(width, 0.24f, length + 0.08f), placeholder));
             wallRenderers.Add(AddBox("Left wall", new Vector3(-width * 0.5f, height * 0.5f, 0f), new Vector3(0.24f, height, length + 0.08f), placeholder));
             wallRenderers.Add(AddBox("Right wall", new Vector3(width * 0.5f, height * 0.5f, 0f), new Vector3(0.24f, height, length + 0.08f), placeholder));
             ceilingRenderers.Add(AddBox("Ceiling", new Vector3(0f, height + 0.12f, 0f), new Vector3(width, 0.24f, length + 0.08f), placeholder));
 
-            float boundaryZ = -length * 0.5f + 0.18f;
-            accentRenderers.Add(AddBox("Arch left", new Vector3(-width * 0.5f + 0.35f, height * 0.5f, boundaryZ), new Vector3(0.48f, height, 0.52f), placeholder));
-            accentRenderers.Add(AddBox("Arch right", new Vector3(width * 0.5f - 0.35f, height * 0.5f, boundaryZ), new Vector3(0.48f, height, 0.52f), placeholder));
-            accentRenderers.Add(AddBox("Arch crown", new Vector3(0f, height - 0.28f, boundaryZ), new Vector3(width, 0.56f, 0.52f), placeholder));
+            float boundaryZ = -length * 0.5f + 0.24f;
+            float pillarX = halfWidth - 0.55f;
+            accentRenderers.Add(AddBox("Monumental arch left pillar", new Vector3(-pillarX, height * 0.5f, boundaryZ),
+                new Vector3(0.82f, height, 0.72f), placeholder));
+            accentRenderers.Add(AddBox("Monumental arch right pillar", new Vector3(pillarX, height * 0.5f, boundaryZ),
+                new Vector3(0.82f, height, 0.72f), placeholder));
+            accentRenderers.Add(AddBox("Arch left shoulder", new Vector3(-halfWidth + 2.0f, height - 0.95f, boundaryZ),
+                new Vector3(3.2f, 1.9f, 0.72f), placeholder));
+            accentRenderers.Add(AddBox("Arch right shoulder", new Vector3(halfWidth - 2.0f, height - 0.95f, boundaryZ),
+                new Vector3(3.2f, 1.9f, 0.72f), placeholder));
+            accentRenderers.Add(AddBox("Arch crown", new Vector3(0f, height - 0.28f, boundaryZ),
+                new Vector3(width, 0.62f, 0.72f), placeholder));
 
             GameObject lightGo = new GameObject("Theme practical light");
             lightGo.transform.SetParent(transform, false);
@@ -567,7 +647,7 @@ namespace KinectKids.Games.GreveGast
             practicalLight.shadows = LightShadows.None;
         }
 
-        public void ApplyTheme(CorridorRunnerDirector.ThemeStyle style, Camera camera)
+        public void ApplyTheme(CorridorRunnerDirector.ThemeStyle style)
         {
             Theme = style.theme;
             SetMaterials(floorRenderers, style.floorMaterial); SetMaterials(wallRenderers, style.wallMaterial);
@@ -575,8 +655,10 @@ namespace KinectKids.Games.GreveGast
             practicalLight.color = style.lightColor;
             ClearDecorations();
             float side = variant % 2 == 0 ? -1f : 1f;
-            AddDecoration(style.decorationA, new Vector3(side * 4.7f, 3.0f, -2.2f), 2.0f, camera);
-            AddDecoration(style.decorationB, new Vector3(-side * 4.7f, 3.3f, 2.8f), 2.2f, camera);
+            AddWallDecoration(style.decorationA, side, -3.2f, 4.2f, 2.7f);
+            AddWallDecoration(style.decorationB, -side, 3.8f, 5.4f, 3.1f);
+            AddFloorFog(variant % 2 == 0 ? "env_16" : "env_17", variant % 2 == 0 ? -1.5f : 2.0f);
+            AddThemeProp(style.theme, side);
         }
 
         private Renderer AddBox(string objectName, Vector3 position, Vector3 scale, Material material)
@@ -584,15 +666,75 @@ namespace KinectKids.Games.GreveGast
             return CorridorRunnerDirector.CreatePrimitive(objectName, PrimitiveType.Cube, transform, position, scale, material).GetComponent<Renderer>();
         }
 
-        private void AddDecoration(string spriteKey, Vector3 position, float height, Camera camera)
+        private void AddWallDecoration(string spriteKey, float side, float z, float y, float height)
         {
             Sprite sprite = spriteKey.StartsWith("haz_") ? GreveChaseSprites.Hazard(spriteKey) : GreveChaseSprites.Environment(spriteKey);
             if (sprite == null) return;
-            GameObject go = new GameObject("Billboard " + spriteKey);
-            go.transform.SetParent(transform, false); go.transform.localPosition = position; go.transform.rotation = camera.transform.rotation;
+            GameObject go = new GameObject("Wall plane " + spriteKey);
+            go.transform.SetParent(transform, false);
+            // The sprite plane lies in the wall's YZ plane instead of turning to
+            // face the camera. A small inset prevents z-fighting with the wall.
+            go.transform.localPosition = new Vector3(side * (halfWidth - 0.16f), y, z);
+            go.transform.localRotation = Quaternion.Euler(0f, side < 0f ? 90f : -90f, 0f);
             SpriteRenderer renderer = go.AddComponent<SpriteRenderer>(); renderer.sprite = sprite; renderer.sortingOrder = 10;
             float spriteHeight = sprite.bounds.size.y;
             go.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? height / spriteHeight : 1f);
+            decorations.Add(renderer);
+        }
+
+        private void AddFloorFog(string spriteKey, float z)
+        {
+            Sprite sprite = GreveChaseSprites.Environment(spriteKey);
+            if (sprite == null) return;
+            GameObject go = new GameObject("Low floor fog " + spriteKey);
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(0f, 0.06f, z);
+            SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.sortingOrder = 6;
+            float width = sprite.bounds.size.x;
+            float scale = width > 0.001f ? (halfWidth * 1.75f) / width : 1f;
+            go.transform.localScale = Vector3.one * scale;
+            renderer.color = new Color(0.72f, 0.78f, 1f, variant % 2 == 0 ? 0.28f : 0.38f);
+            decorations.Add(renderer);
+        }
+
+        private void AddThemeProp(CorridorRunnerDirector.EnvironmentTheme theme, float side)
+        {
+            string key;
+            float height;
+            switch (theme)
+            {
+                case CorridorRunnerDirector.EnvironmentTheme.GreatHall:
+                    key = variant % 2 == 0 ? "env_12" : "env_13";
+                    height = variant % 2 == 0 ? 4.8f : 5.8f;
+                    break;
+                case CorridorRunnerDirector.EnvironmentTheme.Kitchen:
+                    key = variant % 2 == 0 ? "env_14" : "env_15";
+                    height = variant % 2 == 0 ? 2.2f : 2.0f;
+                    break;
+                case CorridorRunnerDirector.EnvironmentTheme.Passage:
+                    key = variant % 2 == 0 ? "env_9" : "env_13";
+                    height = variant % 2 == 0 ? 1.8f : 5.2f;
+                    break;
+                default:
+                    key = variant % 3 == 0 ? "env_12" : "env_13";
+                    height = variant % 3 == 0 ? 4.5f : 5.5f;
+                    break;
+            }
+
+            Sprite sprite = GreveChaseSprites.Environment(key);
+            if (sprite == null) return;
+            GameObject go = new GameObject("Floor prop " + key);
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(side * (halfWidth - 1.15f), 0f, 0.4f);
+            go.transform.localRotation = Quaternion.Euler(0f, side < 0f ? 8f : -8f, 0f);
+            SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.sortingOrder = 8;
+            float spriteHeight = sprite.bounds.size.y;
+            float scale = spriteHeight > 0.001f ? height / spriteHeight : 1f;
+            go.transform.localScale = Vector3.one * scale;
             decorations.Add(renderer);
         }
 
