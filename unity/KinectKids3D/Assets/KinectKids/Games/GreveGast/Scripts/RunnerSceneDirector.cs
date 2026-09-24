@@ -3,6 +3,10 @@ using KinectKids.Scene25D;
 using KinectKids.Scene25D.Sections;
 using KinectKids3D;
 using KinectKids3D.Platform;
+// Disambiguate: both KinectKids3D (RideHazard.cs) and KinectKids.Scene25D
+// declare a HazardKind. This scene uses the Scene25D one (HazardFactory /
+// SectionDefinition), so alias it explicitly.
+using HazardKind = KinectKids.Scene25D.HazardKind;
 
 namespace KinectKids.Games.GreveGast
 {
