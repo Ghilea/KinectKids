@@ -112,9 +112,9 @@ float floorVolumeMask(float3 p)
     float xEdge = saturate((0.5 - abs(p.x)) / max(0.03, _EdgeSoftness));
     float zEdge = saturate((0.5 - abs(p.z)) / max(0.03, _EdgeSoftness));
 
-    float height = saturate((0.10 - p.y) / 0.55);
+    float height = saturate((0.16 - p.y) / 0.82);
     height = smoothstep(0.0, 1.0, height);
-    height = pow(height, 3.6);
+    height = pow(height, 2.2);
 
     return smoothstep(0.0, 1.0, xEdge) *
            smoothstep(0.0, 1.0, zEdge) *
@@ -292,13 +292,13 @@ else
         densityVariation;
 
     float nearFade =
-        smoothstep(
-            4.0,
-            8.0,
-            sampleViewDepth
-        );
+    smoothstep(
+        1.8,
+        4.8,
+        sampleViewDepth
+    );
 
-    density *= nearFade;
+density *= nearFade;
 
     float depthDensity =
         lerp(

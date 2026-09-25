@@ -302,24 +302,24 @@ namespace KinectKids.Games.GreveGast
             if (volumeShader == null) return;
 
             BuildFogVolume("Grevens raymarchade svarta 3D-mörker", darknessRoot,
-  new Vector3(0f, corridorHeight * 0.50f, 3.1f),
-new Vector3(corridorWidth * 0.78f, corridorHeight * 0.82f, 6.0f),
-    new Color(0f, 0f, 0f, 1f),
-    7.5f,
-    0.10f,
-    0f,
-    3010,
-    volumeShader);
+        new Vector3(0f, corridorHeight * 0.52f, 4.0f),
+        new Vector3(corridorWidth * 1.08f, corridorHeight * 1.02f, 11.5f),
+        new Color(0f, 0f, 0f, 1f),
+        8.6f,
+        0.14f,
+        0f,
+        3010,
+        volumeShader);
 
             BuildFogVolume("Raymarchad blåvit 3D-golvdimma", transform,
-         new Vector3(0f, 0.62f, 9.0f),
-            new Vector3(corridorWidth * 0.90f, 1.35f, 26f),
-         new Color(0.34f, 0.54f, 0.92f, 0.82f),
-         1.95f,
-         0.18f,
-         1f,
-         2989,
-         volumeShader);
+       new Vector3(0f, 0.52f, 7.5f),
+       new Vector3(corridorWidth * 1.00f, 2.35f, 34f),
+       new Color(0.45f, 0.62f, 0.98f, 0.95f),
+       3.4f,
+       0.26f,
+       1f,
+       2989,
+       volumeShader);
         }
 
         private static void BuildFogVolume(string volumeName, Transform parent,
@@ -466,11 +466,11 @@ new Vector3(corridorWidth * 0.78f, corridorHeight * 0.82f, 6.0f),
             emission.rateOverTime = 17f;
             ParticleSystem.ShapeModule shape = floorFog.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(corridorWidth * 0.92f, 0.16f, 20f);
+            shape.scale = new Vector3(corridorWidth * 0.98f, 0.42f, 28f);
             ParticleSystem.VelocityOverLifetimeModule velocity = floorFog.velocityOverLifetime;
             velocity.enabled = true;
             velocity.x = new ParticleSystem.MinMaxCurve(-0.16f, 0.16f);
-            velocity.y = new ParticleSystem.MinMaxCurve(0.0f, 0.035f);
+            velocity.y = new ParticleSystem.MinMaxCurve(0.02f, 0.08f);
             velocity.z = new ParticleSystem.MinMaxCurve(-0.04f, 0.02f);
             ParticleSystem.NoiseModule noise = floorFog.noise;
             noise.enabled = true;
@@ -604,7 +604,7 @@ new Vector3(corridorWidth * 0.78f, corridorHeight * 0.82f, 6.0f),
             GameObject wispObject = Instantiate(prefab, transform, false);
             wispObject.name = "GPU Fog Particles - stigande blåvita golvslöjor";
             wispObject.SetActive(false);
-            wispObject.transform.localPosition = new Vector3(0f, 0.10f, 6f);
+            wispObject.transform.localPosition = new Vector3(0f, 0.18f, 5.5f);
             wispObject.transform.localRotation = Quaternion.identity;
             wispObject.transform.localScale = Vector3.one;
 
@@ -622,18 +622,18 @@ new Vector3(corridorWidth * 0.78f, corridorHeight * 0.82f, 6.0f),
             main.prewarm = true;
             main.simulationSpace = ParticleSystemSimulationSpace.Local;
             main.scalingMode = ParticleSystemScalingMode.Shape;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(7f, 12f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.015f, 0.08f);
-            main.startSize = new ParticleSystem.MinMaxCurve(1.6f, 3.2f);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(8f, 13f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.01f, 0.06f);
+            main.startSize = new ParticleSystem.MinMaxCurve(2.8f, 5.2f);
             main.startColor = new ParticleSystem.MinMaxGradient(
-                new Color(0.46f, 0.66f, 1f, 0.13f),
-                new Color(0.86f, 0.95f, 1f, 0.30f));
-            main.maxParticles = 150;
+                new Color(0.56f, 0.74f, 1f, 0.22f),
+                new Color(0.92f, 0.98f, 1f, 0.42f));
+            main.maxParticles = 220;
             ParticleSystem.ColorOverLifetimeModule lifetimeColor = wisps.colorOverLifetime;
             lifetimeColor.enabled = false;
 
             ParticleSystem.EmissionModule emission = wisps.emission;
-            emission.rateOverTime = 11f;
+            emission.rateOverTime = 22f;
             ParticleSystem.ShapeModule shape = wisps.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
             // Starts just in front of the camera and continues through the
@@ -725,8 +725,8 @@ new Vector3(corridorWidth * 0.78f, corridorHeight * 0.82f, 6.0f),
             core.Play();
 
             BuildBlackSurfaceFog(prefab, "svart rök längs golvet",
-                new Vector3(0f, 0.16f, 0.4f),
-                new Vector3(corridorWidth * 0.78f, 0.18f, 7f), true);
+    new Vector3(0f, 0.14f, 1.8f),
+    new Vector3(corridorWidth * 0.96f, 0.28f, 10.5f), true);
             BuildBlackSurfaceFog(prefab, "svart rök längs taket",
                 new Vector3(0f, corridorHeight - 0.55f, 1.05f),
                 new Vector3(corridorWidth * 0.88f, 0.40f, 2.8f));
@@ -762,18 +762,18 @@ new Vector3(corridorWidth * 0.78f, corridorHeight * 0.82f, 6.0f),
             main.prewarm = true;
             main.simulationSpace = ParticleSystemSimulationSpace.Local;
             main.scalingMode = ParticleSystemScalingMode.Shape;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(6f, 10f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.01f, 0.09f);
-            main.startSize = new ParticleSystem.MinMaxCurve(3.8f, 6.8f);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(7f, 11f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.01f, 0.06f);
+            main.startSize = new ParticleSystem.MinMaxCurve(4.6f, 8.0f);
             main.startColor = new ParticleSystem.MinMaxGradient(
                 new Color(0f, 0f, 0f, 0.72f),
                 new Color(0.003f, 0f, 0.006f, 0.94f));
-            main.maxParticles = 38;
+            main.maxParticles = 110;
             ParticleSystem.ColorOverLifetimeModule lifetimeColor = fog.colorOverLifetime;
             lifetimeColor.enabled = false;
 
             ParticleSystem.EmissionModule emission = fog.emission;
-            emission.rateOverTime = 4f;
+            emission.rateOverTime = 9f;
             ParticleSystem.ShapeModule shape = fog.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
             shape.scale = emitterScale;
