@@ -107,14 +107,14 @@ Shader "KinectKids/Greve Volumetric Fog"
                 return smoothstep(0.0, 1.0, side) * smoothstep(0.0, 1.0, depth);
             }
 
-            float floorVolumeMask(float3 p)
+float floorVolumeMask(float3 p)
 {
     float xEdge = saturate((0.5 - abs(p.x)) / max(0.03, _EdgeSoftness));
     float zEdge = saturate((0.5 - abs(p.z)) / max(0.03, _EdgeSoftness));
 
-    float height = saturate((0.18 - p.y) / 0.68);
+    float height = saturate((0.10 - p.y) / 0.55);
     height = smoothstep(0.0, 1.0, height);
-    height = pow(height, 2.8);
+    height = pow(height, 3.6);
 
     return smoothstep(0.0, 1.0, xEdge) *
            smoothstep(0.0, 1.0, zEdge) *
