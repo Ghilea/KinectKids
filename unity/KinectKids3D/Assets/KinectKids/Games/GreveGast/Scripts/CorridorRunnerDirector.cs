@@ -296,7 +296,9 @@ namespace KinectKids.Games.GreveGast
 
         private void BuildVolumetricFogVolumes()
         {
-            Shader volumeShader = Shader.Find("KinectKids/Greve Volumetric Fog");
+            // Loading through Resources prevents Unity's player build shader
+            // stripping from removing this runtime-created volume material.
+            Shader volumeShader = Resources.Load<Shader>("GreveVolumetricFogReference");
             if (volumeShader == null) return;
 
             BuildFogVolume("Grevens raymarchade svarta 3D-mörker", darknessRoot,
