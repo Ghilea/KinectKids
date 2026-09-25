@@ -303,7 +303,7 @@ namespace KinectKids3D.Platform
 
         private void DrawConceptMenu(float scale, float offsetX, float offsetY)
         {
-            Texture2D concept = cardSheet != null ? cardSheet : background;
+            Texture2D concept = background != null ? background : cardSheet;
             if (concept != null) GUI.DrawTexture(new Rect(0f, 0f, DesignWidth, DesignHeight), concept, ScaleMode.StretchToFill);
             else Fill(new Rect(0f, 0f, DesignWidth, DesignHeight), new Color(0.02f, 0.06f, 0.14f));
 
@@ -391,15 +391,34 @@ namespace KinectKids3D.Platform
                 if (!active) continue;
                 float pulse = 1f + Mathf.Sin(Time.unscaledTime * 5f) * 0.018f;
                 Rect animated = ScaleAroundCenter(targets[i], pulse);
-                float alpha = 0.78f + Mathf.Sin(Time.unscaledTime * 5f) * 0.12f;
-                DrawButtonSprite(animated, hoverSources[i], alpha);
+                DrawSparkles(animated, 0.82f + Mathf.Sin(Time.unscaledTime * 5f) * 0.12f);
             }
+        }
+
+        private void DrawSparkles(Rect target, float alpha)
+        {
+            Rect sparkleSource = new Rect(44f, 800f, 104f, 116f);
+            float size = Mathf.Min(target.width, target.height) * 0.72f;
+            Rect topLeft = new Rect(target.x - size * 0.24f, target.y - size * 0.28f, size, size);
+            Rect bottomRight = new Rect(target.xMax - size * 0.76f, target.yMax - size * 0.70f, size, size);
+            DrawButtonSpriteTinted(topLeft, sparkleSource, alpha);
+            DrawButtonSpriteTinted(bottomRight, sparkleSource, alpha * 0.86f);
         }
 
         private void DrawButtonSprite(Rect destination, Rect sourcePixels, float alpha)
         {
+            DrawButtonSpriteTinted(destination, sourcePixels, alpha, Color.white);
+        }
+
+        private void DrawButtonSpriteTinted(Rect destination, Rect sourcePixels, float alpha)
+        {
+            DrawButtonSpriteTinted(destination, sourcePixels, alpha, new Color(1f, 0.82f, 0.22f));
+        }
+
+        private void DrawButtonSpriteTinted(Rect destination, Rect sourcePixels, float alpha, Color tint)
+        {
             Color old = GUI.color;
-            GUI.color = new Color(1f, 1f, 1f, alpha);
+            GUI.color = new Color(tint.r, tint.g, tint.b, alpha);
             Rect uv = new Rect(sourcePixels.x / buttonSheet.width,
                 1f - (sourcePixels.y + sourcePixels.height) / buttonSheet.height,
                 sourcePixels.width / buttonSheet.width, sourcePixels.height / buttonSheet.height);

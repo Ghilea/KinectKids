@@ -70,6 +70,7 @@ namespace KinectKids.Games.GreveGast
 
         private SpriteRenderer player;
         private SpriteRenderer greve;
+        private SpriteRenderer greveDarkness;
         private SpriteRenderer illustratedVista;
         private Sprite[] playerRunFrames;
         private Sprite[] playerJumpFrames;
@@ -98,12 +99,12 @@ namespace KinectKids.Games.GreveGast
         private PlayerMotion playerMotion = PlayerMotion.Running;
         private float playerMotionTime;
         private GreveGastAction previousRawAction = GreveGastAction.None;
+        private float hitFlashUntil;
 
         public DodgeAction CurrentDodge => currentDodge;
         public float LateralPosition => Mathf.Clamp(lateral, -1f, 1f);
         public EnvironmentTheme CurrentTheme => requestedTheme;
-        private bool WorldPaused => playerMotion == PlayerMotion.Ducking ||
-            playerMotion == PlayerMotion.Hit || playerMotion == PlayerMotion.Recovering;
+        private bool WorldPaused => false;
 
         private void Start()
         {
@@ -277,6 +278,13 @@ namespace KinectKids.Games.GreveGast
                 new Vector3(0f, 0f, Mathf.Max(playerZ, playerStartZ)));
             greve = BuildActor("Greve Gast (singing)", greveStart, greveHeight,
                 new Vector3(0f, 0.25f, greveFarZ));
+            Texture2D darknessTexture = Texture2D.whiteTexture;
+            Sprite darknessSprite = Sprite.Create(darknessTexture, new Rect(0f, 0f, 1f, 1f),
+                new Vector2(0.5f, 0.5f), 1f);
+            greveDarkness = BuildActor("Greve Gast darkness", darknessSprite, corridorHeight * 0.9f,
+                new Vector3(0f, 0.5f, greveFarZ + 0.35f));
+            greveDarkness.sortingOrder = 10;
+            greveDarkness.color = new Color(0f, 0f, 0f, 0f);
         }
 
         private SpriteRenderer BuildActor(string actorName, Sprite sprite, float height, Vector3 position)
@@ -477,6 +485,9 @@ namespace KinectKids.Games.GreveGast
                 else
                     sprite = ResolvePlayer("run_near");
                 if (sprite != null && player.sprite != sprite) player.sprite = sprite;
+                bool flashing = Time.unscaledTime < hitFlashUntil
+                    && Mathf.FloorToInt(Time.unscaledTime * 18f) % 2 == 0;
+                player.color = flashing ? new Color(1f, 0.25f, 0.25f) : Color.white;
                 float stride = Mathf.Sin(playerRunCycle * Mathf.PI);
                 // Authored frames now provide the foot/arm changes. The small
                 // movement below only plants the animation in the moving world.
@@ -505,10 +516,18 @@ namespace KinectKids.Games.GreveGast
                     float jumpProgress = Mathf.Clamp01(playerMotionTime / Mathf.Max(0.1f, playerJumpDuration));
                     p.y = Mathf.Sin(jumpProgress * Mathf.PI) * playerJumpHeight;
                 }
+                else if (playerMotion == PlayerMotion.Ducking)
+                {
+                    float slideProgress = Mathf.Clamp01(playerMotionTime / Mathf.Max(0.1f, playerDuckDuration));
+                    p.y = -0.16f;
+                    p.z = playerZ - Mathf.Sin(slideProgress * Mathf.PI) * 0.42f;
+                }
                 else p.y = regularRun ? Mathf.Abs(stride) * 0.13f : 0f;
                 // The player is the only non-chaser object allowed to advance
                 // toward the camera. It settles at a stable gameplay depth.
                 p.z = Mathf.MoveTowards(p.z, playerZ, 1.2f * dt);
+                if (playerMotion == PlayerMotion.Ducking)
+                    p.z = playerZ - Mathf.Sin(Mathf.Clamp01(playerMotionTime / Mathf.Max(0.1f, playerDuckDuration)) * Mathf.PI) * 0.42f;
                 player.transform.localPosition = p;
             }
             if (greve != null)
@@ -547,6 +566,21 @@ namespace KinectKids.Games.GreveGast
                 greve.transform.localRotation = sillyDuck
                     ? Quaternion.Euler(0f, 0f, Mathf.Sin(elapsed * 9f) * 7f)
                     : Quaternion.identity;
+                if (greveDarkness != null)
+                {
+                    float darknessProgress = Mathf.InverseLerp(0.22f, 0.92f, chase);
+                    float darknessEase = darknessProgress * darknessProgress * (3f - 2f * darknessProgress);
+                    Vector3 darknessPosition = greve.transform.localPosition;
+                    darknessPosition.y = 0.5f;
+                    darknessPosition.z += Mathf.Lerp(0.65f, 0.24f, darknessEase);
+                    greveDarkness.transform.localPosition = darknessPosition;
+                    greveDarkness.transform.localRotation = worldCamera.transform.localRotation;
+                    SizeSpriteToHeight(greveDarkness, Mathf.Lerp(2.0f, corridorHeight * 1.15f, darknessEase));
+                    greveDarkness.transform.localScale = new Vector3(
+                        Mathf.Lerp(0.75f, 2.7f, darknessEase), 1f, 1f);
+                    greveDarkness.color = new Color(0f, 0f, 0f,
+                        Mathf.Lerp(0.04f, 0.92f, darknessEase));
+                }
             }
         }
 
@@ -663,10 +697,9 @@ namespace KinectKids.Games.GreveGast
             if (hazard.warning != null) hazard.warning.gameObject.SetActive(false);
             if (avoided) { chase = Mathf.Clamp01(chase - 0.05f); return; }
             chase = Mathf.Clamp01(chase + catchOnHit);
-            BeginMotion(PlayerMotion.Hit);
+            hitFlashUntil = Time.unscaledTime + 0.48f;
             currentDodge = DodgeAction.None;
             laneMoveDirection = 0;
-            worldSpeed = 0f;
             Renderer[] renderers = hazard.root.GetComponentsInChildren<Renderer>();
             for (int i = 0; i < renderers.Length; i++) renderers[i].material.color = new Color(0.9f, 0.15f, 0.12f);
         }
