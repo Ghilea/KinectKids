@@ -65,7 +65,7 @@ namespace KinectKids3D.Platform
 
         public void SetMenuMusic(AudioClip clip) => menuMusic = clip;
 
-                    platform.Scenes.LoadGame(game.sceneName);
+        private void Awake()
         {
             EnsurePlatformAndCamera();
             voice = gameObject.AddComponent<AudioSource>();
@@ -82,7 +82,9 @@ namespace KinectKids3D.Platform
         }
 
         private static void EnsurePlatformAndCamera()
-                        StartStory();
+        {
+            if (KinectKidsPlatformRoot.Instance == null)
+                new GameObject("KinectKids Platform").AddComponent<KinectKidsPlatformRoot>();
 
             if (Camera.main != null) return;
             GameObject cameraObject = new GameObject("Main Camera");
@@ -266,6 +268,11 @@ namespace KinectKids3D.Platform
                 platform = platformObject.AddComponent<KinectKidsPlatformRoot>();
             }
 
+            platform.Scenes.LoadGame(game.sceneName);
+        }
+
+        private void StartStory()
+        {
             KinectKidsStoryMode.Start();
         }
 
