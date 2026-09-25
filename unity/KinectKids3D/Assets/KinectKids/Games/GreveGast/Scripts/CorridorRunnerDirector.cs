@@ -43,9 +43,9 @@ namespace KinectKids.Games.GreveGast
         public float playerDuckDuration = 0.82f;
         public float playerHitDuration = 0.72f;
         public float playerRecoverDuration = 0.86f;
-        public float greveFarZ = 18f;
-        public float greveNearZ = 6f;
-        public float greveHeight = 3.4f;
+        public float greveFarZ = 16f;
+        public float greveNearZ = 4.8f;
+        public float greveHeight = 5.8f;
 
         [Header("Chase")]
         public float catchOnHit = 0.14f;
@@ -59,7 +59,7 @@ namespace KinectKids.Games.GreveGast
         [Tooltip("Streams Kitchen segments in behind CastleCorridor after this many seconds.")]
         public float kitchenTransitionAt = 10f;
         public bool cycleAllThemes = true;
-        public bool showIllustratedVista = true;
+        public bool showIllustratedVista = false;
 
         private Camera worldCamera;
         private Transform corridorRoot;
@@ -70,7 +70,8 @@ namespace KinectKids.Games.GreveGast
 
         private SpriteRenderer player;
         private SpriteRenderer greve;
-        private SpriteRenderer greveDarkness;
+        private Transform darknessRoot;
+        private Sprite darknessSmokeSprite;
         private SpriteRenderer illustratedVista;
         private Sprite[] playerRunFrames;
         private Sprite[] playerJumpFrames;
@@ -278,13 +279,220 @@ namespace KinectKids.Games.GreveGast
                 new Vector3(0f, 0f, Mathf.Max(playerZ, playerStartZ)));
             greve = BuildActor("Greve Gast (singing)", greveStart, greveHeight,
                 new Vector3(0f, 0.25f, greveFarZ));
-            Texture2D darknessTexture = Texture2D.whiteTexture;
-            Sprite darknessSprite = Sprite.Create(darknessTexture, new Rect(0f, 0f, 1f, 1f),
-                new Vector2(0.5f, 0.5f), 1f);
-            greveDarkness = BuildActor("Greve Gast darkness", darknessSprite, corridorHeight * 0.9f,
-                new Vector3(0f, 0.5f, greveFarZ + 0.35f));
-            greveDarkness.sortingOrder = 10;
-            greveDarkness.color = new Color(0f, 0f, 0f, 0f);
+            BuildDarknessFront();
+        }
+
+        private void BuildDarknessFront()
+        {
+            darknessRoot = new GameObject("Greve Gasts levande mörkerfront").transform;
+            darknessRoot.SetParent(transform, false);
+            // Oregelbundna, pulserande moln gör att gränsen ser ut att äta sig
+            // fram över rummets ytor utan någon solid geometri som kan avslöja
+            // en rektangulär kant.
+            darknessSmokeSprite = CreateDarknessSmokeSprite();
+            BuildDarknessParticleFog();
+            BuildFloorParticleFog();
+        }
+
+        private void BuildDarknessParticleFog()
+        {
+            GameObject fogObject = new GameObject("Mjuk svart partikelrök");
+            fogObject.SetActive(false);
+            fogObject.transform.SetParent(darknessRoot, false);
+            fogObject.transform.localPosition = new Vector3(0f, corridorHeight * 0.5f, 1.25f);
+            fogObject.transform.localScale = new Vector3(
+                corridorWidth * 0.55f, corridorHeight * 0.52f, 3.0f);
+
+            ParticleSystem fog = fogObject.AddComponent<ParticleSystem>();
+            fog.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule main = fog.main;
+            main.loop = true;
+            main.prewarm = true;
+            main.duration = 7f;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.scalingMode = ParticleSystemScalingMode.Shape;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(5.5f, 9f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.08f, 0.32f);
+            main.startSize = new ParticleSystem.MinMaxCurve(7.5f, 13.5f);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(0.001f, 0f, 0.004f, 0.48f),
+                new Color(0.008f, 0.002f, 0.014f, 0.76f));
+            main.maxParticles = 200;
+
+            ParticleSystem.EmissionModule emission = fog.emission;
+            emission.rateOverTime = 25f;
+            ParticleSystem.ShapeModule shape = fog.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 1f;
+            shape.radiusThickness = 1f;
+
+            ParticleSystem.VelocityOverLifetimeModule velocity = fog.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.x = new ParticleSystem.MinMaxCurve(-0.12f, 0.12f);
+            velocity.y = new ParticleSystem.MinMaxCurve(-0.08f, 0.18f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.06f, 0.10f);
+
+            ParticleSystem.NoiseModule noise = fog.noise;
+            noise.enabled = true;
+            noise.quality = ParticleSystemNoiseQuality.High;
+            noise.strength = new ParticleSystem.MinMaxCurve(0.28f, 0.72f);
+            noise.frequency = 0.16f;
+            noise.scrollSpeed = 0.18f;
+            noise.octaveCount = 2;
+
+            ParticleSystem.ColorOverLifetimeModule colorOverLife = fog.colorOverLifetime;
+            colorOverLife.enabled = true;
+            Gradient fade = new Gradient();
+            fade.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(Color.white, 0f),
+                    new GradientColorKey(Color.white, 1f)
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0f, 0f),
+                    new GradientAlphaKey(0.92f, 0.16f),
+                    new GradientAlphaKey(0.72f, 0.72f),
+                    new GradientAlphaKey(0f, 1f)
+                });
+            colorOverLife.color = fade;
+
+            ParticleSystem.SizeOverLifetimeModule sizeOverLife = fog.sizeOverLifetime;
+            sizeOverLife.enabled = true;
+            sizeOverLife.size = new ParticleSystem.MinMaxCurve(1f,
+                new AnimationCurve(new Keyframe(0f, 0.55f), new Keyframe(0.45f, 1f), new Keyframe(1f, 1.18f)));
+
+            ParticleSystemRenderer fogRenderer = fog.GetComponent<ParticleSystemRenderer>();
+            fogRenderer.material = CreateParticleFogMaterial(fogRenderer, "Greve soft black fog");
+            fogRenderer.renderMode = ParticleSystemRenderMode.Billboard;
+            fogRenderer.alignment = ParticleSystemRenderSpace.View;
+            fogRenderer.sortingOrder = 19;
+            fogObject.SetActive(true);
+            fog.Play();
+        }
+
+        private void BuildFloorParticleFog()
+        {
+            GameObject floorFogObject = new GameObject("Kontinuerlig partikelgolvdimma");
+            floorFogObject.SetActive(false);
+            floorFogObject.transform.SetParent(transform, false);
+            floorFogObject.transform.localPosition = new Vector3(0f, 0.24f, 13f);
+
+            ParticleSystem floorFog = floorFogObject.AddComponent<ParticleSystem>();
+            floorFog.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule main = floorFog.main;
+            main.loop = true;
+            main.prewarm = true;
+            main.duration = 8f;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(7f, 12f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.03f, 0.14f);
+            main.startSize = new ParticleSystem.MinMaxCurve(4.5f, 9.0f);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(0.62f, 0.72f, 0.96f, 0.14f),
+                new Color(0.92f, 0.96f, 1f, 0.30f));
+            main.maxParticles = 170;
+
+            ParticleSystem.EmissionModule emission = floorFog.emission;
+            emission.rateOverTime = 17f;
+            ParticleSystem.ShapeModule shape = floorFog.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(corridorWidth * 0.98f, 0.55f, 46f);
+            ParticleSystem.VelocityOverLifetimeModule velocity = floorFog.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.x = new ParticleSystem.MinMaxCurve(-0.16f, 0.16f);
+            velocity.y = new ParticleSystem.MinMaxCurve(0.01f, 0.05f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.04f, 0.02f);
+            ParticleSystem.NoiseModule noise = floorFog.noise;
+            noise.enabled = true;
+            noise.quality = ParticleSystemNoiseQuality.High;
+            noise.strength = new ParticleSystem.MinMaxCurve(0.06f, 0.20f);
+            noise.frequency = 0.12f;
+            noise.scrollSpeed = 0.07f;
+
+            ParticleSystem.ColorOverLifetimeModule colorOverLife = floorFog.colorOverLifetime;
+            colorOverLife.enabled = true;
+            Gradient fade = new Gradient();
+            fade.SetKeys(
+                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                new[]
+                {
+                    new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.8f, 0.18f),
+                    new GradientAlphaKey(0.65f, 0.78f), new GradientAlphaKey(0f, 1f)
+                });
+            colorOverLife.color = fade;
+
+            ParticleSystemRenderer renderer = floorFog.GetComponent<ParticleSystemRenderer>();
+            renderer.material = CreateParticleFogMaterial(renderer, "Soft floor particle fog");
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            renderer.sortingOrder = 12;
+            floorFogObject.SetActive(true);
+            floorFog.Play();
+        }
+
+        private Material CreateParticleFogMaterial(ParticleSystemRenderer renderer, string materialName)
+        {
+            Material baseMaterial = renderer.sharedMaterial;
+            Shader shader = baseMaterial != null ? baseMaterial.shader : null;
+            if (shader == null || !shader.isSupported || shader.name == "Hidden/InternalErrorShader")
+                shader = Shader.Find("Particles/Standard Unlit");
+            if (shader == null || !shader.isSupported)
+                shader = Shader.Find("Legacy Shaders/Particles/Alpha Blended");
+            if (shader == null || !shader.isSupported)
+                shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (baseMaterial == null && shader == null) return null;
+
+            Material material = baseMaterial != null && baseMaterial.shader != null
+                && baseMaterial.shader.isSupported
+                    ? new Material(baseMaterial)
+                    : new Material(shader);
+            material.name = materialName;
+            Texture2D texture = darknessSmokeSprite.texture;
+            if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", texture);
+            if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", texture);
+            if (material.HasProperty("_Color")) material.SetColor("_Color", Color.white);
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.white);
+            return material;
+        }
+
+        private static Sprite CreateDarknessSmokeSprite()
+        {
+            const int size = 128;
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Greve darkness soft smoke",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            Color32[] pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = (x + 0.5f) / size * 2f - 1f;
+                    float ny = (y + 0.5f) / size * 2f - 1f;
+                    float radius = Mathf.Sqrt(nx * nx + ny * ny);
+                    float coarse = Mathf.PerlinNoise(x * 0.037f + 11.7f, y * 0.037f + 4.3f);
+                    float detail = Mathf.PerlinNoise(x * 0.091f + 2.1f, y * 0.091f + 19.4f);
+                    float angle = Mathf.Atan2(ny, nx);
+                    float flowingContour = Mathf.Sin(angle * 3f + 0.7f) * 0.055f
+                        + Mathf.Sin(angle * 7f - 1.2f) * 0.026f;
+                    float warpedRadius = radius + flowingContour
+                        + (coarse - 0.5f) * 0.08f + (detail - 0.5f) * 0.035f;
+                    // A deliberately broad falloff avoids readable circles or
+                    // a hard emitter boundary when many clouds overlap.
+                    float alpha = 1f - Mathf.SmoothStep(0.34f, 1.32f, warpedRadius);
+                    pixels[y * size + x] = new Color32(255, 255, 255,
+                        (byte)Mathf.RoundToInt(alpha * 242f));
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            return Sprite.Create(texture, new Rect(0f, 0f, size, size),
+                new Vector2(0.5f, 0.5f), 64f, 0, SpriteMeshType.FullRect);
         }
 
         private SpriteRenderer BuildActor(string actorName, Sprite sprite, float height, Vector3 position)
@@ -295,7 +503,7 @@ namespace KinectKids.Games.GreveGast
             go.transform.localRotation = worldCamera.transform.localRotation;
             SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
-            renderer.sortingOrder = 20;
+            renderer.sortingOrder = 30;
             SizeSpriteToHeight(renderer, height);
             return renderer;
         }
@@ -532,21 +740,22 @@ namespace KinectKids.Games.GreveGast
             }
             if (greve != null)
             {
-                // New-sheet performance states: sing at distance, fly toward the
-                // player in the middle of the chase, and clown around when the
-                // player ducks. Old-sheet near/reach poses still finish the attack.
+                // Greven måste alltid läsas som en hel figur under jakten. De
+                // beskurna sånghuvudena används därför inte här: flygsekvensen
+                // bär sången, med en helkroppsaccent och ett tydligt utfall nära.
                 Sprite sprite;
                 bool sillyDuck = false;
-                if (chase >= 0.84f) sprite = ResolveGreve("reach");
+                bool attacking = chase >= 0.76f;
+                float attackPulse = attacking ? Mathf.SmoothStep(0f, 1f,
+                    Mathf.PingPong(elapsed * 2.2f, 1f)) : 0f;
+                if (attacking) sprite = attackPulse > 0.22f ? ResolveGreve("reach") : ResolveGreve("chase_near");
                 else if (playerMotion == PlayerMotion.Ducking && greveDuckReactFrames.Length > 0)
                 {
                     sprite = Frame(greveDuckReactFrames, playerMotionTime, 6f, true);
                     sillyDuck = true;
                 }
-                else if (chase >= 0.72f) sprite = ResolveGreve("chase_near");
-                else if (chase >= 0.56f && greveFlyFrames.Length > 0)
-                    sprite = FrameProgress(greveFlyFrames, Mathf.InverseLerp(0.56f, 0.72f, chase));
-                else if (greveSingFrames.Length > 0) sprite = Frame(greveSingFrames, elapsed, 7f, true);
+                else if (Mathf.Repeat(elapsed, 2.35f) < 0.38f) sprite = ResolveGreve("threaten");
+                else if (greveFlyFrames.Length > 0) sprite = Frame(greveFlyFrames, elapsed, 7.5f, true);
                 else sprite = ResolveGreve("chase");
                 if (sprite != null && greve.sprite != sprite)
                     greve.sprite = sprite;
@@ -556,32 +765,26 @@ namespace KinectKids.Games.GreveGast
                 // Recalculate from the current frame every tick (no accumulated
                 // scaling), small in the distance and imposing near the player.
                 float chaseEase = chase * chase * (3f - 2f * chase);
-                float distanceScale = Mathf.Lerp(0.78f, 1.32f, chaseEase);
-                SizeSpriteToHeight(greve, greveHeight * distanceScale * (sillyDuck ? 1.05f : 1f));
+                float distanceScale = Mathf.Lerp(1.05f, 2.08f, chaseEase);
+                float attackScale = attacking ? 1f + attackPulse * 0.20f : 1f;
+                SizeSpriteToHeight(greve, greveHeight * distanceScale * attackScale * (sillyDuck ? 1.05f : 1f));
                 Vector3 p = greve.transform.localPosition;
-                p.x = Mathf.Lerp(p.x, lateral * laneSpacing * 0.65f, 1f - Mathf.Exp(-4f * dt));
-                p.y = 0.25f + Mathf.Sin(elapsed * (sillyDuck ? 8f : 2f)) * (sillyDuck ? 0.18f : 0.08f);
-                p.z = Mathf.Lerp(greveFarZ, greveNearZ, chase);
+                float hoverX = Mathf.Sin(elapsed * 1.15f) * Mathf.Lerp(1.15f, 0.28f, chaseEase);
+                p.x = Mathf.Lerp(p.x, lateral * laneSpacing * 0.72f + hoverX, 1f - Mathf.Exp(-4f * dt));
+                p.y = 0.38f + Mathf.Sin(elapsed * (sillyDuck ? 8f : 2.1f)) * (sillyDuck ? 0.20f : 0.22f);
+                p.z = Mathf.Lerp(greveFarZ, greveNearZ, chase) - attackPulse * Mathf.InverseLerp(0.76f, 1f, chase) * 1.35f;
                 greve.transform.localPosition = p;
-                greve.transform.localRotation = sillyDuck
-                    ? Quaternion.Euler(0f, 0f, Mathf.Sin(elapsed * 9f) * 7f)
-                    : Quaternion.identity;
-                if (greveDarkness != null)
-                {
-                    float darknessProgress = Mathf.InverseLerp(0.22f, 0.92f, chase);
-                    float darknessEase = darknessProgress * darknessProgress * (3f - 2f * darknessProgress);
-                    Vector3 darknessPosition = greve.transform.localPosition;
-                    darknessPosition.y = 0.5f;
-                    darknessPosition.z += Mathf.Lerp(0.65f, 0.24f, darknessEase);
-                    greveDarkness.transform.localPosition = darknessPosition;
-                    greveDarkness.transform.localRotation = worldCamera.transform.localRotation;
-                    SizeSpriteToHeight(greveDarkness, Mathf.Lerp(2.0f, corridorHeight * 1.15f, darknessEase));
-                    greveDarkness.transform.localScale = new Vector3(
-                        Mathf.Lerp(0.75f, 2.7f, darknessEase), 1f, 1f);
-                    greveDarkness.color = new Color(0f, 0f, 0f,
-                        Mathf.Lerp(0.04f, 0.92f, darknessEase));
-                }
+                greve.transform.localRotation = Quaternion.Euler(0f, 0f,
+                    sillyDuck ? Mathf.Sin(elapsed * 9f) * 7f : -hoverX * 1.8f - attackPulse * 4f);
+                UpdateDarknessFront(p, chaseEase);
             }
+        }
+
+        private void UpdateDarknessFront(Vector3 grevePosition, float chaseEase)
+        {
+            if (darknessRoot == null) return;
+            darknessRoot.localPosition = new Vector3(grevePosition.x * 0.18f, 0f,
+                grevePosition.z + Mathf.Lerp(0.55f, 0.22f, chaseEase));
         }
 
         private static Sprite FrameProgress(Sprite[] frames, float progress)
@@ -870,7 +1073,6 @@ namespace KinectKids.Games.GreveGast
             float side = variant % 2 == 0 ? -1f : 1f;
             AddWallDecoration(style.decorationA, side, -3.2f, 4.2f, 2.7f);
             AddWallDecoration(style.decorationB, -side, 3.8f, 5.4f, 3.1f);
-            AddFloorFog(variant % 2 == 0 ? "new_fog_back" : "new_fog_front", variant % 2 == 0 ? -1.5f : 2.0f);
             AddThemeProp(style.theme, side);
         }
 
@@ -892,23 +1094,6 @@ namespace KinectKids.Games.GreveGast
             SpriteRenderer renderer = go.AddComponent<SpriteRenderer>(); renderer.sprite = sprite; renderer.sortingOrder = 10;
             float spriteHeight = sprite.bounds.size.y;
             go.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? height / spriteHeight : 1f);
-            decorations.Add(renderer);
-        }
-
-        private void AddFloorFog(string spriteKey, float z)
-        {
-            Sprite sprite = GreveChaseSprites.Environment(spriteKey);
-            if (sprite == null) return;
-            GameObject go = new GameObject("Low floor fog " + spriteKey);
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = new Vector3(0f, 0.06f, z);
-            SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
-            renderer.sprite = sprite;
-            renderer.sortingOrder = 6;
-            float width = sprite.bounds.size.x;
-            float scale = width > 0.001f ? (halfWidth * 1.75f) / width : 1f;
-            go.transform.localScale = Vector3.one * scale;
-            renderer.color = new Color(0.72f, 0.78f, 1f, variant % 2 == 0 ? 0.28f : 0.38f);
             decorations.Add(renderer);
         }
 
