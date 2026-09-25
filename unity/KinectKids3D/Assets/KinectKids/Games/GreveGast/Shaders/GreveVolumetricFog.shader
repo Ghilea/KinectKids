@@ -108,13 +108,18 @@ Shader "KinectKids/Greve Volumetric Fog"
             }
 
             float floorVolumeMask(float3 p)
-            {
-                float xEdge = saturate((0.5 - abs(p.x)) / max(0.03, _EdgeSoftness));
-                float zEdge = saturate((0.5 - abs(p.z)) / max(0.03, _EdgeSoftness));
-                float height = saturate(0.5 - p.y);
-                height = height * height * (3.0 - 2.0 * height);
-                return smoothstep(0.0, 1.0, xEdge) * smoothstep(0.0, 1.0, zEdge) * height;
-            }
+{
+    float xEdge = saturate((0.5 - abs(p.x)) / max(0.03, _EdgeSoftness));
+    float zEdge = saturate((0.5 - abs(p.z)) / max(0.03, _EdgeSoftness));
+
+    float height = saturate((0.18 - p.y) / 0.68);
+    height = smoothstep(0.0, 1.0, height);
+    height = pow(height, 2.8);
+
+    return smoothstep(0.0, 1.0, xEdge) *
+           smoothstep(0.0, 1.0, zEdge) *
+           height;
+}
 
             fixed4 frag(v2f i) : SV_Target
             {
@@ -137,32 +142,182 @@ Shader "KinectKids/Greve Volumetric Fog"
                     _CameraDepthTexture, UNITY_PROJ_COORD(i.screenPos)));
                 if (sceneDepth + 0.08 < entryDepth) discard;
 
-                const int STEPS = 40;
-                float stepLength = (tEnd - tStart) / STEPS;
-                float alpha = 0.0;
-                float timeOffset = _Time.y;
-                [loop]
-                for (int s = 0; s < STEPS; s++)
-                {
-                    float jitter = hash31(float3(uv * _ScreenParams.xy, s)) - 0.5;
-                    float t = tStart + (s + 0.5 + jitter * 0.35) * stepLength;
-                    float3 p = ro + rd * t;
-                    float3 wp = mul(unity_ObjectToWorld, float4(p, 1)).xyz;
-                    float noise = fbm(wp * _NoiseScale + _NoiseSpeed.xyz * timeOffset);
-                    float mask = lerp(roundedVolumeMask(p), floorVolumeMask(p), _FloorMode);
-                    // Break up only the outer part of the black silhouette.
-                    // The interior retains a guaranteed density floor and can
-                    // therefore never develop transparent pockets.
-                    float warpedBlackMask = saturate(mask + (noise - 0.52) * 0.82);
-                    warpedBlackMask = max(warpedBlackMask, mask * 0.72);
-                    mask = lerp(warpedBlackMask, mask, _FloorMode);
-                    // A non-zero base prevents holes while animated FBM gives
-                    // the boundary and interior visible volumetric movement.
-                    float density = _Density * mask * lerp(0.68, 1.32, noise);
-                    float sampleAlpha = 1.0 - exp(-density * stepLength);
-                    alpha += (1.0 - alpha) * sampleAlpha;
-                    if (alpha > 0.995) break;
-                }
+                const int STEPS = 56;
+
+float stepLength = (tEnd - tStart) / STEPS;
+
+float alpha = 0.0;
+float3 accumulatedColor = float3(0.0, 0.0, 0.0);
+
+float timeOffset = _Time.y;
+
+[loop]
+for (int s = 0; s < STEPS; s++)
+{
+    float jitter =
+        hash31(float3(uv * _ScreenParams.xy, s)) - 0.5;
+
+    float t =
+        tStart +
+        (s + 0.5 + jitter * 0.35) * stepLength;
+
+    float3 p = ro + rd * t;
+
+    float3 wp =
+        mul(unity_ObjectToWorld, float4(p, 1)).xyz;
+
+    // ------------------------------------------------
+    // Stoppa dimman när vi träffar riktig geometri.
+    // ------------------------------------------------
+
+    float sampleViewDepth =
+        -mul(UNITY_MATRIX_V, float4(wp, 1)).z;
+
+    if (sampleViewDepth >= sceneDepth - 0.04)
+        break;
+
+    // ------------------------------------------------
+    // Två noise-skalor.
+    // Stor noise = stora dimbankar.
+    // Liten noise = detaljer inuti dem.
+    // ------------------------------------------------
+
+    float largeNoise =
+        fbm(
+            wp * _NoiseScale +
+            _NoiseSpeed.xyz * timeOffset
+        );
+
+    float fineNoise =
+        fbm(
+            wp * (_NoiseScale * 2.15) -
+            _NoiseSpeed.xyz * timeOffset * 0.65 +
+            11.7
+        );
+
+    float noise =
+        saturate(
+            largeNoise * 0.72 +
+            fineNoise * 0.28
+        );
+
+    float mask =
+        lerp(
+            roundedVolumeMask(p),
+            floorVolumeMask(p),
+            _FloorMode
+        );
+
+    // Svarta Greve-volymen behåller tät kärna.
+    float warpedBlackMask =
+        saturate(
+            mask +
+            (noise - 0.52) * 0.82
+        );
+
+    warpedBlackMask =
+        max(
+            warpedBlackMask,
+            mask * 0.72
+        );
+
+    mask =
+        lerp(
+            warpedBlackMask,
+            mask,
+            _FloorMode
+        );
+
+    // ------------------------------------------------
+    // Mycket större skillnad mellan tunn och tjock dimma.
+    // ------------------------------------------------
+
+    float densityVariation =
+        lerp(
+            0.42,
+            1.55,
+            smoothstep(0.18, 0.85, noise)
+        );
+
+    float density =
+        _Density *
+        mask *
+        densityVariation;
+
+    // Ingen blå hinna precis framför linsen.
+    float nearFade =
+        smoothstep(
+            4.0,
+            8.0,
+            sampleViewDepth
+        );
+
+    density *= nearFade;
+
+    // Lite mer atmosfär längre in i korridoren.
+    float depthDensity =
+        lerp(
+            0.90,
+            1.30,
+            saturate(
+                (sampleViewDepth - 10.0) / 45.0
+            )
+        );
+
+    density *= depthDensity;
+
+    float sampleAlpha =
+        1.0 -
+        exp(-density * stepLength);
+
+    float contribution =
+        (1.0 - alpha) *
+        sampleAlpha;
+
+    // ------------------------------------------------
+    // Dimman får intern ljusvariation.
+    // Detta ger mycket mer 3D-känsla.
+    // ------------------------------------------------
+
+    float depthShade =
+        lerp(
+            1.10,
+            0.72,
+            saturate(
+                (sampleViewDepth - 8.0) / 50.0
+            )
+        );
+
+    float noiseLight =
+        lerp(
+            0.78,
+            1.20,
+            noise
+        );
+
+    float3 sampleColor =
+        _FogColor.rgb *
+        depthShade *
+        noiseLight;
+
+    accumulatedColor +=
+        sampleColor *
+        contribution;
+
+    alpha += contribution;
+
+    if (alpha > 0.995)
+        break;
+}
+
+float3 finalColor =
+    accumulatedColor /
+    max(alpha, 0.0001);
+
+return fixed4(
+    finalColor,
+    alpha * _FogColor.a
+);
 
                 return fixed4(_FogColor.rgb, alpha * _FogColor.a);
             }

@@ -205,8 +205,8 @@ namespace KinectKids.Games.GreveGast
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = worldCamera.backgroundColor;
-            RenderSettings.fogStartDistance = 65f;
-            RenderSettings.fogEndDistance = 115f;
+            RenderSettings.fogStartDistance = 24f;
+            RenderSettings.fogEndDistance = 88f;
 
             GameObject lightGo = new GameObject("Corridor Key Light");
             lightGo.transform.SetParent(transform, false);
@@ -302,14 +302,24 @@ namespace KinectKids.Games.GreveGast
             if (volumeShader == null) return;
 
             BuildFogVolume("Grevens raymarchade svarta 3D-mörker", darknessRoot,
-                new Vector3(0f, corridorHeight * 0.50f, 2.0f),
-                new Vector3(corridorWidth * 0.96f, corridorHeight * 0.96f, 7.5f),
-                new Color(0f, 0f, 0f, 1f), 4.8f, 0.52f, 0f, 3010, volumeShader);
+    new Vector3(0f, corridorHeight * 0.50f, 2.6f),
+    new Vector3(corridorWidth * 0.94f, corridorHeight * 0.94f, 8.5f),
+    new Color(0f, 0f, 0f, 1f),
+    7.5f,
+    0.10f,
+    0f,
+    3010,
+    volumeShader);
 
             BuildFogVolume("Raymarchad blåvit 3D-golvdimma", transform,
-                new Vector3(0f, 1.75f, 5.5f),
-                new Vector3(corridorWidth * 0.98f, 4.2f, 29f),
-                new Color(0.34f, 0.54f, 0.92f, 0.60f), 1.18f, 0.28f, 1f, 2989, volumeShader);
+    new Vector3(0f, 0.78f, 9.0f),
+    new Vector3(corridorWidth * 0.98f, 1.9f, 28f),
+    new Color(0.34f, 0.54f, 0.92f, 0.82f),
+    1.95f,
+    0.18f,
+    1f,
+    2989,
+    volumeShader);
         }
 
         private static void BuildFogVolume(string volumeName, Transform parent,
