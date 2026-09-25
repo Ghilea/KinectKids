@@ -7,7 +7,6 @@ using System.IO.Pipes;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Runtime.InteropServices;
 using Microsoft.Kinect;
 
 namespace KinectKids.Bridge
@@ -21,6 +20,7 @@ namespace KinectKids.Bridge
         private NamedPipeClientStream pipe;
         private StreamWriter writer;
         private bool stopping;
+        private int startupFinished;
 
         private static int Main(string[] args)
         {
@@ -60,7 +60,10 @@ namespace KinectKids.Bridge
             if (sensor == null) throw new InvalidOperationException("Ingen ansluten Kinect 360 hittades.");
 
             SendStatus("INFO", "Kinect hittad – startar djup- och skelettström…");
+            StartStartupWatchdog();
+            SendStatus("INFO", "Aktiverar Kinect-djupström…");
             sensor.DepthStream.Enable(DepthImageFormat.Resolution320x240Fps30);
+            SendStatus("INFO", "Djupström klar - aktiverar skelettström…");
             // Kinect v1-data blir mycket orolig när en hand förs ut från
             // kroppen. SDK-filtreringen tar bort led-jitter innan koordinaterna
             // skickas till Unity, men behåller tillräckligt snabb respons för kast.
@@ -73,16 +76,19 @@ namespace KinectKids.Bridge
                 MaxDeviationRadius = 0.18f
             });
             sensor.SkeletonFrameReady += OnSkeletonFrameReady;
+            SendStatus("INFO", "Skelettström klar - startar sensorn…");
             try
             {
                 sensor.Start();
             }
-            catch (COMException)
+            catch (Exception)
             {
+                Interlocked.Exchange(ref startupFinished, 1);
                 throw new InvalidOperationException(
                     "Kinect kunde inte starta. Stäng Kinect Explorer, Kinect Studio och andra Kinect-program, "
                     + "kontrollera USB-anslutningen och starta sedan spelet igen.");
             }
+            Interlocked.Exchange(ref startupFinished, 1);
             SendStatus("READY", "Kinect 360 ansluten via 32-bitarsbryggan");
 
             while (!stopping)
@@ -90,6 +96,24 @@ namespace KinectKids.Bridge
                 if (parent != null && parent.HasExited) break;
                 Thread.Sleep(200);
             }
+        }
+
+        private void StartStartupWatchdog()
+        {
+            var watchdog = new Thread(() =>
+            {
+                Thread.Sleep(15000);
+                if (Interlocked.CompareExchange(ref startupFinished, 0, 0) != 0 || stopping) return;
+                TrySendStatus("ERROR",
+                    "Kinect hittades men sensorn svarade inte inom 15 sekunder. "
+                    + "Kontrollera USB-anslutningen och att inget annat Kinect-program är öppet.");
+                Environment.Exit(2);
+            })
+            {
+                IsBackground = true,
+                Name = "KinectKids startup watchdog"
+            };
+            watchdog.Start();
         }
 
         private void OnSkeletonFrameReady(object sender, SkeletonFrameReadyEventArgs eventArgs)

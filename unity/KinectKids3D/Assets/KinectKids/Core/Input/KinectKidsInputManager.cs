@@ -20,6 +20,7 @@ namespace KinectKids3D.Platform
         public static KinectKidsInputManager Instance { get; private set; }
         public PlayerInputFrame Frame => frame;
         public bool KinectConnected => provider != null && provider.KinectConnected;
+        public bool PlayerDetected => KinectConnected && latestPlayerPoses.Count > 0;
         public string Status => provider != null ? provider.Status : "Kinect startar";
         public IReadOnlyList<AimSample> AimSamples => latestAimSamples;
         public IReadOnlyList<PlayerPose> PlayerPoses => latestPlayerPoses;
@@ -33,6 +34,13 @@ namespace KinectKids3D.Platform
         }
 
         private void Update() => Tick();
+
+        public void RetryKinect()
+        {
+            if (provider == null) return;
+            calibrationTime = 0f;
+            provider.RetryNow();
+        }
 
         public void Tick()
         {

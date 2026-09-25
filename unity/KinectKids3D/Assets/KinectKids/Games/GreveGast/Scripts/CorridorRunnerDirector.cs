@@ -15,6 +15,7 @@ namespace KinectKids.Games.GreveGast
     {
         public enum EnvironmentTheme { CastleCorridor, GreatHall, Kitchen, Passage }
         public enum Lane { Left, Center, Right }
+        private enum PlayerMotion { Running, Jumping, Ducking, ChangingLane, Hit, Recovering }
 
         [Header("3D corridor")]
         [Range(4, 6)] public int segmentCount = 6;
@@ -31,9 +32,17 @@ namespace KinectKids.Games.GreveGast
         [Header("Actors and lanes")]
         public float laneSpacing = 4.2f;
         public float laneChangeSharpness = 6f;
+        [Tooltip("Seconds for one complete lane-change animation and movement.")]
+        public float laneChangeDuration = 0.42f;
         public float playerZ = 2.5f;
         public float playerStartZ = 5.5f;
         public float playerHeight = 3.2f;
+        [Tooltip("Extra world-space height at the top of the jump arc.")]
+        public float playerJumpHeight = 1.35f;
+        public float playerJumpDuration = 0.68f;
+        public float playerDuckDuration = 0.82f;
+        public float playerHitDuration = 0.72f;
+        public float playerRecoverDuration = 0.86f;
         public float greveFarZ = 18f;
         public float greveNearZ = 6f;
         public float greveHeight = 3.4f;
@@ -42,6 +51,9 @@ namespace KinectKids.Games.GreveGast
         public float catchOnHit = 0.14f;
         public float recoverPerSecond = 0.05f;
         public float runDrainPerSecond = 0.05f;
+        [Tooltip("Extra distance Greve Gast gains while the player ducks.")]
+        public float duckPressurePerSecond = 0.11f;
+        public float hitPressurePerSecond = 0.14f;
 
         [Header("Theme demonstration")]
         [Tooltip("Streams Kitchen segments in behind CastleCorridor after this many seconds.")]
@@ -59,6 +71,15 @@ namespace KinectKids.Games.GreveGast
         private SpriteRenderer player;
         private SpriteRenderer greve;
         private SpriteRenderer illustratedVista;
+        private Sprite[] playerRunFrames;
+        private Sprite[] playerJumpFrames;
+        private Sprite[] playerSideFrames;
+        private Sprite[] playerDuckFrames;
+        private Sprite[] playerHitFrames;
+        private Sprite[] playerRecoverFrames;
+        private Sprite[] greveSingFrames;
+        private Sprite[] greveFlyFrames;
+        private Sprite[] greveDuckReactFrames;
         private GreveGastBodyInput body;
         private AudioSource music;
         private EnvironmentTheme requestedTheme = EnvironmentTheme.CastleCorridor;
@@ -71,12 +92,18 @@ namespace KinectKids.Games.GreveGast
         private float hazardTimer = 2.2f;
         private int hazardCounter;
         private float playerRunCycle;
-        private int previousSideDirection;
+        private float laneAnimationTime;
+        private float laneAnimationStartX;
         private int laneMoveDirection;
+        private PlayerMotion playerMotion = PlayerMotion.Running;
+        private float playerMotionTime;
+        private GreveGastAction previousRawAction = GreveGastAction.None;
 
         public DodgeAction CurrentDodge => currentDodge;
         public float LateralPosition => Mathf.Clamp(lateral, -1f, 1f);
         public EnvironmentTheme CurrentTheme => requestedTheme;
+        private bool WorldPaused => playerMotion == PlayerMotion.Ducking ||
+            playerMotion == PlayerMotion.Hit || playerMotion == PlayerMotion.Recovering;
 
         private void Start()
         {
@@ -140,25 +167,25 @@ namespace KinectKids.Games.GreveGast
                 CreateTiledMaterial(new Color(0.68f, 0.72f, 0.84f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.48f, 0.52f, 0.64f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.82f, 0.84f, 0.94f), wallTexture, accentTiling),
-                new Color(1f, 0.55f, 0.24f), "env_10", "env_11");
+                new Color(1f, 0.55f, 0.24f), "new_wall_left", "new_window");
             themeStyles[EnvironmentTheme.GreatHall] = new ThemeStyle(EnvironmentTheme.GreatHall,
                 CreateTiledMaterial(new Color(0.84f, 0.70f, 0.58f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.78f, 0.62f, 0.58f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.48f, 0.36f, 0.40f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.86f, 0.68f, 0.34f), wallTexture, accentTiling, 0.18f),
-                new Color(1f, 0.72f, 0.35f), "env_8", "env_11");
+                new Color(1f, 0.72f, 0.35f), "new_banner", "new_armour");
             themeStyles[EnvironmentTheme.Kitchen] = new ThemeStyle(EnvironmentTheme.Kitchen,
                 CreateTiledMaterial(new Color(0.82f, 0.68f, 0.54f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.90f, 0.78f, 0.62f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.56f, 0.46f, 0.38f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.66f, 0.48f, 0.30f), wallTexture, accentTiling),
-                new Color(1f, 0.64f, 0.30f), "env_10", "env_8");
+                new Color(1f, 0.64f, 0.30f), "new_barrel", "new_crate");
             themeStyles[EnvironmentTheme.Passage] = new ThemeStyle(EnvironmentTheme.Passage,
                 CreateTiledMaterial(new Color(0.60f, 0.72f, 0.74f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.54f, 0.68f, 0.72f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.34f, 0.46f, 0.50f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.58f, 0.74f, 0.76f), wallTexture, accentTiling),
-                new Color(0.40f, 0.72f, 0.78f), "env_7", "env_10");
+                new Color(0.40f, 0.72f, 0.78f), "new_door", "new_pillar");
         }
 
         private static Material CreateTiledMaterial(Color tint, Texture2D texture, Vector2 tiling, float metallic = 0f)
@@ -218,10 +245,11 @@ namespace KinectKids.Games.GreveGast
             // env_18 is the open castle/moon illustration without a painted
             // corridor floor or two complete corridor walls. It is a distant
             // billboard skin only; the 3D primitives still define perspective.
-            Sprite sprite = GreveChaseSprites.Environment("env_18");
+            Sprite sprite = GreveChaseSprites.Environment("new_kitchen_vista");
+            if (sprite == null) sprite = GreveChaseSprites.Environment("env_18");
             if (sprite == null) return;
 
-            GameObject go = new GameObject("Illustrated open-castle vista (env_18)");
+            GameObject go = new GameObject("Illustrated castle kitchen vista");
             go.transform.SetParent(corridorRoot, false);
             go.transform.localPosition = new Vector3(0f, 0f, 38f);
             go.transform.localRotation = worldCamera.transform.localRotation;
@@ -233,9 +261,21 @@ namespace KinectKids.Games.GreveGast
 
         private void BuildCharacters()
         {
-            player = BuildActor("Player", ResolvePlayer("run_near"), playerHeight,
+            playerRunFrames = GreveChaseSprites.PlayerAnimation("run");
+            playerJumpFrames = GreveChaseSprites.PlayerAnimation("jump");
+            playerSideFrames = GreveChaseSprites.PlayerAnimation("side");
+            playerDuckFrames = GreveChaseSprites.PlayerAnimation("duck");
+            playerHitFrames = GreveChaseSprites.PlayerAnimation("hit");
+            playerRecoverFrames = GreveChaseSprites.PlayerAnimation("recover");
+            greveSingFrames = GreveChaseSprites.GreveAnimation("sing");
+            greveFlyFrames = GreveChaseSprites.GreveAnimation("fly");
+            greveDuckReactFrames = GreveChaseSprites.GreveAnimation("duck_react");
+
+            Sprite playerStart = playerRunFrames.Length > 0 ? playerRunFrames[0] : ResolvePlayer("run_near");
+            Sprite greveStart = greveSingFrames.Length > 0 ? greveSingFrames[0] : ResolveGreve("chase");
+            player = BuildActor("Player", playerStart, playerHeight,
                 new Vector3(0f, 0f, Mathf.Max(playerZ, playerStartZ)));
-            greve = BuildActor("Greve Gast", ResolveGreve("chase"), greveHeight,
+            greve = BuildActor("Greve Gast (singing)", greveStart, greveHeight,
                 new Vector3(0f, 0.25f, greveFarZ));
         }
 
@@ -258,7 +298,7 @@ namespace KinectKids.Games.GreveGast
             float dt = Time.deltaTime;
             elapsed += dt;
             body.Update();
-            ReadInput();
+            ReadInput(dt);
             DriveWorld(dt);
             StreamSegments(dt);
             MoveIllustratedVista(dt);
@@ -267,44 +307,104 @@ namespace KinectKids.Games.GreveGast
             TickThemeSequence();
         }
 
-        private void ReadInput()
+        private void ReadInput(float dt)
         {
             currentDodge = DodgeAction.None;
-            switch (body.Current)
-            {
-                case GreveGastAction.Jump: currentDodge = DodgeAction.Jump; break;
-                case GreveGastAction.Duck: currentDodge = DodgeAction.Duck; break;
-                case GreveGastAction.Left: currentDodge = DodgeAction.Left; break;
-                case GreveGastAction.Right: currentDodge = DodgeAction.Right; break;
-            }
-            int sideDirection = 0;
-            if (body.Current == GreveGastAction.Left) sideDirection = -1;
-            else if (body.Current == GreveGastAction.Right) sideDirection = 1;
 
-            // One fresh gesture/key press means exactly ONE lane. Moving from
-            // Left to Right therefore requires Left -> Center -> Right instead
-            // of teleporting across the middle lane. Holding a gesture is latched
-            // until it returns to neutral, so it cannot repeat every frame.
-            if (sideDirection != 0 && sideDirection != previousSideDirection)
+            // A gesture starts a complete motion. Holding the pose does not
+            // extend or repeat it; Kinect and keyboard both re-arm only after
+            // the raw action changes away and is performed again.
+            if (playerMotion != PlayerMotion.Running && playerMotionTime >= MotionDuration(playerMotion))
             {
-                int oldLane = (int)lane;
-                int nextLane = Mathf.Clamp((int)lane + sideDirection, (int)Lane.Left, (int)Lane.Right);
-                lane = (Lane)nextLane;
-                if (nextLane != oldLane) laneMoveDirection = nextLane > oldLane ? 1 : -1;
+                if (playerMotion == PlayerMotion.Hit)
+                {
+                    playerMotion = PlayerMotion.Recovering;
+                    playerMotionTime = 0f;
+                }
+                else
+                {
+                    playerMotion = PlayerMotion.Running;
+                    playerMotionTime = 0f;
+                    laneMoveDirection = 0;
+                }
             }
-            previousSideDirection = sideDirection;
+
+            GreveGastAction raw = body.Current;
+            bool freshAction = raw != previousRawAction;
+            if (playerMotion == PlayerMotion.Running && freshAction)
+            {
+                if (raw == GreveGastAction.Jump) BeginMotion(PlayerMotion.Jumping);
+                else if (raw == GreveGastAction.Duck) BeginMotion(PlayerMotion.Ducking);
+                else if (raw == GreveGastAction.Left || raw == GreveGastAction.Right)
+                {
+                    int direction = raw == GreveGastAction.Left ? -1 : 1;
+                    int oldLane = (int)lane;
+                    int nextLane = Mathf.Clamp(oldLane + direction, (int)Lane.Left, (int)Lane.Right);
+                    if (nextLane != oldLane)
+                    {
+                        lane = (Lane)nextLane;
+                        laneMoveDirection = direction;
+                        laneAnimationStartX = player != null ? player.transform.localPosition.x : LaneX((Lane)oldLane);
+                        BeginMotion(PlayerMotion.ChangingLane);
+                    }
+                }
+            }
+
+            switch (playerMotion)
+            {
+                case PlayerMotion.Jumping: currentDodge = DodgeAction.Jump; break;
+                case PlayerMotion.Ducking: currentDodge = DodgeAction.Duck; break;
+                case PlayerMotion.ChangingLane:
+                    currentDodge = laneMoveDirection < 0 ? DodgeAction.Left : DodgeAction.Right;
+                    break;
+            }
+
+            if (playerMotion != PlayerMotion.Running) playerMotionTime += dt;
+            laneAnimationTime = playerMotion == PlayerMotion.ChangingLane ? playerMotionTime : 0f;
+            previousRawAction = raw;
 
             float target = LaneX(lane);
             lateral = Mathf.Lerp(lateral, target / laneSpacing,
                 1f - Mathf.Exp(-laneChangeSharpness * Time.deltaTime));
         }
 
+        private void BeginMotion(PlayerMotion motion)
+        {
+            playerMotion = motion;
+            playerMotionTime = 0f;
+        }
+
+        private float MotionDuration(PlayerMotion motion)
+        {
+            switch (motion)
+            {
+                case PlayerMotion.Jumping: return playerJumpDuration;
+                case PlayerMotion.Ducking: return playerDuckDuration;
+                case PlayerMotion.ChangingLane: return laneChangeDuration;
+                case PlayerMotion.Hit: return playerHitDuration;
+                case PlayerMotion.Recovering: return playerRecoverDuration;
+                default: return 0f;
+            }
+        }
+
         private void DriveWorld(float dt)
         {
+            if (WorldPaused)
+            {
+                // The room, obstacles and vista stop. Greve Gast does not: this
+                // is his opportunity to close the distance during a duck/fall.
+                worldSpeed = 0f;
+                float pressure = playerMotion == PlayerMotion.Ducking
+                    ? duckPressurePerSecond : hitPressurePerSecond;
+                chase = Mathf.Clamp01(chase + pressure * dt);
+                return;
+            }
+
             bool running = body.Current == GreveGastAction.Run || body.RunEnergy > 0.4f ||
                            Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.LeftShift);
             worldSpeed = Mathf.Lerp(worldSpeed, running ? runningSpeed : idleSpeed, 1f - Mathf.Exp(-4f * dt));
-            chase = Mathf.Clamp01(chase + (running ? -runDrainPerSecond : recoverPerSecond) * dt);
+            float chaseRate = running ? -runDrainPerSecond : recoverPerSecond;
+            chase = Mathf.Clamp01(chase + chaseRate * dt);
         }
 
         private void StreamSegments(float dt)
@@ -351,33 +451,61 @@ namespace KinectKids.Games.GreveGast
         {
             if (player != null)
             {
-                string pose = "run_near";
-                if (currentDodge == DodgeAction.Jump) pose = "jump";
-                else if (currentDodge == DodgeAction.Duck) pose = "duck";
-                else if (laneMoveDirection < 0) pose = "sidestep_left";
-                else if (laneMoveDirection > 0) pose = "sidestep_right";
-                Sprite sprite = ResolvePlayer(pose);
-                if (sprite != null && player.sprite != sprite) player.sprite = sprite;
                 playerRunCycle += dt * 7.5f;
-                bool regularRun = currentDodge != DodgeAction.Jump && currentDodge != DodgeAction.Duck && laneMoveDirection == 0;
+                bool regularRun = playerMotion == PlayerMotion.Running;
+                Sprite sprite;
+                if (playerMotion == PlayerMotion.Hit && playerHitFrames.Length > 0)
+                    sprite = FrameProgress(playerHitFrames,
+                        playerMotionTime / Mathf.Max(0.1f, playerHitDuration));
+                else if (playerMotion == PlayerMotion.Recovering && playerRecoverFrames.Length > 0)
+                    sprite = FrameProgress(playerRecoverFrames,
+                        playerMotionTime / Mathf.Max(0.1f, playerRecoverDuration));
+                else if (playerMotion == PlayerMotion.Jumping && playerJumpFrames.Length > 0)
+                {
+                    float jumpProgress = Mathf.Clamp01(playerMotionTime / Mathf.Max(0.1f, playerJumpDuration));
+                    sprite = FrameProgress(playerJumpFrames, Mathf.Sin(jumpProgress * Mathf.PI));
+                }
+                else if (playerMotion == PlayerMotion.Ducking && playerDuckFrames.Length > 0)
+                    sprite = FrameProgress(playerDuckFrames,
+                        playerMotionTime / Mathf.Max(0.1f, playerDuckDuration * 0.45f));
+                else if (playerMotion == PlayerMotion.Ducking) sprite = ResolvePlayer("duck");
+                else if (playerMotion == PlayerMotion.ChangingLane && playerSideFrames.Length > 0)
+                    sprite = FrameProgress(playerSideFrames,
+                        laneAnimationTime / Mathf.Max(0.05f, laneChangeDuration));
+                else if (regularRun && playerRunFrames.Length > 0)
+                    sprite = Frame(playerRunFrames, playerRunCycle, 1f, true);
+                else
+                    sprite = ResolvePlayer("run_near");
+                if (sprite != null && player.sprite != sprite) player.sprite = sprite;
                 float stride = Mathf.Sin(playerRunCycle * Mathf.PI);
-                // With only one front-facing run drawing, alternating flipX makes
-                // the leading arm/leg swap every step. Bob and a slight opposing
-                // torso sway make the feet read as an actual running cycle.
-                player.flipX = regularRun && (Mathf.FloorToInt(playerRunCycle) & 1) != 0;
+                // Authored frames now provide the foot/arm changes. The small
+                // movement below only plants the animation in the moving world.
+                // The authored sheet contains one side-change direction. Mirror
+                // that same clean sequence for the opposite lane.
+                player.flipX = playerMotion == PlayerMotion.ChangingLane &&
+                    laneMoveDirection < 0 && playerSideFrames.Length > 0;
                 player.transform.localRotation = regularRun
                     ? Quaternion.Euler(0f, 0f, stride * 4f)
                     : Quaternion.identity;
                 Vector3 p = player.transform.localPosition;
-                p.x = Mathf.Lerp(p.x, lateral * laneSpacing, 1f - Mathf.Exp(-12f * dt));
                 float finalLaneX = LaneX(lane);
-                if (Mathf.Abs(finalLaneX - p.x) < 0.08f)
+                if (playerMotion == PlayerMotion.ChangingLane)
                 {
-                    p.x = finalLaneX;
-                    laneMoveDirection = 0;
+                    float progress = Mathf.Clamp01(laneAnimationTime / Mathf.Max(0.05f, laneChangeDuration));
+                    float eased = progress * progress * (3f - 2f * progress);
+                    p.x = Mathf.Lerp(laneAnimationStartX, finalLaneX, eased);
+                    if (progress >= 1f) p.x = finalLaneX;
                 }
-                // Chase sprites use a bottom-centre pivot, so y=0 plants the feet on the floor.
-                p.y = regularRun ? Mathf.Abs(stride) * 0.13f : 0f;
+                else p.x = finalLaneX;
+                // Chase sprites use a bottom-centre pivot. The authored jump
+                // frames are combined with a real world-space arc so the jump
+                // clears obstacles instead of only changing the drawing.
+                if (playerMotion == PlayerMotion.Jumping)
+                {
+                    float jumpProgress = Mathf.Clamp01(playerMotionTime / Mathf.Max(0.1f, playerJumpDuration));
+                    p.y = Mathf.Sin(jumpProgress * Mathf.PI) * playerJumpHeight;
+                }
+                else p.y = regularRun ? Mathf.Abs(stride) * 0.13f : 0f;
                 // The player is the only non-chaser object allowed to advance
                 // toward the camera. It settles at a stable gameplay depth.
                 p.z = Mathf.MoveTowards(p.z, playerZ, 1.2f * dt);
@@ -385,18 +513,66 @@ namespace KinectKids.Games.GreveGast
             }
             if (greve != null)
             {
-                Sprite sprite = ResolveGreve(chase > 0.72f ? "reach" : "chase");
-                if (sprite != null && greve.sprite != sprite) greve.sprite = sprite;
+                // New-sheet performance states: sing at distance, fly toward the
+                // player in the middle of the chase, and clown around when the
+                // player ducks. Old-sheet near/reach poses still finish the attack.
+                Sprite sprite;
+                bool sillyDuck = false;
+                if (chase >= 0.84f) sprite = ResolveGreve("reach");
+                else if (playerMotion == PlayerMotion.Ducking && greveDuckReactFrames.Length > 0)
+                {
+                    sprite = Frame(greveDuckReactFrames, playerMotionTime, 6f, true);
+                    sillyDuck = true;
+                }
+                else if (chase >= 0.72f) sprite = ResolveGreve("chase_near");
+                else if (chase >= 0.56f && greveFlyFrames.Length > 0)
+                    sprite = FrameProgress(greveFlyFrames, Mathf.InverseLerp(0.56f, 0.72f, chase));
+                else if (greveSingFrames.Length > 0) sprite = Frame(greveSingFrames, elapsed, 7f, true);
+                else sprite = ResolveGreve("chase");
+                if (sprite != null && greve.sprite != sprite)
+                    greve.sprite = sprite;
+
+                // Perspective already contributes to apparent size, but the
+                // authored chase also calls for an unmistakable far/near read.
+                // Recalculate from the current frame every tick (no accumulated
+                // scaling), small in the distance and imposing near the player.
+                float chaseEase = chase * chase * (3f - 2f * chase);
+                float distanceScale = Mathf.Lerp(0.78f, 1.32f, chaseEase);
+                SizeSpriteToHeight(greve, greveHeight * distanceScale * (sillyDuck ? 1.05f : 1f));
                 Vector3 p = greve.transform.localPosition;
                 p.x = Mathf.Lerp(p.x, lateral * laneSpacing * 0.65f, 1f - Mathf.Exp(-4f * dt));
-                p.y = 0.25f + Mathf.Sin(elapsed * 2f) * 0.08f;
+                p.y = 0.25f + Mathf.Sin(elapsed * (sillyDuck ? 8f : 2f)) * (sillyDuck ? 0.18f : 0.08f);
                 p.z = Mathf.Lerp(greveFarZ, greveNearZ, chase);
                 greve.transform.localPosition = p;
+                greve.transform.localRotation = sillyDuck
+                    ? Quaternion.Euler(0f, 0f, Mathf.Sin(elapsed * 9f) * 7f)
+                    : Quaternion.identity;
             }
+        }
+
+        private static Sprite FrameProgress(Sprite[] frames, float progress)
+        {
+            if (frames == null || frames.Length == 0) return null;
+            int index = Mathf.Min(frames.Length - 1,
+                Mathf.FloorToInt(Mathf.Clamp01(progress) * frames.Length));
+            return frames[index];
+        }
+
+        private static Sprite Frame(Sprite[] frames, float time, float framesPerSecond, bool pingPong)
+        {
+            if (frames == null || frames.Length == 0) return null;
+            if (frames.Length == 1) return frames[0];
+            int step = Mathf.FloorToInt(Mathf.Max(0f, time) * framesPerSecond);
+            if (!pingPong) return frames[step % frames.Length];
+            int span = frames.Length * 2 - 2;
+            int index = step % span;
+            if (index >= frames.Length) index = span - index;
+            return frames[index];
         }
 
         private void TickHazards(float dt)
         {
+            if (WorldPaused) return;
             for (int i = hazards.Count - 1; i >= 0; i--)
             {
                 RunHazard hazard = hazards[i];
@@ -487,6 +663,10 @@ namespace KinectKids.Games.GreveGast
             if (hazard.warning != null) hazard.warning.gameObject.SetActive(false);
             if (avoided) { chase = Mathf.Clamp01(chase - 0.05f); return; }
             chase = Mathf.Clamp01(chase + catchOnHit);
+            BeginMotion(PlayerMotion.Hit);
+            currentDodge = DodgeAction.None;
+            laneMoveDirection = 0;
+            worldSpeed = 0f;
             Renderer[] renderers = hazard.root.GetComponentsInChildren<Renderer>();
             for (int i = 0; i < renderers.Length; i++) renderers[i].material.color = new Color(0.9f, 0.15f, 0.12f);
         }
@@ -657,7 +837,7 @@ namespace KinectKids.Games.GreveGast
             float side = variant % 2 == 0 ? -1f : 1f;
             AddWallDecoration(style.decorationA, side, -3.2f, 4.2f, 2.7f);
             AddWallDecoration(style.decorationB, -side, 3.8f, 5.4f, 3.1f);
-            AddFloorFog(variant % 2 == 0 ? "env_16" : "env_17", variant % 2 == 0 ? -1.5f : 2.0f);
+            AddFloorFog(variant % 2 == 0 ? "new_fog_back" : "new_fog_front", variant % 2 == 0 ? -1.5f : 2.0f);
             AddThemeProp(style.theme, side);
         }
 
@@ -706,20 +886,20 @@ namespace KinectKids.Games.GreveGast
             switch (theme)
             {
                 case CorridorRunnerDirector.EnvironmentTheme.GreatHall:
-                    key = variant % 2 == 0 ? "env_12" : "env_13";
+                    key = variant % 2 == 0 ? "new_armour" : "new_banner";
                     height = variant % 2 == 0 ? 4.8f : 5.8f;
                     break;
                 case CorridorRunnerDirector.EnvironmentTheme.Kitchen:
-                    key = variant % 2 == 0 ? "env_14" : "env_15";
+                    key = variant % 2 == 0 ? "new_barrel" : "new_crate";
                     height = variant % 2 == 0 ? 2.2f : 2.0f;
                     break;
                 case CorridorRunnerDirector.EnvironmentTheme.Passage:
-                    key = variant % 2 == 0 ? "env_9" : "env_13";
-                    height = variant % 2 == 0 ? 1.8f : 5.2f;
+                    key = variant % 2 == 0 ? "new_rubble" : "new_rubble_pillar";
+                    height = variant % 2 == 0 ? 1.8f : 2.6f;
                     break;
                 default:
-                    key = variant % 3 == 0 ? "env_12" : "env_13";
-                    height = variant % 3 == 0 ? 4.5f : 5.5f;
+                    key = variant % 3 == 0 ? "new_armour" : "new_pillar";
+                    height = variant % 3 == 0 ? 4.5f : 4.2f;
                     break;
             }
 

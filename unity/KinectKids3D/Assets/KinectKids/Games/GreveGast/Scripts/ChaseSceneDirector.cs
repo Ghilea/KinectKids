@@ -359,11 +359,16 @@ namespace KinectKids.Games.GreveGast
             // Small delay so the caught beat lands before input is accepted.
             if (Time.unscaledTime - gameOverTime < 0.6f) return;
 
-            bool restart = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)
+            bool restart = Input.GetKeyDown(KeyCode.R);
+            bool continueStory = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)
                 || body.Current == GreveGastAction.Jump;
             bool quit = Input.GetKeyDown(KeyCode.Escape);
 
             if (restart)
+            {
+                RestartScene();
+            }
+            else if (continueStory && !KinectKidsStoryMode.ContinueAfter("GreveGast"))
             {
                 RestartScene();
             }

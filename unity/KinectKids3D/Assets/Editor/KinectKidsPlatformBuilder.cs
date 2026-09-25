@@ -78,11 +78,12 @@ namespace KinectKids3D.Editor
             MainMenuController menu = new GameObject("Gemensam spelmeny").AddComponent<MainMenuController>();
             menu.SetRegistry(registry);
             menu.SetVisualAssets(
-                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/ChatGPT Image 20 sep. 2026 16_54_25 (1).png"),
-                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/ChatGPT Image 20 sep. 2026 16_54_26 (2).png"),
+                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/KinectKidsMenuBackground.png"),
+                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/KinectKidsMenuConcept.png"),
                 AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/ChatGPT Image 20 sep. 2026 16_54_26 (4).png"),
-                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/ChatGPT Image 20 sep. 2026 16_54_27 (5).png"),
-                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/ChatGPT Image 20 sep. 2026 16_54_28 (7).png"));
+                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/KinectKidsMenuInteractions.png"),
+                AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/menu/KinectKidsMenuSheet.png"));
+            menu.SetMenuMusic(AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Resources/Audio/MenuTheme.wav"));
             EditorUtility.SetDirty(menu);
             EditorSceneManager.SaveScene(scene, MenuPath);
 
@@ -166,21 +167,62 @@ namespace KinectKids3D.Editor
             {
                 if (Directory.Exists(finalFolder))
                 {
-                    Directory.Move(finalFolder, backupFolder);
+                    StopProgramsInFolder(finalFolder);
+                    MoveDirectoryWithRetry(finalFolder, backupFolder);
                     previousMoved = true;
                 }
-                Directory.Move(stagingFolder, finalFolder);
+                MoveDirectoryWithRetry(stagingFolder, finalFolder);
             }
             catch
             {
                 if (!Directory.Exists(finalFolder) && previousMoved && Directory.Exists(backupFolder))
-                    Directory.Move(backupFolder, finalFolder);
+                    MoveDirectoryWithRetry(backupFolder, finalFolder);
                 throw;
             }
 
             if (!previousMoved) return;
             try { Directory.Delete(backupFolder, true); }
             catch (Exception exception) { Debug.LogWarning("Den tidigare byggmappen kunde inte rensas: " + exception.Message); }
+        }
+
+        private static void StopProgramsInFolder(string folder)
+        {
+            string prefix = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            foreach (System.Diagnostics.Process process in System.Diagnostics.Process.GetProcesses())
+            {
+                try
+                {
+                    string executable = process.MainModule != null ? process.MainModule.FileName : null;
+                    if (string.IsNullOrEmpty(executable)
+                        || !Path.GetFullPath(executable).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    Debug.Log("Stänger den körande tidigare versionen före installation: " + executable);
+                    process.Kill();
+                    process.WaitForExit(5000);
+                }
+                catch { }
+                finally { process.Dispose(); }
+            }
+        }
+
+        private static void MoveDirectoryWithRetry(string source, string destination)
+        {
+            IOException lastError = null;
+            for (int attempt = 0; attempt < 10; attempt++)
+            {
+                try
+                {
+                    Directory.Move(source, destination);
+                    return;
+                }
+                catch (IOException exception)
+                {
+                    lastError = exception;
+                    System.Threading.Thread.Sleep(300);
+                }
+            }
+            throw new IOException("Byggmappen kunde inte bytas efter flera försök. Stäng program som använder "
+                + source + ".", lastError);
         }
 
         private static GameDefinition EnsureGame(string assetName, string displayName, string description,

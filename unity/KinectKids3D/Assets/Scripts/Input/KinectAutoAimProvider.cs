@@ -13,6 +13,7 @@ namespace KinectKids3D
         private readonly MouseAimProvider mouse = new MouseAimProvider();
         private KinectBridgeAimProvider bridge;
         private float nextRetryAt;
+        private bool retryScheduled;
         private bool disposed;
 
         public bool IsAvailable => !disposed;
@@ -33,7 +34,19 @@ namespace KinectKids3D
 
         public void Tick()
         {
-            if (disposed || KinectConnected || bridge == null || !bridge.HasFailed) return;
+            if (disposed || bridge == null) return;
+            bridge.CheckStartupTimeout();
+            if (KinectConnected || !bridge.HasFailed)
+            {
+                retryScheduled = false;
+                return;
+            }
+            if (!retryScheduled)
+            {
+                retryScheduled = true;
+                nextRetryAt = Time.realtimeSinceStartup + 8f;
+                return;
+            }
             if (Time.realtimeSinceStartup < nextRetryAt) return;
             StartBridge();
         }
@@ -51,7 +64,8 @@ namespace KinectKids3D
             if (bridge != null) bridge.Dispose();
             bridge = new KinectBridgeAimProvider();
             bool launched = bridge.TryStart();
-            nextRetryAt = Time.realtimeSinceStartup + (launched ? 5f : 7f);
+            retryScheduled = !launched;
+            nextRetryAt = Time.realtimeSinceStartup + 8f;
         }
 
         public IReadOnlyList<AimSample> GetAimSamples()

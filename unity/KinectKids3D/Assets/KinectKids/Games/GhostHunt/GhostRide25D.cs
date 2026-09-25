@@ -245,7 +245,10 @@ namespace KinectKids.Games.GhostHunt
                     new Color(0.05f, 0.05f, 0.12f, 0.92f));
                 GUI.Label(new Rect(0, Screen.height * 0.36f, Screen.width, 80), "BRA JOBBAT!  " + score + " POÄNG", title);
                 if (GUI.Button(new Rect(Screen.width * 0.34f, Screen.height * 0.52f, Screen.width * 0.32f, 60), "TILL SPELMENYN"))
-                    KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
+                {
+                    if (!KinectKidsStoryMode.ContinueAfter("Spokjakten"))
+                        KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
+                }
             }
         }
 

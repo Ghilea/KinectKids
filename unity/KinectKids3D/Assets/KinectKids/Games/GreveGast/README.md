@@ -29,6 +29,27 @@ README there for the full pipeline and how to swap placeholders for final art.
 - chase meter, hit/avoid feedback, catch recovery and camera shake;
 - common platform pause and return-to-menu flow.
 
+## Authored chase animation
+
+The active `CorridorRunnerDirector` loads numbered frames from
+`Resources/GreveChase`: `player_run_*`, `player_jump_*`, `player_side_*` and
+`player_duck_*`, `player_hit_*`, `player_recover_*`, `greve_sing_*`,
+`greve_fly_*` and `greve_duck_react_*`. The player's run, jump, duck, lane
+change, fall and recovery use real frame sequences; lane movement
+and its animation finish on the same frame, and one side sequence is mirrored
+for the opposite direction. Greve Gast sings at distance, visibly flies closer,
+and performs a comic reaction while ducking gives him extra chase distance. He
+then transitions back to the old sheet's `chase_near` and extended-hand `reach`
+poses when close. His world-space size also grows with chase distance, while the
+player jump combines its sprite sequence with a full vertical arc. Jump, duck
+and lane gestures are one-shot commands: the full movement completes after the
+Kinect pose or key first triggers it. Ducking freezes the streamed world while
+Greve Gast advances. A failed dodge likewise freezes the world for authored
+fall and get-up sequences before running resumes.
+The newly cut `new_*` environment sprites supply corridor decorations, fog and
+the illustrated kitchen vista. Missing sequences still fall back to the
+earlier single-pose sprites.
+
 ## Controls
 
 Same as the platform (`W`/up = jump, `S`/down = duck, `A`/`D` or arrows = weave,

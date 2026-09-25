@@ -20,6 +20,17 @@ namespace KinectKids.Games.GreveGast
         public static Sprite Environment(string name) => Load("Environment/" + name);
         public static Sprite Hazard(string name) => Load("Hazards/" + name);
 
+        /// <summary>
+        /// Loads a numbered animation exported as prefix_1, prefix_2, ... .
+        /// Missing tail frames end the sequence, which makes it safe to add more
+        /// authored frames without changing gameplay code.
+        /// </summary>
+        public static Sprite[] PlayerAnimation(string prefix, int maximumFrames = 16)
+            => LoadSequence("Player/player_" + prefix + "_", maximumFrames);
+
+        public static Sprite[] GreveAnimation(string prefix, int maximumFrames = 16)
+            => LoadSequence("GreveGast/greve_" + prefix + "_", maximumFrames);
+
         public static bool HasPlayerArt => Player("idle") != null;
         public static bool HasGreveArt => Greve("idle") != null;
 
@@ -29,6 +40,18 @@ namespace KinectKids.Games.GreveGast
             Sprite sprite = Resources.Load<Sprite>(Root + relativePath);
             cache[relativePath] = sprite;
             return sprite;
+        }
+
+        private static Sprite[] LoadSequence(string relativePrefix, int maximumFrames)
+        {
+            var frames = new List<Sprite>();
+            for (int i = 1; i <= maximumFrames; i++)
+            {
+                Sprite frame = Load(relativePrefix + i);
+                if (frame == null) break;
+                frames.Add(frame);
+            }
+            return frames.ToArray();
         }
     }
 

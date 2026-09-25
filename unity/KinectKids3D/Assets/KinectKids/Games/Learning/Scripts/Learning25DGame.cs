@@ -433,7 +433,10 @@ namespace KinectKids.Games.Learning
                 GUI.Label(new Rect(0, Screen.height * 0.34f, Screen.width, 80), "BRA JOBBAT! " + score + " POÄNG", title);
                 if (GUI.Button(new Rect(Screen.width * 0.3f, Screen.height * 0.56f, Screen.width * 0.4f, 60), "SPELA IGEN (R)")) Restart();
                 if (GUI.Button(new Rect(Screen.width * 0.3f, Screen.height * 0.66f, Screen.width * 0.4f, 60), "TILL SPELMENYN"))
-                    KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
+                {
+                    if (!KinectKidsStoryMode.ContinueAfter(StorySceneName()))
+                        KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
+                }
             }
         }
 
@@ -471,6 +474,10 @@ namespace KinectKids.Games.Learning
         private string TitleText() => mode == LearningGameMode.Math ? "MATEMATIKBANAN"
             : mode == LearningGameMode.Swedish ? "BOKSTAVSJAKTEN"
             : mode == LearningGameMode.Shapes ? "FORMVERKSTAN" : "MÖNSTERJAKTEN";
+
+        private string StorySceneName() => mode == LearningGameMode.Math ? "Matematikbanan"
+            : mode == LearningGameMode.Swedish ? "Bokstavsjakten"
+            : mode == LearningGameMode.Shapes ? "Formverkstan" : "Monsterjakten";
 
         private Color AccentColor() => mode == LearningGameMode.Math ? new Color(0.10f, 0.48f, 0.86f)
             : mode == LearningGameMode.Swedish ? new Color(0.92f, 0.35f, 0.18f)

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using KinectKids.Scene25D;
 using KinectKids3D;
 using KinectKids3D.Platform;
@@ -97,7 +98,10 @@ namespace KinectKids.Games.Movement
                 new Color(0.05f, 0.05f, 0.12f, 0.92f));
             GUI.Label(new Rect(0, Screen.height * 0.34f, Screen.width, 80), "BRA JOBBAT!  " + Score + " POÄNG", TitleStyle);
             if (GUI.Button(new Rect(Screen.width * 0.34f, Screen.height * 0.52f, Screen.width * 0.32f, 60), "TILL SPELMENYN"))
-                KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
+            {
+                if (!KinectKidsStoryMode.ContinueAfter(SceneManager.GetActiveScene().name))
+                    KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
+            }
         }
 
         protected static void Fill(Rect rect, Color color)

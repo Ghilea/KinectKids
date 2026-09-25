@@ -22,8 +22,10 @@ namespace KinectKids3D
         private Thread receiveThread;
         private Process bridgeProcess;
         private volatile bool stopping;
+        private volatile bool receivedErrorStatus;
         private bool disposed;
         private DateTime lastTrackedFrameAt = DateTime.MinValue;
+        private DateTime startupDeadline = DateTime.MaxValue;
 
         public bool HasFailed { get; private set; }
 
@@ -71,6 +73,7 @@ namespace KinectKids3D
                 if (bridgeProcess == null) throw new InvalidOperationException("KinectBridge.exe kunde inte startas.");
                 bridgeProcess.EnableRaisingEvents = true;
                 bridgeProcess.Exited += OnBridgeExited;
+                startupDeadline = DateTime.UtcNow.AddSeconds(18);
                 status = "Kinect-bryggan startar i bakgrunden…";
                 HasFailed = false;
                 return true;
@@ -84,11 +87,30 @@ namespace KinectKids3D
             }
         }
 
+        public void CheckStartupTimeout()
+        {
+            if (disposed || IsAvailable || HasFailed || DateTime.UtcNow < startupDeadline) return;
+            status = "Kinect hittades men sensorn svarade inte - försöker ansluta igen";
+            IsAvailable = false;
+            HasFailed = true;
+            try
+            {
+                if (bridgeProcess != null && !bridgeProcess.HasExited) bridgeProcess.Kill();
+            }
+            catch { }
+            ready.Set();
+        }
+
         private void OnBridgeExited(object sender, EventArgs eventArgs)
         {
             if (stopping) return;
             IsAvailable = false;
             HasFailed = true;
+            if (receivedErrorStatus)
+            {
+                ready.Set();
+                return;
+            }
             try
             {
                 string error = bridgeProcess != null ? bridgeProcess.StandardError.ReadToEnd() : string.Empty;
@@ -159,6 +181,7 @@ namespace KinectKids3D
                     {
                         IsAvailable = false;
                         HasFailed = true;
+                        receivedErrorStatus = true;
                         ready.Set();
                     }
                 }

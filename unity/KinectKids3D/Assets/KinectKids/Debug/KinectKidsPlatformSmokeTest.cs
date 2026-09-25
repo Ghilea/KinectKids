@@ -20,7 +20,8 @@ namespace KinectKids3D.Platform
             KinectKidsPlatformRoot.Instance.Scenes.LoadGame("GreveGast");
             yield return WaitForScene("GreveGast");
             yield return null;
-            if (FindFirstObjectByType<RunnerSceneDirector>() == null)
+            if (FindFirstObjectByType<CorridorRunnerDirector>() == null
+                && FindFirstObjectByType<RunnerSceneDirector>() == null)
                 Fail("Greve Gast runner missing");
             else Debug.Log("PLATFORM_SMOKE: Greve Gast loaded");
             yield return new WaitForSecondsRealtime(2f);

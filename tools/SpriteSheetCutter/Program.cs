@@ -56,7 +56,7 @@ internal static class Program
 
         // Flood-fill connected components (4/8-connected via 8 neighbours).
         int[] labels = new int[w * h];
-        var components = new List<(int minX, int minY, int maxX, int maxY, int area)>();
+        var components = new List<(int label, int minX, int minY, int maxX, int maxY, int area)>();
         var stack = new Stack<(int, int)>();
         int nextLabel = 0;
 
@@ -85,7 +85,7 @@ internal static class Program
                     stack.Push((nx, ny));
                 }
             }
-            components.Add((minX, minY, maxX, maxY, area));
+            components.Add((nextLabel, minX, minY, maxX, maxY, area));
         }
 
         // Merge components whose bounding boxes overlap or nearly touch (re-joins
@@ -124,6 +124,29 @@ internal static class Program
                 g.Clear(Color.Transparent);
                 g.DrawImage(bmp, new Rectangle(0, 0, rw, rh), new Rectangle(rx, ry, rw, rh), GraphicsUnit.Pixel);
             }
+
+            // In isolated-component mode, keep only the pixels belonging to the
+            // selected component. A plain rectangular crop can otherwise include
+            // hands, smoke or feet from a neighbouring animation cell whenever
+            // their bounding boxes overlap. This masking is the important part
+            // for tightly packed AI-authored sheets.
+            if (mergeGap < 0)
+            {
+                BitmapData sliceData = slice.LockBits(new Rectangle(0, 0, rw, rh),
+                    ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+                byte[] slicePixels = new byte[sliceData.Stride * rh];
+                Marshal.Copy(sliceData.Scan0, slicePixels, 0, slicePixels.Length);
+                for (int sy = 0; sy < rh; sy++)
+                for (int sx = 0; sx < rw; sx++)
+                {
+                    int sourceX = rx + sx, sourceY = ry + sy;
+                    if (labels[sourceY * w + sourceX] == c.label) continue;
+                    int pixel = sy * sliceData.Stride + sx * 4;
+                    slicePixels[pixel] = slicePixels[pixel + 1] = slicePixels[pixel + 2] = slicePixels[pixel + 3] = 0;
+                }
+                Marshal.Copy(slicePixels, 0, sliceData.Scan0, slicePixels.Length);
+                slice.UnlockBits(sliceData);
+            }
             string outPath = Path.Combine(outDir, $"{prefix}_{index}.png");
             slice.Save(outPath, ImageFormat.Png);
             manifest.WriteLine($"{index}\t{rx}\t{ry}\t{rw}\t{rh}\t{c.area}");
@@ -135,8 +158,8 @@ internal static class Program
         return 0;
     }
 
-    private static List<(int minX, int minY, int maxX, int maxY, int area)> MergeNearby(
-        List<(int minX, int minY, int maxX, int maxY, int area)> comps, int gap)
+    private static List<(int label, int minX, int minY, int maxX, int maxY, int area)> MergeNearby(
+        List<(int label, int minX, int minY, int maxX, int maxY, int area)> comps, int gap)
     {
         bool merged = true;
         while (merged)
@@ -148,7 +171,7 @@ internal static class Program
                 {
                     if (!Overlaps(comps[i], comps[j], gap)) continue;
                     var a = comps[i]; var b = comps[j];
-                    comps[i] = (Math.Min(a.minX, b.minX), Math.Min(a.minY, b.minY),
+                    comps[i] = (-1, Math.Min(a.minX, b.minX), Math.Min(a.minY, b.minY),
                         Math.Max(a.maxX, b.maxX), Math.Max(a.maxY, b.maxY), a.area + b.area);
                     comps.RemoveAt(j);
                     merged = true;
@@ -160,8 +183,8 @@ internal static class Program
         return comps;
     }
 
-    private static bool Overlaps((int minX, int minY, int maxX, int maxY, int area) a,
-        (int minX, int minY, int maxX, int maxY, int area) b, int gap)
+    private static bool Overlaps((int label, int minX, int minY, int maxX, int maxY, int area) a,
+        (int label, int minX, int minY, int maxX, int maxY, int area) b, int gap)
     {
         return a.minX - gap <= b.maxX && b.minX - gap <= a.maxX &&
                a.minY - gap <= b.maxY && b.minY - gap <= a.maxY;
