@@ -149,6 +149,10 @@ float stepLength = (tEnd - tStart) / STEPS;
 float alpha = 0.0;
 float3 accumulatedColor = float3(0.0, 0.0, 0.0);
 
+// Används bara av Grevens mörker.
+// Håller reda på om kamerans ray passerar den solida kärnan.
+float maxBlackCore = 0.0;
+
 float timeOffset = _Time.y;
 
 [loop]
@@ -201,32 +205,51 @@ for (int s = 0; s < STEPS; s++)
             fineNoise * 0.28
         );
 
-    float mask =
-        lerp(
-            roundedVolumeMask(p),
-            floorVolumeMask(p),
-            _FloorMode
-        );
+   float baseMask =
+    lerp(
+        roundedVolumeMask(p),
+        floorVolumeMask(p),
+        _FloorMode
+    );
 
-    // Svarta Greve-volymen behåller tät kärna.
+float mask = baseMask;
+
+if (_FloorMode < 0.5)
+{
+    // Noise påverkar framför allt ytterkanten.
+    // Kärnan får aldrig tunnas ut av noise.
     float warpedBlackMask =
         saturate(
-            mask +
-            (noise - 0.52) * 0.82
+            baseMask +
+            (noise - 0.52) * 0.38
         );
 
     warpedBlackMask =
         max(
             warpedBlackMask,
-            mask * 0.72
+            baseMask * 0.92
+        );
+
+    // Solid kärna inne i Grevens mörker.
+    float coreMask =
+        smoothstep(
+            0.28,
+            0.68,
+            baseMask
+        );
+
+    maxBlackCore =
+        max(
+            maxBlackCore,
+            coreMask
         );
 
     mask =
-        lerp(
+        max(
             warpedBlackMask,
-            mask,
-            _FloorMode
+            coreMask
         );
+}
 
     // ------------------------------------------------
     // Mycket större skillnad mellan tunn och tjock dimma.
@@ -239,12 +262,35 @@ for (int s = 0; s < STEPS; s++)
             smoothstep(0.18, 0.85, noise)
         );
 
-    float density =
+  float density;
+
+if (_FloorMode < 0.5)
+{
+    // Grevens mörker:
+    // ingen kamerafade och extremt tät kärna.
+    float solidCore =
+        smoothstep(
+            0.28,
+            0.68,
+            baseMask
+        );
+
+    density =
+        _Density *
+        (
+            mask * lerp(0.90, 1.35, noise) +
+            solidCore * 5.0
+        );
+}
+else
+{
+    // Blå golvdimma:
+    // tunnare nära kameran och tätare längre bort.
+    density =
         _Density *
         mask *
         densityVariation;
 
-    // Ingen blå hinna precis framför linsen.
     float nearFade =
         smoothstep(
             4.0,
@@ -254,7 +300,6 @@ for (int s = 0; s < STEPS; s++)
 
     density *= nearFade;
 
-    // Lite mer atmosfär längre in i korridoren.
     float depthDensity =
         lerp(
             0.90,
@@ -265,6 +310,7 @@ for (int s = 0; s < STEPS; s++)
         );
 
     density *= depthDensity;
+}
 
     float sampleAlpha =
         1.0 -
@@ -314,12 +360,26 @@ float3 finalColor =
     accumulatedColor /
     max(alpha, 0.0001);
 
+if (_FloorMode < 0.5)
+{
+    // Där rayen går genom kärnan ska bakgrunden inte kunna synas.
+    alpha =
+        max(
+            alpha,
+            maxBlackCore * 0.995
+        );
+
+    // Grevens mörker ska verkligen vara svart,
+    // inte grått från noise/depth shading.
+    finalColor = float3(0.0, 0.0, 0.0);
+}
+
 return fixed4(
     finalColor,
     alpha * _FogColor.a
 );
 
-                return fixed4(_FogColor.rgb, alpha * _FogColor.a);
+              
             }
             ENDCG
         }
