@@ -6,13 +6,15 @@ namespace KinectKids3D
         public long TrackingId;
         public float CenterX;
         public float HeadY;
+        public float ShoulderY;
 
-        public PlayerPose(int playerIndex, long trackingId, float centerX, float headY)
+        public PlayerPose(int playerIndex, long trackingId, float centerX, float headY, float shoulderY = 0f)
         {
             PlayerIndex = playerIndex;
             TrackingId = trackingId;
             CenterX = centerX;
             HeadY = headY;
+            ShoulderY = shoulderY;
         }
     }
 }

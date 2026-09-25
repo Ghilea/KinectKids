@@ -167,14 +167,20 @@ namespace KinectKids.Bridge
             Joint head = body.Joints[JointType.Head];
             Joint left = body.Joints[JointType.HandLeft];
             Joint right = body.Joints[JointType.HandRight];
+            if (shoulder.TrackingState == JointTrackingState.NotTracked)
+                shoulder = body.Joints[JointType.Spine];
+            if (head.TrackingState == JointTrackingState.NotTracked)
+                head = shoulder;
             // En kort tappad hand får inte radera hela spelaren. Handleden är
             // ofta fortfarande spårad när handen ligger nära bildkanten.
             if (left.TrackingState == JointTrackingState.NotTracked)
                 left = body.Joints[JointType.WristLeft];
             if (right.TrackingState == JointTrackingState.NotTracked)
                 right = body.Joints[JointType.WristRight];
-            if (left.TrackingState == JointTrackingState.NotTracked
-                || right.TrackingState == JointTrackingState.NotTracked) return;
+            // Body gestures must continue working even when one hand leaves the
+            // sensor volume. Use the shoulder as a neutral aim fallback.
+            if (left.TrackingState == JointTrackingState.NotTracked) left = shoulder;
+            if (right.TrackingState == JointTrackingState.NotTracked) right = shoulder;
 
             DepthImagePoint leftDepth = sensor.CoordinateMapper.MapSkeletonPointToDepthPoint(
                 left.Position, DepthImageFormat.Resolution320x240Fps30);

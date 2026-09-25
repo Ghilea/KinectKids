@@ -325,15 +325,11 @@ namespace KinectKids3D.Platform
             Vector2 mouse = DesignMousePosition();
             for (int i = 0; i < targets.Length; i++)
                 if (targets[i].Contains(mouse)) { hoveredMenuItem = i; break; }
-            int focus = hoveredMenuItem >= 0 ? hoveredMenuItem : keyboardNavigationActive ? keyboardFocus : -1;
-            if (focus >= 0 && focus < targets.Length) DrawFocusEffect(targets[focus]);
+            DrawMenuButtons(targets);
 
             if (InvisibleButton(new Rect(47f, 250f, 365f, 120f)))
             {
-                showAdventurePicker = true;
-                showKinectPanel = false;
-                showInformation = false;
-                showSongsPanel = false;
+                StartStory();
             }
             if (InvisibleButton(new Rect(505f, 776f, 318f, 116f))) Play();
             if (InvisibleButton(new Rect(66f, 378f, 350f, 96f)) || InvisibleButton(new Rect(830f, 790f, 282f, 101f)))
@@ -369,16 +365,46 @@ namespace KinectKids3D.Platform
             new Rect(1350f, 790f, 245f, 101f)
         };
 
-        private void DrawFocusEffect(Rect target)
+        private void DrawMenuButtons(Rect[] targets)
         {
             if (buttonSheet == null) return;
-            float pulse = 1f + Mathf.Sin(Time.unscaledTime * 4.5f) * 0.025f;
-            Rect destination = ScaleAroundCenter(target, pulse);
-            Rect buttonSource = ScaleSheetRect(new Rect(500f, 885f, 205f, 135f), 1448f, 1086f);
-            Rect sparkleSource = ScaleSheetRect(new Rect(220f, 885f, 145f, 165f), 1448f, 1086f);
-            DrawTexturePartContained(destination, buttonSheet, buttonSource);
-            Rect sparkle = new Rect(destination.x - 16f, destination.y - 20f, 105f, 105f);
-            DrawTexturePartContained(sparkle, buttonSheet, sparkleSource);
+            Rect[] normalSources =
+            {
+                new Rect(36f, 48f, 264f, 100f),
+                new Rect(40f, 152f, 260f, 84f),
+                new Rect(36f, 248f, 264f, 80f),
+                new Rect(36f, 344f, 264f, 80f),
+                new Rect(36f, 436f, 264f, 84f)
+            };
+            Rect[] hoverSources =
+            {
+                new Rect(1384f, 48f, 256f, 100f),
+                new Rect(1388f, 152f, 256f, 84f),
+                new Rect(1392f, 248f, 252f, 80f),
+                new Rect(1392f, 344f, 252f, 80f),
+                new Rect(1392f, 436f, 252f, 84f)
+            };
+            for (int i = 0; i < normalSources.Length; i++)
+            {
+                DrawButtonSprite(targets[i], normalSources[i], 1f);
+                bool active = hoveredMenuItem == i || (keyboardNavigationActive && keyboardFocus == i);
+                if (!active) continue;
+                float pulse = 1f + Mathf.Sin(Time.unscaledTime * 5f) * 0.018f;
+                Rect animated = ScaleAroundCenter(targets[i], pulse);
+                float alpha = 0.78f + Mathf.Sin(Time.unscaledTime * 5f) * 0.12f;
+                DrawButtonSprite(animated, hoverSources[i], alpha);
+            }
+        }
+
+        private void DrawButtonSprite(Rect destination, Rect sourcePixels, float alpha)
+        {
+            Color old = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, alpha);
+            Rect uv = new Rect(sourcePixels.x / buttonSheet.width,
+                1f - (sourcePixels.y + sourcePixels.height) / buttonSheet.height,
+                sourcePixels.width / buttonSheet.width, sourcePixels.height / buttonSheet.height);
+            GUI.DrawTextureWithTexCoords(destination, buttonSheet, uv, true);
+            GUI.color = old;
         }
 
         private Vector2 DesignMousePosition()

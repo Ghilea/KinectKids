@@ -146,7 +146,7 @@ namespace KinectKids3D
                     object shoulder = GetJointPoint(body, "ShoulderCenter");
                     object head = GetJointPoint(body, "Head");
                     nextPoses.Add(new PlayerPose(player, trackingId,
-                        ReadFloat(shoulder, "X"), ReadFloat(head, "Y")));
+                        ReadFloat(shoulder, "X"), ReadFloat(head, "Y"), ReadFloat(shoulder, "Y")));
                     AddHand(next, body, player, player * 2, "HandLeft", shoulder, now);
                     AddHand(next, body, player, player * 2 + 1, "HandRight", shoulder, now);
                 }

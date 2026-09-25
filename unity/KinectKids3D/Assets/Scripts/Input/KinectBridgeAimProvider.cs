@@ -198,7 +198,7 @@ namespace KinectKids3D
                 if (values.Length != 15 || values[0] != "P") continue;
                 int player = ParseInt(values[1]);
                 long trackingId = ParseLong(values[2]);
-                poses.Add(new PlayerPose(player, trackingId, ParseFloat(values[3]), ParseFloat(values[4])));
+                poses.Add(new PlayerPose(player, trackingId, ParseFloat(values[3]), ParseFloat(values[4]), ParseFloat(values[5])));
                 AddHand(samples, player, player * 2, ParseFloat(values[7]), ParseFloat(values[8]),
                     ParseFloat(values[9]), ParseFloat(values[10]), ParseFloat(values[5]), ParseFloat(values[6]), now);
                 AddHand(samples, player, player * 2 + 1, ParseFloat(values[11]), ParseFloat(values[12]),
