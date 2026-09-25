@@ -71,7 +71,6 @@ namespace KinectKids.Games.GreveGast
         private SpriteRenderer player;
         private SpriteRenderer greve;
         private Transform darknessRoot;
-        private Sprite darknessSmokeSprite;
         private SpriteRenderer illustratedVista;
         private Sprite[] playerRunFrames;
         private Sprite[] playerJumpFrames;
@@ -135,6 +134,7 @@ namespace KinectKids.Games.GreveGast
             worldCamera.fieldOfView = fieldOfView;
             worldCamera.nearClipPlane = 0.1f;
             worldCamera.farClipPlane = 150f;
+            worldCamera.depthTextureMode |= DepthTextureMode.Depth;
             worldCamera.clearFlags = CameraClearFlags.SolidColor;
             worldCamera.backgroundColor = new Color(0.035f, 0.045f, 0.07f, 1f);
 
@@ -289,13 +289,60 @@ namespace KinectKids.Games.GreveGast
             // Oregelbundna, pulserande moln gör att gränsen ser ut att äta sig
             // fram över rummets ytor utan någon solid geometri som kan avslöja
             // en rektangulär kant.
-            darknessSmokeSprite = CreateDarknessSmokeSprite();
+            BuildVolumetricFogVolumes();
             BuildDarknessParticleFog();
             BuildFloorParticleFog();
         }
 
+        private void BuildVolumetricFogVolumes()
+        {
+            Shader volumeShader = Shader.Find("KinectKids/Greve Volumetric Fog");
+            if (volumeShader == null) return;
+
+            BuildFogVolume("Grevens raymarchade svarta 3D-mörker", darknessRoot,
+                new Vector3(0f, corridorHeight * 0.50f, 2.0f),
+                new Vector3(corridorWidth * 0.96f, corridorHeight * 0.96f, 7.5f),
+                new Color(0f, 0f, 0f, 1f), 4.8f, 0.52f, 0f, 3010, volumeShader);
+
+            BuildFogVolume("Raymarchad blåvit 3D-golvdimma", transform,
+                new Vector3(0f, 1.75f, 5.5f),
+                new Vector3(corridorWidth * 0.98f, 4.2f, 29f),
+                new Color(0.34f, 0.54f, 0.92f, 0.60f), 1.18f, 0.28f, 1f, 2989, volumeShader);
+        }
+
+        private static void BuildFogVolume(string volumeName, Transform parent,
+            Vector3 localPosition, Vector3 localScale, Color color, float density,
+            float edgeSoftness, float floorMode, int renderQueue, Shader shader)
+        {
+            GameObject volume = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            volume.name = volumeName;
+            volume.transform.SetParent(parent, false);
+            volume.transform.localPosition = localPosition;
+            volume.transform.localRotation = Quaternion.identity;
+            volume.transform.localScale = localScale;
+            Collider collider = volume.GetComponent<Collider>();
+            if (collider != null) Destroy(collider);
+
+            Material material = new Material(shader);
+            material.name = volumeName + " material";
+            material.renderQueue = renderQueue;
+            material.SetColor("_FogColor", color);
+            material.SetFloat("_Density", density);
+            material.SetFloat("_NoiseScale", floorMode > 0.5f ? 0.34f : 0.22f);
+            material.SetVector("_NoiseSpeed", floorMode > 0.5f
+                ? new Vector4(0.045f, 0.012f, -0.025f, 0f)
+                : new Vector4(-0.028f, 0.018f, 0.022f, 0f));
+            material.SetFloat("_EdgeSoftness", edgeSoftness);
+            material.SetFloat("_FloorMode", floorMode);
+            MeshRenderer renderer = volume.GetComponent<MeshRenderer>();
+            renderer.material = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+
         private void BuildDarknessParticleFog()
         {
+            if (TryBuildGpuFogLibrary(true)) return;
             GameObject fogObject = new GameObject("Mjuk svart partikelrök");
             fogObject.SetActive(false);
             fogObject.transform.SetParent(darknessRoot, false);
@@ -366,6 +413,12 @@ namespace KinectKids.Games.GreveGast
 
             ParticleSystemRenderer fogRenderer = fog.GetComponent<ParticleSystemRenderer>();
             fogRenderer.material = CreateParticleFogMaterial(fogRenderer, "Greve soft black fog");
+            fogRenderer.SetActiveVertexStreams(new List<ParticleSystemVertexStream>
+            {
+                ParticleSystemVertexStream.Position, ParticleSystemVertexStream.Normal,
+                ParticleSystemVertexStream.Color, ParticleSystemVertexStream.UV,
+                ParticleSystemVertexStream.StableRandomX
+            });
             fogRenderer.renderMode = ParticleSystemRenderMode.Billboard;
             fogRenderer.alignment = ParticleSystemRenderSpace.View;
             fogRenderer.sortingOrder = 19;
@@ -375,6 +428,7 @@ namespace KinectKids.Games.GreveGast
 
         private void BuildFloorParticleFog()
         {
+            if (TryBuildGpuFogLibrary(false)) return;
             GameObject floorFogObject = new GameObject("Kontinuerlig partikelgolvdimma");
             floorFogObject.SetActive(false);
             floorFogObject.transform.SetParent(transform, false);
@@ -427,72 +481,334 @@ namespace KinectKids.Games.GreveGast
 
             ParticleSystemRenderer renderer = floorFog.GetComponent<ParticleSystemRenderer>();
             renderer.material = CreateParticleFogMaterial(renderer, "Soft floor particle fog");
+            renderer.SetActiveVertexStreams(new List<ParticleSystemVertexStream>
+            {
+                ParticleSystemVertexStream.Position, ParticleSystemVertexStream.Normal,
+                ParticleSystemVertexStream.Color, ParticleSystemVertexStream.UV,
+                ParticleSystemVertexStream.StableRandomX
+            });
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
             renderer.sortingOrder = 12;
             floorFogObject.SetActive(true);
             floorFog.Play();
         }
 
-        private Material CreateParticleFogMaterial(ParticleSystemRenderer renderer, string materialName)
+        private bool TryBuildGpuFogLibrary(bool blackFog)
         {
-            Material baseMaterial = renderer.sharedMaterial;
-            Shader shader = baseMaterial != null ? baseMaterial.shader : null;
-            if (shader == null || !shader.isSupported || shader.name == "Hidden/InternalErrorShader")
-                shader = Shader.Find("Particles/Standard Unlit");
-            if (shader == null || !shader.isSupported)
-                shader = Shader.Find("Legacy Shaders/Particles/Alpha Blended");
-            if (shader == null || !shader.isSupported)
-                shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
-            if (baseMaterial == null && shader == null) return null;
+            GameObject prefab = Resources.Load<GameObject>("GPUFog/Ground Fog");
+            if (prefab == null) return false;
+            if (!blackFog)
+            {
+                // The raymarched volume supplies real perspective depth.  The
+                // library particles now only add rising animated wisps, avoiding
+                // the flat horizontal band produced by a dense billboard layer.
+                BuildRisingFloorWisps(prefab);
+                return true;
+            }
+            Transform parent = blackFog ? darknessRoot : transform;
+            GameObject fogObject = Instantiate(prefab, parent, false);
+            fogObject.name = blackFog
+                ? "GPU Fog Particles - Grevens svarta mörker"
+                : "GPU Fog Particles - blåvit golvdimma";
+            fogObject.SetActive(false);
+            fogObject.transform.localPosition = blackFog
+                ? new Vector3(0f, corridorHeight * 0.50f, 0.72f)
+                : new Vector3(0f, 0.20f, 5f);
+            fogObject.transform.localRotation = Quaternion.identity;
+            fogObject.transform.localScale = Vector3.one;
 
-            Material material = baseMaterial != null && baseMaterial.shader != null
-                && baseMaterial.shader.isSupported
-                    ? new Material(baseMaterial)
-                    : new Material(shader);
-            material.name = materialName;
-            Texture2D texture = darknessSmokeSprite.texture;
-            if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", texture);
-            if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", texture);
-            if (material.HasProperty("_Color")) material.SetColor("_Color", Color.white);
-            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.white);
-            return material;
+            ParticleSystem fog = fogObject.GetComponent<ParticleSystem>();
+            ParticleSystemRenderer renderer = fogObject.GetComponent<ParticleSystemRenderer>();
+            if (fog == null || renderer == null)
+            {
+                Destroy(fogObject);
+                return false;
+            }
+            fog.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule main = fog.main;
+            main.loop = true;
+            main.prewarm = true;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.scalingMode = ParticleSystemScalingMode.Shape;
+            main.startLifetime = blackFog
+                ? new ParticleSystem.MinMaxCurve(5.5f, 9f)
+                : new ParticleSystem.MinMaxCurve(7f, 12f);
+            main.startSpeed = blackFog
+                ? new ParticleSystem.MinMaxCurve(0.04f, 0.20f)
+                : new ParticleSystem.MinMaxCurve(0.02f, 0.12f);
+            main.startSize = blackFog
+                ? new ParticleSystem.MinMaxCurve(2.8f, 4.8f)
+                : new ParticleSystem.MinMaxCurve(3.0f, 6.2f);
+            main.startColor = blackFog
+                ? new ParticleSystem.MinMaxGradient(
+                    new Color(0f, 0f, 0f, 0.90f),
+                    new Color(0.004f, 0.001f, 0.008f, 1f))
+                : new ParticleSystem.MinMaxGradient(
+                    new Color(0.48f, 0.66f, 1f, 0.22f),
+                    new Color(0.88f, 0.96f, 1f, 0.48f));
+            main.maxParticles = blackFog ? 180 : 340;
+            ParticleSystem.ColorOverLifetimeModule lifetimeColor = fog.colorOverLifetime;
+            lifetimeColor.enabled = false;
+
+            ParticleSystem.EmissionModule emission = fog.emission;
+            emission.rateOverTime = blackFog ? 22f : 34f;
+            ParticleSystem.ShapeModule shape = fog.shape;
+            shape.shapeType = blackFog ? ParticleSystemShapeType.Sphere : ParticleSystemShapeType.Box;
+            if (blackFog)
+            {
+                // Keep the emitter inside the corridor.  A huge emitter was
+                // clipped by the portal and therefore read as a rectangle.
+                shape.radius = 2.0f;
+                shape.radiusThickness = 1f;
+                fogObject.transform.localScale = new Vector3(1.08f, 1.0f, 0.52f);
+            }
+            else shape.scale = new Vector3(corridorWidth * 0.98f, 0.36f, 34f);
+
+            ParticleSystem.VelocityOverLifetimeModule velocity = fog.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.x = new ParticleSystem.MinMaxCurve(blackFog ? -0.10f : -0.18f,
+                blackFog ? 0.10f : 0.18f);
+            velocity.y = blackFog
+                ? new ParticleSystem.MinMaxCurve(-0.05f, 0.12f)
+                : new ParticleSystem.MinMaxCurve(0.015f, 0.06f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.04f, 0.04f);
+
+            renderer.material = CreateParticleFogMaterial(renderer,
+                blackFog ? "Greve GPU black fog" : "GPU blue-white floor fog");
+            renderer.renderMode = blackFog
+                ? ParticleSystemRenderMode.Billboard
+                : ParticleSystemRenderMode.HorizontalBillboard;
+            renderer.alignment = ParticleSystemRenderSpace.View;
+            renderer.sortingOrder = blackFog ? 19 : 12;
+            renderer.enableGPUInstancing = true;
+            fogObject.SetActive(true);
+            fog.Play();
+            if (blackFog) BuildOpaqueBlackFogCore(prefab);
+            return true;
         }
 
-        private static Sprite CreateDarknessSmokeSprite()
+        private void BuildRisingFloorWisps(GameObject prefab)
         {
-            const int size = 128;
-            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            GameObject wispObject = Instantiate(prefab, transform, false);
+            wispObject.name = "GPU Fog Particles - stigande blåvita golvslöjor";
+            wispObject.SetActive(false);
+            wispObject.transform.localPosition = new Vector3(0f, 0.42f, 1f);
+            wispObject.transform.localRotation = Quaternion.identity;
+            wispObject.transform.localScale = Vector3.one;
+
+            ParticleSystem wisps = wispObject.GetComponent<ParticleSystem>();
+            ParticleSystemRenderer renderer = wispObject.GetComponent<ParticleSystemRenderer>();
+            if (wisps == null || renderer == null)
             {
-                name = "Greve darkness soft smoke",
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp
-            };
-            Color32[] pixels = new Color32[size * size];
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float nx = (x + 0.5f) / size * 2f - 1f;
-                    float ny = (y + 0.5f) / size * 2f - 1f;
-                    float radius = Mathf.Sqrt(nx * nx + ny * ny);
-                    float coarse = Mathf.PerlinNoise(x * 0.037f + 11.7f, y * 0.037f + 4.3f);
-                    float detail = Mathf.PerlinNoise(x * 0.091f + 2.1f, y * 0.091f + 19.4f);
-                    float angle = Mathf.Atan2(ny, nx);
-                    float flowingContour = Mathf.Sin(angle * 3f + 0.7f) * 0.055f
-                        + Mathf.Sin(angle * 7f - 1.2f) * 0.026f;
-                    float warpedRadius = radius + flowingContour
-                        + (coarse - 0.5f) * 0.08f + (detail - 0.5f) * 0.035f;
-                    // A deliberately broad falloff avoids readable circles or
-                    // a hard emitter boundary when many clouds overlap.
-                    float alpha = 1f - Mathf.SmoothStep(0.34f, 1.32f, warpedRadius);
-                    pixels[y * size + x] = new Color32(255, 255, 255,
-                        (byte)Mathf.RoundToInt(alpha * 242f));
-                }
+                Destroy(wispObject);
+                return;
             }
-            texture.SetPixels32(pixels);
-            texture.Apply(false, false);
-            return Sprite.Create(texture, new Rect(0f, 0f, size, size),
-                new Vector2(0.5f, 0.5f), 64f, 0, SpriteMeshType.FullRect);
+
+            wisps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule main = wisps.main;
+            main.loop = true;
+            main.prewarm = true;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.scalingMode = ParticleSystemScalingMode.Shape;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(7f, 12f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.015f, 0.08f);
+            main.startSize = new ParticleSystem.MinMaxCurve(2.2f, 4.4f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(0.46f, 0.66f, 1f, 0.13f),
+                new Color(0.86f, 0.95f, 1f, 0.30f));
+            main.maxParticles = 150;
+            ParticleSystem.ColorOverLifetimeModule lifetimeColor = wisps.colorOverLifetime;
+            lifetimeColor.enabled = false;
+
+            ParticleSystem.EmissionModule emission = wisps.emission;
+            emission.rateOverTime = 15f;
+            ParticleSystem.ShapeModule shape = wisps.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            // Starts just in front of the camera and continues through the
+            // playable corridor, so near wisps are visibly larger than far ones.
+            shape.scale = new Vector3(corridorWidth * 0.94f, 0.70f, 24f);
+
+            ParticleSystem.VelocityOverLifetimeModule velocity = wisps.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.x = new ParticleSystem.MinMaxCurve(-0.12f, 0.12f);
+            velocity.y = new ParticleSystem.MinMaxCurve(0.06f, 0.20f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.025f, 0.025f);
+
+            renderer.material = CreateParticleFogMaterial(renderer, "GPU blue-white floor wisps");
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            renderer.alignment = ParticleSystemRenderSpace.View;
+            renderer.sortMode = ParticleSystemSortMode.Distance;
+            renderer.sortingOrder = 13;
+            renderer.enableGPUInstancing = true;
+            wispObject.SetActive(true);
+            wisps.Play();
+        }
+
+        private void BuildOpaqueBlackFogCore(GameObject prefab)
+        {
+            // A second, tighter layer makes the middle truly coal black.  It
+            // still consists of the library's radial/noise particles, so its
+            // silhouette stays soft instead of exposing a quad or box edge.
+            GameObject coreObject = Instantiate(prefab, darknessRoot, false);
+            coreObject.name = "GPU Fog Particles - ogenomskinlig svart kärna";
+            coreObject.SetActive(false);
+            coreObject.transform.localPosition = new Vector3(0f, corridorHeight * 0.50f, 1.85f);
+            coreObject.transform.localRotation = Quaternion.identity;
+            coreObject.transform.localScale = new Vector3(0.92f, 1.0f, 0.42f);
+
+            ParticleSystem core = coreObject.GetComponent<ParticleSystem>();
+            ParticleSystemRenderer renderer = coreObject.GetComponent<ParticleSystemRenderer>();
+            if (core == null || renderer == null)
+            {
+                Destroy(coreObject);
+                return;
+            }
+
+            core.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule main = core.main;
+            main.loop = true;
+            main.prewarm = true;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.scalingMode = ParticleSystemScalingMode.Shape;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(7f, 9f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.005f, 0.025f);
+            main.startSize = new ParticleSystem.MinMaxCurve(14.5f, 16.5f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(0f, 0f, 0f, 0.98f), Color.black);
+            main.maxParticles = 8;
+            ParticleSystem.ColorOverLifetimeModule lifetimeColor = core.colorOverLifetime;
+            lifetimeColor.enabled = false;
+
+            ParticleSystem.EmissionModule emission = core.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[]
+            {
+                new ParticleSystem.Burst(0f, (short)4)
+            });
+            ParticleSystem.ShapeModule shape = core.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.20f;
+            shape.radiusThickness = 1f;
+
+            ParticleSystem.VelocityOverLifetimeModule velocity = core.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.x = new ParticleSystem.MinMaxCurve(-0.06f, 0.06f);
+            velocity.y = new ParticleSystem.MinMaxCurve(-0.03f, 0.09f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.02f, 0.02f);
+
+            renderer.material = CreateParticleFogMaterial(renderer, "Greve GPU black core fog");
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            renderer.alignment = ParticleSystemRenderSpace.View;
+            renderer.sortMode = ParticleSystemSortMode.Distance;
+            renderer.sortingOrder = 18;
+            renderer.enableGPUInstancing = true;
+            coreObject.SetActive(true);
+            core.Play();
+
+            BuildBlackSurfaceFog(prefab, "svart rök längs golvet",
+                new Vector3(0f, 0.16f, 0.4f),
+                new Vector3(corridorWidth * 0.78f, 0.18f, 7f), true);
+            BuildBlackSurfaceFog(prefab, "svart rök längs taket",
+                new Vector3(0f, corridorHeight - 0.55f, 1.05f),
+                new Vector3(corridorWidth * 0.88f, 0.40f, 2.8f));
+            BuildBlackSurfaceFog(prefab, "svart rök längs vänster vägg",
+                new Vector3(-corridorWidth * 0.47f, corridorHeight * 0.50f, 1.05f),
+                new Vector3(0.46f, corridorHeight * 0.88f, 2.8f));
+            BuildBlackSurfaceFog(prefab, "svart rök längs höger vägg",
+                new Vector3(corridorWidth * 0.47f, corridorHeight * 0.50f, 1.05f),
+                new Vector3(0.46f, corridorHeight * 0.88f, 2.8f));
+        }
+
+        private void BuildBlackSurfaceFog(GameObject prefab, string fogName,
+            Vector3 localPosition, Vector3 emitterScale, bool horizontal = false)
+        {
+            GameObject edgeObject = Instantiate(prefab, darknessRoot, false);
+            edgeObject.name = "GPU Fog Particles - " + fogName;
+            edgeObject.SetActive(false);
+            edgeObject.transform.localPosition = localPosition;
+            edgeObject.transform.localRotation = Quaternion.identity;
+            edgeObject.transform.localScale = Vector3.one;
+
+            ParticleSystem fog = edgeObject.GetComponent<ParticleSystem>();
+            ParticleSystemRenderer renderer = edgeObject.GetComponent<ParticleSystemRenderer>();
+            if (fog == null || renderer == null)
+            {
+                Destroy(edgeObject);
+                return;
+            }
+
+            fog.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule main = fog.main;
+            main.loop = true;
+            main.prewarm = true;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.scalingMode = ParticleSystemScalingMode.Shape;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(6f, 10f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.01f, 0.09f);
+            main.startSize = new ParticleSystem.MinMaxCurve(3.8f, 6.8f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(0f, 0f, 0f, 0.72f),
+                new Color(0.003f, 0f, 0.006f, 0.94f));
+            main.maxParticles = 38;
+            ParticleSystem.ColorOverLifetimeModule lifetimeColor = fog.colorOverLifetime;
+            lifetimeColor.enabled = false;
+
+            ParticleSystem.EmissionModule emission = fog.emission;
+            emission.rateOverTime = 4f;
+            ParticleSystem.ShapeModule shape = fog.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = emitterScale;
+
+            ParticleSystem.VelocityOverLifetimeModule velocity = fog.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.x = new ParticleSystem.MinMaxCurve(-0.08f, 0.08f);
+            velocity.y = new ParticleSystem.MinMaxCurve(-0.06f, 0.10f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.03f, 0.03f);
+
+            renderer.material = CreateParticleFogMaterial(renderer, "Greve GPU black edge fog");
+            renderer.renderMode = horizontal
+                ? ParticleSystemRenderMode.HorizontalBillboard
+                : ParticleSystemRenderMode.Billboard;
+            renderer.alignment = ParticleSystemRenderSpace.View;
+            renderer.sortMode = ParticleSystemSortMode.Distance;
+            renderer.sortingOrder = 17;
+            renderer.enableGPUInstancing = true;
+            edgeObject.SetActive(true);
+            fog.Play();
+        }
+
+        private Material CreateParticleFogMaterial(ParticleSystemRenderer renderer, string materialName)
+        {
+            Material template = Resources.Load<Material>("GPUFog/Fog Large");
+            Shader shader = Shader.Find("Mirza Beig/GPU Fog (Built-In)");
+            if (template == null && shader == null) return renderer.sharedMaterial;
+            Material material = template != null ? new Material(template) : new Material(shader);
+            material.name = materialName;
+            bool blackFog = materialName.StartsWith("Greve");
+            bool blackCore = materialName.Contains("core");
+            material.SetColor("_Albedo", blackFog
+                ? new Color(0.001f, 0f, 0.004f, 0.96f)
+                : new Color(0.64f, 0.80f, 1f, 0.62f));
+            material.SetFloat("_SimpleNoiseScale", blackFog ? 7.5f : 11f);
+            material.SetFloat("_SimplexNoiseScale", blackFog ? 3.2f : 4.5f);
+            material.SetFloat("_VoronoiScale", blackFog ? 3.8f : 5.5f);
+            material.SetFloat("_SimpleNoiseAmount", blackCore ? 0.12f : (blackFog ? 0.34f : 0.24f));
+            material.SetFloat("_SimplexNoiseAmount", blackCore ? 0.10f : (blackFog ? 0.28f : 0.20f));
+            material.SetFloat("_VoronoiNoiseAmount", blackCore ? 0.08f : (blackFog ? 0.22f : 0.16f));
+            material.SetFloat("_SimpleNoiseRemap", 0f);
+            material.SetFloat("_SimplexNoiseRemap", 0f);
+            material.SetFloat("_VoronoiNoiseRemap", 0f);
+            material.SetFloat("_CombinedNoiseRemap", 0f);
+            material.SetVector("_SimpleNoiseAnimation", new Vector4(-0.035f, 0.022f, 0f, 0f));
+            material.SetVector("_SimplexNoiseAnimation", new Vector4(0.016f, 0.009f, 0.025f, 0f));
+            material.SetVector("_VoronoiNoiseAnimation", new Vector4(-0.012f, 0.008f, 0.018f, 0f));
+            // Black smoke must cover geometry, not reveal transparent pockets
+            // around it.  Only retain a hairline intersection fade to avoid
+            // z-fighting; the blue floor fog keeps a visibly soft intersection.
+            material.SetFloat("_SurfaceDepthFade", blackCore ? 0.001f : (blackFog ? 0.015f : 0.08f));
+            material.SetFloat("_CameraDepthFadeRange", blackFog ? 1.5f : 0.30f);
+            material.SetFloat("_CameraDepthFadeOffset", 0f);
+            return material;
         }
 
         private SpriteRenderer BuildActor(string actorName, Sprite sprite, float height, Vector3 position)
@@ -504,6 +820,10 @@ namespace KinectKids.Games.GreveGast
             SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
             renderer.sortingOrder = 30;
+            Material actorMaterial = new Material(Shader.Find("Sprites/Default"));
+            actorMaterial.name = actorName + " foreground sprite material";
+            actorMaterial.renderQueue = 3020;
+            renderer.material = actorMaterial;
             SizeSpriteToHeight(renderer, height);
             return renderer;
         }

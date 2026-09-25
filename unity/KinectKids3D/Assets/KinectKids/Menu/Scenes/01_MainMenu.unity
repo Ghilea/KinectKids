@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &1163554425
+--- !u!1 &1196980187
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,8 +127,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1163554427}
-  - component: {fileID: 1163554426}
+  - component: {fileID: 1196980189}
+  - component: {fileID: 1196980188}
   m_Layer: 0
   m_Name: Gemensam spelmeny
   m_TagString: Untagged
@@ -136,13 +136,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1163554426
+--- !u!114 &1196980188
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1163554425}
+  m_GameObject: {fileID: 1196980187}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 24bcc18c8959b7c46bd7622a74a1a7cc, type: 3}
@@ -155,13 +155,13 @@ MonoBehaviour:
   buttonSheet: {fileID: 2800000, guid: fa576fd5a4ae4c4458716ee73061929a, type: 3}
   iconSheet: {fileID: 2800000, guid: 3217998f8d337914d939aabe8703474f, type: 3}
   menuMusic: {fileID: 8300000, guid: c03e196a373f12b45b81cb3d75bca730, type: 3}
---- !u!4 &1163554427
+--- !u!4 &1196980189
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1163554425}
+  m_GameObject: {fileID: 1196980187}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -174,4 +174,4 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1163554427}
+  - {fileID: 1196980189}
