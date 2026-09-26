@@ -668,9 +668,9 @@ namespace KinectKids.Games.GreveGast
             emission.rateOverTime = 32f;
             ParticleSystem.ShapeModule shape = wisps.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
-            // Starts just in front of the camera and continues through the
-            // playable corridor, so near wisps are visibly larger than far ones.
-            shape.scale = new Vector3(corridorWidth * 0.98f, 0.50f, 17f);
+            // Concentrate the blue wisps around the player. Extending them
+            // behind the player lit up the seam under Gast's black mass.
+            shape.scale = new Vector3(corridorWidth * 0.98f, 0.50f, 9f);
 
             ParticleSystem.VelocityOverLifetimeModule velocity = wisps.velocityOverLifetime;
             velocity.enabled = true;
@@ -704,7 +704,7 @@ namespace KinectKids.Games.GreveGast
             ParticleSystem.EmissionModule liftedEmission = lifted.emission;
             liftedEmission.rateOverTime = 16f;
             ParticleSystem.ShapeModule liftedShape = lifted.shape;
-            liftedShape.scale = new Vector3(corridorWidth * 0.92f, 0.42f, 16f);
+            liftedShape.scale = new Vector3(corridorWidth * 0.92f, 0.42f, 8f);
             ParticleSystem.VelocityOverLifetimeModule liftedVelocity = lifted.velocityOverLifetime;
             liftedVelocity.y = new ParticleSystem.MinMaxCurve(0.005f, 0.025f);
             liftedObject.SetActive(true);

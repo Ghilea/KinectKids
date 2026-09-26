@@ -6,6 +6,7 @@ namespace KinectKids.Games.GreveGast.LivingFog
     {
         private Material bodyMaterial;
         private Material smokeMaterial;
+        private Material upperTendrilMaterial;
         private EdgeMass edgeMass;
         private RearMass rearMass;
         private FloorMass floorMass;
@@ -21,6 +22,10 @@ namespace KinectKids.Games.GreveGast.LivingFog
             smokeMaterial = LivingMassMesh.Material(shader,
                 new Color(0.008f, 0.009f, 0.018f, 1f),
                 new Color(0.052f, 0.058f, 0.086f, 1f), 0.38f);
+            if (corridorMode)
+                upperTendrilMaterial = LivingMassMesh.Material(shader,
+                    new Color(0.028f, 0.018f, 0.040f, 1f),
+                    new Color(0.05f, 0.035f, 0.065f, 1f));
 
             edgeMass = AddPart<EdgeMass>("EdgeMass");
             edgeMass.Initialize(bodyMaterial, wallWidth, wallHeight, corridorMode);
@@ -32,7 +37,8 @@ namespace KinectKids.Games.GreveGast.LivingFog
             floorMass = AddPart<FloorMass>("FloorMass");
             floorMass.Initialize(bodyMaterial, wallWidth, corridorMode);
             tendrilSpawner = AddPart<TendrilSpawner>("TendrilSpawner");
-            tendrilSpawner.Initialize(bodyMaterial, wallWidth, wallHeight, corridorMode);
+            tendrilSpawner.Initialize(bodyMaterial, wallWidth, wallHeight, corridorMode,
+                upperTendrilMaterial);
             wisps = AddPart<WispsSmoke>("Wisps/Smoke");
             wisps.Initialize(smokeMaterial, wallWidth);
         }
@@ -58,6 +64,7 @@ namespace KinectKids.Games.GreveGast.LivingFog
         {
             if (bodyMaterial != null) Destroy(bodyMaterial);
             if (smokeMaterial != null) Destroy(smokeMaterial);
+            if (upperTendrilMaterial != null) Destroy(upperTendrilMaterial);
         }
     }
 }

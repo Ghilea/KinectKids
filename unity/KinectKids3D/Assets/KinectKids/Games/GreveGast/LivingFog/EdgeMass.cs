@@ -20,6 +20,7 @@ namespace KinectKids.Games.GreveGast.LivingFog
         public void Initialize(Material material, float wallWidth, float wallHeight,
             bool corridorMode = false)
         {
+            ready = false;
             width = wallWidth;
             height = wallHeight;
             firstPart = corridorMode ? 3 : 0;
@@ -44,7 +45,41 @@ namespace KinectKids.Games.GreveGast.LivingFog
 
         private void Update()
         {
-            if (ready) Rebuild(Time.time);
+            if (ready && RestoreMeshData()) Rebuild(Time.time);
+        }
+
+        private bool RestoreMeshData()
+        {
+            // Unity can keep this component and its child MeshFilters during a
+            // script reload while recreating the readonly managed arrays.
+            // Recover those arrays before the next animated vertex update.
+            for (int part = firstPart; part < partCount; part++)
+            {
+                if (meshes[part] != null && vertices[part] != null &&
+                    colors[part] != null) continue;
+
+                int childIndex = part - firstPart;
+                if (childIndex >= transform.childCount) return false;
+                MeshFilter filter = transform.GetChild(childIndex).GetComponent<MeshFilter>();
+                if (filter == null) return false;
+
+                Mesh mesh = filter.sharedMesh;
+                if (mesh == null || mesh.vertexCount != (Columns + 1) * (Rows + 1))
+                {
+                    mesh = LivingMassMesh.Create(filter.gameObject.name, Columns, Rows,
+                        out vertices[part], out colors[part]);
+                    filter.sharedMesh = mesh;
+                }
+                else
+                {
+                    vertices[part] = mesh.vertices;
+                    colors[part] = mesh.colors;
+                    if (colors[part].Length != vertices[part].Length)
+                        colors[part] = new Color[vertices[part].Length];
+                }
+                meshes[part] = mesh;
+            }
+            return true;
         }
 
         private void Rebuild(float time)
