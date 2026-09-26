@@ -3,6 +3,7 @@ using UnityEngine;
 using KinectKids.Scene25D;
 using KinectKids3D;
 using KinectKids3D.Platform;
+using KinectKids.Games.GreveGast.LivingFog;
 
 namespace KinectKids.Games.GreveGast
 {
@@ -71,6 +72,7 @@ namespace KinectKids.Games.GreveGast
         private SpriteRenderer player;
         private SpriteRenderer greve;
         private Transform darknessRoot;
+        private GastFogController livingFogController;
         private SpriteRenderer illustratedVista;
         private Sprite[] playerRunFrames;
         private Sprite[] playerJumpFrames;
@@ -286,39 +288,69 @@ namespace KinectKids.Games.GreveGast
         {
             darknessRoot = new GameObject("Greve Gasts levande mörkerfront").transform;
             darknessRoot.SetParent(transform, false);
-            // Oregelbundna, pulserande moln gör att gränsen ser ut att äta sig
-            // fram över rummets ytor utan någon solid geometri som kan avslöja
-            // en rektangulär kant.
-            BuildVolumetricFogVolumes();
-            BuildDarknessParticleFog();
+            BuildLivingMass();
+            BuildVolumetricFloorFog();
+            BuildForegroundFloorFog();
             BuildFloorParticleFog();
         }
 
-        private void BuildVolumetricFogVolumes()
+        private void BuildLivingMass()
+        {
+            Shader shader = Resources.Load<Shader>("GastLivingMass");
+            if (shader == null || !shader.isSupported)
+            {
+                Debug.LogError("Greve Gasts living mass shader is missing or unsupported.");
+                return;
+            }
+
+            GameObject body = new GameObject("GastLivingFog");
+            body.transform.SetParent(darknessRoot, false);
+            GastLivingFog livingMass = body.AddComponent<GastLivingFog>();
+            livingMass.Initialize(shader, corridorWidth, corridorHeight, true);
+            livingFogController = body.AddComponent<GastFogController>();
+            livingFogController.showTestControls = false;
+            livingFogController.aggression = chase;
+            livingMass.SetAggression(chase);
+        }
+
+        private void BuildVolumetricFloorFog()
         {
             // Loading through Resources prevents Unity's player build shader
             // stripping from removing this runtime-created volume material.
             Shader volumeShader = Resources.Load<Shader>("GreveVolumetricFogReference");
-            if (volumeShader == null) return;
-
-            BuildFogVolume("Grevens raymarchade svarta 3D-mörker", darknessRoot,
-        new Vector3(0f, corridorHeight * 0.52f, 5.2f),
-        new Vector3(corridorWidth * 1.18f, corridorHeight * 1.08f, 15.5f),
-        new Color(0f, 0f, 0f, 1f),
-        12.5f,
-        0.26f,
-        0f,
-        3010,
-        volumeShader);
+            if (volumeShader == null || !volumeShader.isSupported)
+                volumeShader = Shader.Find("KinectKids/Greve Volumetric Fog");
+            if (volumeShader == null || !volumeShader.isSupported) return;
 
             BuildFogVolume("Raymarchad blåvit 3D-golvdimma", transform,
-                new Vector3(0f, 0.78f, 9.2f),
-                new Vector3(corridorWidth * 1.08f, 3.4f, 42f),
-                new Color(0.52f, 0.70f, 1f, 1f),
-                5.9f,
-                0.34f,
+                new Vector3(0f, 2.35f, 10.0f),
+                new Vector3(corridorWidth * 1.16f, 6.4f, 60f),
+                new Color(0.52f, 0.70f, 1f, 0.62f),
+                2.8f,
+                0.30f,
                 1f,
                 2989,
+                volumeShader);
+        }
+
+        private void BuildForegroundFloorFog()
+        {
+            Shader volumeShader = Resources.Load<Shader>("GreveVolumetricFogReference");
+            if (volumeShader == null || !volumeShader.isSupported)
+                volumeShader = Shader.Find("KinectKids/Greve Volumetric Fog");
+            if (volumeShader == null || !volumeShader.isSupported) return;
+
+            // This short volume spans the player and the space between the
+            // player and camera. It is drawn over the rear mass, then below the
+            // character sprites, so the visible bank lives in the foreground.
+            BuildFogVolume("Blåvit 3D-golvdimma vid spelaren", transform,
+                new Vector3(0f, 0.75f, 2.4f),
+                new Vector3(corridorWidth * 1.06f, 2.6f, 12f),
+                new Color(0.50f, 0.68f, 0.98f, 0.55f),
+                1.9f,
+                0.22f,
+                1f,
+                3001,
                 volumeShader);
         }
 
@@ -604,7 +636,7 @@ namespace KinectKids.Games.GreveGast
             GameObject wispObject = Instantiate(prefab, transform, false);
             wispObject.name = "GPU Fog Particles - stigande blåvita golvslöjor";
             wispObject.SetActive(false);
-            wispObject.transform.localPosition = new Vector3(0f, 0.20f, 5.5f);
+            wispObject.transform.localPosition = new Vector3(0f, 0.52f, 0f);
             wispObject.transform.localRotation = Quaternion.identity;
             wispObject.transform.localScale = Vector3.one;
 
@@ -622,13 +654,13 @@ namespace KinectKids.Games.GreveGast
             main.prewarm = true;
             main.simulationSpace = ParticleSystemSimulationSpace.Local;
             main.scalingMode = ParticleSystemScalingMode.Shape;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(8f, 13f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.01f, 0.05f);
-            main.startSize = new ParticleSystem.MinMaxCurve(3.6f, 6.4f);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(5f, 8f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.01f, 0.04f);
+            main.startSize = new ParticleSystem.MinMaxCurve(2.0f, 3.5f);
             main.startColor = new ParticleSystem.MinMaxGradient(
-                new Color(0.56f, 0.74f, 1f, 0.24f),
-                new Color(0.96f, 0.99f, 1f, 0.46f));
-            main.maxParticles = 320;
+                new Color(0.56f, 0.74f, 1f, 0.19f),
+                new Color(0.96f, 0.99f, 1f, 0.32f));
+            main.maxParticles = 280;
             ParticleSystem.ColorOverLifetimeModule lifetimeColor = wisps.colorOverLifetime;
             lifetimeColor.enabled = false;
 
@@ -638,22 +670,70 @@ namespace KinectKids.Games.GreveGast
             shape.shapeType = ParticleSystemShapeType.Box;
             // Starts just in front of the camera and continues through the
             // playable corridor, so near wisps are visibly larger than far ones.
-            shape.scale = new Vector3(corridorWidth * 1.00f, 0.52f, 34f);
+            shape.scale = new Vector3(corridorWidth * 0.98f, 0.50f, 17f);
 
             ParticleSystem.VelocityOverLifetimeModule velocity = wisps.velocityOverLifetime;
             velocity.enabled = true;
             velocity.x = new ParticleSystem.MinMaxCurve(-0.12f, 0.12f);
-            velocity.y = new ParticleSystem.MinMaxCurve(0.02f, 0.07f);
+            velocity.y = new ParticleSystem.MinMaxCurve(0.01f, 0.045f);
             velocity.z = new ParticleSystem.MinMaxCurve(-0.025f, 0.025f);
 
             renderer.material = CreateParticleFogMaterial(renderer, "GPU blue-white floor wisps");
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
             renderer.alignment = ParticleSystemRenderSpace.View;
             renderer.sortMode = ParticleSystemSortMode.Distance;
-            renderer.sortingOrder = 13;
+            renderer.sortingOrder = 24;
             renderer.enableGPUInstancing = true;
             wispObject.SetActive(true);
             wisps.Play();
+
+            // A second, raised sheet gives the bank visible body above the
+            // floor without letting its particles drift into the ceiling.
+            GameObject liftedObject = Instantiate(wispObject, transform, false);
+            liftedObject.name = "GPU Fog Particles - högre blåvita dimslöjor";
+            liftedObject.SetActive(false);
+            liftedObject.transform.localPosition = new Vector3(0f, 1.35f, 0.5f);
+            ParticleSystem lifted = liftedObject.GetComponent<ParticleSystem>();
+            lifted.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule liftedMain = lifted.main;
+            liftedMain.startSize = new ParticleSystem.MinMaxCurve(1.6f, 2.8f);
+            liftedMain.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(0.62f, 0.78f, 1f, 0.11f),
+                new Color(0.96f, 0.99f, 1f, 0.21f));
+            liftedMain.maxParticles = 150;
+            ParticleSystem.EmissionModule liftedEmission = lifted.emission;
+            liftedEmission.rateOverTime = 16f;
+            ParticleSystem.ShapeModule liftedShape = lifted.shape;
+            liftedShape.scale = new Vector3(corridorWidth * 0.92f, 0.42f, 16f);
+            ParticleSystem.VelocityOverLifetimeModule liftedVelocity = lifted.velocityOverLifetime;
+            liftedVelocity.y = new ParticleSystem.MinMaxCurve(0.005f, 0.025f);
+            liftedObject.SetActive(true);
+            lifted.Play();
+
+            // A separate shallow bank sits between the camera and the player.
+            // It keeps the near floor from becoming an empty stretch while the
+            // smaller lifted wisps retain visible gaps and depth.
+            GameObject foregroundObject = Instantiate(wispObject, transform, false);
+            foregroundObject.name = "GPU Fog Particles - förgrund vid spelaren";
+            foregroundObject.SetActive(false);
+            foregroundObject.transform.localPosition = new Vector3(0f, 0.42f, -3.3f);
+            ParticleSystem foreground = foregroundObject.GetComponent<ParticleSystem>();
+            foreground.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule foregroundMain = foreground.main;
+            foregroundMain.startSize = new ParticleSystem.MinMaxCurve(2.1f, 3.4f);
+            foregroundMain.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(0.60f, 0.76f, 1f, 0.14f),
+                new Color(0.94f, 0.98f, 1f, 0.25f));
+            foregroundMain.maxParticles = 135;
+            ParticleSystem.EmissionModule foregroundEmission = foreground.emission;
+            foregroundEmission.rateOverTime = 18f;
+            ParticleSystem.ShapeModule foregroundShape = foreground.shape;
+            foregroundShape.scale = new Vector3(corridorWidth * 0.92f, 0.32f, 7f);
+            ParticleSystemRenderer foregroundRenderer =
+                foregroundObject.GetComponent<ParticleSystemRenderer>();
+            foregroundRenderer.sortingOrder = 25;
+            foregroundObject.SetActive(true);
+            foreground.Play();
         }
 
         private void BuildOpaqueBlackFogCore(GameObject prefab)
@@ -664,7 +744,7 @@ namespace KinectKids.Games.GreveGast
             GameObject coreObject = Instantiate(prefab, darknessRoot, false);
             coreObject.name = "GPU Fog Particles - ogenomskinlig svart kärna";
             coreObject.SetActive(false);
-            coreObject.transform.localPosition = new Vector3(0f, corridorHeight * 0.52f, 2.8f);
+            coreObject.transform.localPosition = new Vector3(0f, corridorHeight * 0.42f, 5.5f);
             coreObject.transform.localRotation = Quaternion.identity;
             coreObject.transform.localScale = new Vector3(1.05f, 1.08f, 0.56f);
 
@@ -684,7 +764,7 @@ namespace KinectKids.Games.GreveGast
             main.scalingMode = ParticleSystemScalingMode.Shape;
             main.startLifetime = new ParticleSystem.MinMaxCurve(8f, 10f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.003f, 0.018f);
-            main.startSize = new ParticleSystem.MinMaxCurve(18.5f, 22.0f);
+            main.startSize = new ParticleSystem.MinMaxCurve(14f, 18f);
             main.startColor = new ParticleSystem.MinMaxGradient(
                 new Color(0f, 0f, 0f, 1f), Color.black);
             main.maxParticles = 30;
@@ -695,7 +775,7 @@ namespace KinectKids.Games.GreveGast
             emission.rateOverTime = 0f;
             emission.SetBursts(new[]
             {
-                new ParticleSystem.Burst(0f, (short)4)
+                new ParticleSystem.Burst(0f, (short)6)
             });
             ParticleSystem.ShapeModule shape = core.shape;
             shape.shapeType = ParticleSystemShapeType.Sphere;
@@ -718,17 +798,17 @@ namespace KinectKids.Games.GreveGast
             core.Play();
 
             BuildBlackSurfaceFog(prefab, "svart rök längs golvet",
-    new Vector3(0f, 0.14f, 2.2f),
-    new Vector3(corridorWidth * 1.00f, 0.34f, 13f), true);
+                new Vector3(0f, 0.28f, -1.5f),
+                new Vector3(corridorWidth * 1.08f, 0.65f, 22f), true);
             BuildBlackSurfaceFog(prefab, "svart rök längs taket",
-                new Vector3(0f, corridorHeight - 0.55f, 1.05f),
-                new Vector3(corridorWidth * 0.88f, 0.40f, 2.8f));
+                new Vector3(0f, corridorHeight - 0.55f, -4f),
+                new Vector3(corridorWidth * 0.88f, 0.55f, 12f));
             BuildBlackSurfaceFog(prefab, "svart rök längs vänster vägg",
-                new Vector3(-corridorWidth * 0.47f, corridorHeight * 0.50f, 1.05f),
-                new Vector3(0.46f, corridorHeight * 0.88f, 2.8f));
+                new Vector3(-corridorWidth * 0.47f, corridorHeight * 0.50f, -4f),
+                new Vector3(0.65f, corridorHeight * 0.88f, 12f));
             BuildBlackSurfaceFog(prefab, "svart rök längs höger vägg",
-                new Vector3(corridorWidth * 0.47f, corridorHeight * 0.50f, 1.05f),
-                new Vector3(0.46f, corridorHeight * 0.88f, 2.8f));
+                new Vector3(corridorWidth * 0.47f, corridorHeight * 0.50f, -4f),
+                new Vector3(0.65f, corridorHeight * 0.88f, 12f));
         }
 
         private void BuildBlackSurfaceFog(GameObject prefab, string fogName,
@@ -757,14 +837,16 @@ namespace KinectKids.Games.GreveGast
             main.scalingMode = ParticleSystemScalingMode.Shape;
             main.startLifetime = new ParticleSystem.MinMaxCurve(7f, 12f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.008f, 0.05f);
-            main.startSize = new ParticleSystem.MinMaxCurve(5.5f, 9.5f);
-            main.maxParticles = 110;
+            main.startSize = horizontal
+                ? new ParticleSystem.MinMaxCurve(6.5f, 11.5f)
+                : new ParticleSystem.MinMaxCurve(5.5f, 9.5f);
+            main.maxParticles = horizontal ? 240 : 160;
             
             ParticleSystem.ColorOverLifetimeModule lifetimeColor = fog.colorOverLifetime;
             lifetimeColor.enabled = false;
 
             ParticleSystem.EmissionModule emission = fog.emission;
-            emission.rateOverTime = 12f;
+            emission.rateOverTime = horizontal ? 28f : 18f;
             ParticleSystem.ShapeModule shape = fog.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
             shape.scale = emitterScale;
@@ -1115,6 +1197,8 @@ namespace KinectKids.Games.GreveGast
             if (darknessRoot == null) return;
             darknessRoot.localPosition = new Vector3(grevePosition.x * 0.18f, 0f,
                 grevePosition.z + Mathf.Lerp(0.55f, 0.22f, chaseEase));
+            if (livingFogController != null)
+                livingFogController.aggression = 0.45f + chaseEase * 0.55f;
         }
 
         private static Sprite FrameProgress(Sprite[] frames, float progress)

@@ -3,7 +3,7 @@ Shader "KinectKids/Greve Volumetric Fog"
     Properties
     {
         _FogColor ("Fog Color", Color) = (0,0,0,1)
-        _Density ("Density", Range(0,8)) = 2
+        _Density ("Density", Range(0,32)) = 2
         _NoiseScale ("Noise Scale", Range(0.05,4)) = 0.55
         _NoiseSpeed ("Noise Speed", Vector) = (0.05,0.02,0.03,0)
         _EdgeSoftness ("Edge Softness", Range(0.02,0.8)) = 0.22
@@ -15,6 +15,7 @@ Shader "KinectKids/Greve Volumetric Fog"
         Tags { "Queue"="Transparent-10" "RenderType"="Transparent" "IgnoreProjector"="True" }
         Pass
         {
+            Name "FOG"
             Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
             ZTest Always
@@ -100,26 +101,34 @@ Shader "KinectKids/Greve Volumetric Fog"
 
             float roundedVolumeMask(float3 p)
             {
-                float2 q = abs(p.xy) * 2.0;
-                float rounded = pow(pow(q.x, 6.0) + pow(q.y, 6.0), 1.0 / 6.0);
-                float side = saturate((1.0 - rounded) / _EdgeSoftness);
-                float depth = saturate((0.5 - abs(p.z)) / max(0.04, _EdgeSoftness * 0.45));
-                return smoothstep(0.0, 1.0, side) * smoothstep(0.0, 1.0, depth);
+                // Let the darkness reach the floor, while the sides dissolve
+                // well before the cube intersects the corridor walls.
+                float side = saturate((1.0 - abs(p.x) * 2.0) /
+                    max(0.04, _EdgeSoftness * 1.35));
+                float top = saturate((0.5 - p.y) /
+                    max(0.04, _EdgeSoftness * 0.85));
+                float depth = saturate((0.5 - abs(p.z)) /
+                    max(0.04, _EdgeSoftness * 0.55));
+                return pow(smoothstep(0.0, 1.0, side), 2.2) *
+                    smoothstep(0.0, 1.0, top) *
+                    smoothstep(0.0, 1.0, depth);
             }
 
-float floorVolumeMask(float3 p)
+float floorVolumeMask(float3 p, float noise)
 {
     float xEdge = saturate((0.5 - abs(p.x)) / max(0.03, _EdgeSoftness));
     float zEdge = saturate((0.5 - abs(p.z)) / max(0.03, _EdgeSoftness));
+    float bankHeight = p.y - (noise - 0.5) * 0.16;
 
-    float lowBand = saturate((0.26 - p.y) / 1.02);
+    float lowBand = saturate((0.32 - bankHeight) / 0.82);
     lowBand = smoothstep(0.0, 1.0, lowBand);
 
-    float tallBand = saturate((0.42 - p.y) / 1.36);
+    float tallBand = saturate((0.49 - bankHeight) / 0.78);
     tallBand = smoothstep(0.0, 1.0, tallBand);
+    tallBand *= lerp(0.65, 1.30, smoothstep(0.35, 0.70, noise));
 
-    float height = max(lowBand, tallBand * 0.62);
-    height = pow(height, 1.45);
+    float height = max(lowBand, tallBand * 0.80);
+    height = pow(height, 0.85);
 
     return smoothstep(0.0, 1.0, xEdge) *
            smoothstep(0.0, 1.0, zEdge) *
@@ -213,7 +222,7 @@ for (int s = 0; s < STEPS; s++)
    float baseMask =
     lerp(
         roundedVolumeMask(p),
-        floorVolumeMask(p),
+        floorVolumeMask(p, noise),
         _FloorMode
     );
 
@@ -225,8 +234,7 @@ if (_FloorMode < 0.5)
     // Kärnan får aldrig tunnas ut av noise.
     float warpedBlackMask =
         saturate(
-            baseMask +
-            (noise - 0.52) * 0.38
+            baseMask * lerp(0.78, 1.22, noise)
         );
 
     warpedBlackMask =
@@ -262,8 +270,8 @@ if (_FloorMode < 0.5)
 
     float densityVariation =
         lerp(
-            0.42,
-            1.55,
+            0.80,
+            1.90,
             smoothstep(0.18, 0.85, noise)
         );
 
@@ -280,38 +288,41 @@ if (_FloorMode < 0.5)
             baseMask
         );
 
-         float bottomWeight =
-        saturate((0.24 - p.y) / 1.05);
+    float bottomWeight =
+        saturate((0.18 - p.y) / 0.68);
     bottomWeight = smoothstep(0.0, 1.0, bottomWeight);
 
     float wallSoft =
-        1.0 - smoothstep(0.74, 1.0, abs(p.x) * 2.0);
+        1.0 - 0.78 * smoothstep(0.46, 0.98, abs(p.x) * 2.0);
 
         
     density =
         _Density *
         (
-            mask * lerp(0.90, 1.35, noise) +
-            solidCore * 5.0
-        );
+            pow(mask, 1.7) * lerp(0.95, 1.35, noise) +
+            solidCore * 5.5
+        ) *
+        (1.0 + bottomWeight * 1.8) *
+        wallSoft;
 }
 else
 {
     // Blå golvdimma:
-    // tunnare nära kameran och tätare längre bort.
+    // Dense near the player too, with a short fade at the lens.
     density =
         _Density *
         mask *
         densityVariation;
+    density *= lerp(1.30, 0.80, smoothstep(-0.20, 0.35, p.y));
 
-    float nearFade = smoothstep(0.8, 2.8, sampleViewDepth);
+    float nearFade = smoothstep(0.15, 1.4, sampleViewDepth);
 
 density *= nearFade;
 
     float depthDensity =
         lerp(
-            0.90,
-            1.30,
+            1.05,
+            1.55,
             saturate(
                 (sampleViewDepth - 10.0) / 45.0
             )
@@ -376,6 +387,22 @@ if (_FloorMode < 0.5)
             alpha,
             maxBlackCore * 0.995
         );
+
+    // The volume can saturate before its density fade becomes visible.
+    // Feather the projected silhouette as well, and move that boundary
+    // slowly so the darkness breathes instead of reading as a flat box.
+    float edgeNoise = fbm(entryWorld * float3(0.14, 0.18, 0.09) +
+        float3(_Time.y * 0.07, -_Time.y * 0.05, _Time.y * 0.04));
+    float edgeWarp = (edgeNoise - 0.5) * 0.32 +
+        sin(entryWorld.y * 0.45 + entryWorld.x * 0.20 +
+            _Time.y * 0.85) * 0.045;
+    float sideCoord = abs(entryObject.x) * 2.0;
+    float topCoord = entryObject.y * 2.0;
+    float sideFade = 1.0 - smoothstep(0.40 + edgeWarp,
+        0.84 + edgeWarp, sideCoord);
+    float topFade = 1.0 - smoothstep(0.42 + edgeWarp * 0.65,
+        0.88 + edgeWarp * 0.65, topCoord);
+    alpha *= sideFade * topFade;
 
     // Grevens mörker ska verkligen vara svart,
     // inte grått från noise/depth shading.
