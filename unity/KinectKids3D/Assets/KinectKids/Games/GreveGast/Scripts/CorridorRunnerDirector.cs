@@ -302,24 +302,24 @@ namespace KinectKids.Games.GreveGast
             if (volumeShader == null) return;
 
             BuildFogVolume("Grevens raymarchade svarta 3D-mörker", darknessRoot,
-       new Vector3(0f, corridorHeight * 0.52f, 4.8f),
-       new Vector3(corridorWidth * 1.14f, corridorHeight * 1.06f, 13.5f),
-       new Color(0f, 0f, 0f, 1f),
-       10.5f,
-       0.18f,
-       0f,
-       3010,
-       volumeShader);
+        new Vector3(0f, corridorHeight * 0.52f, 5.2f),
+        new Vector3(corridorWidth * 1.18f, corridorHeight * 1.08f, 15.5f),
+        new Color(0f, 0f, 0f, 1f),
+        12.5f,
+        0.26f,
+        0f,
+        3010,
+        volumeShader);
 
             BuildFogVolume("Raymarchad blåvit 3D-golvdimma", transform,
-            new Vector3(0f, 0.62f, 8.5f),
-            new Vector3(corridorWidth * 1.04f, 2.8f, 38f),
-            new Color(0.48f, 0.66f, 1f, 1f),
-            4.8f,
-            0.30f,
-            1f,
-            2989,
-            volumeShader);
+                new Vector3(0f, 0.78f, 9.2f),
+                new Vector3(corridorWidth * 1.08f, 3.4f, 42f),
+                new Color(0.52f, 0.70f, 1f, 1f),
+                5.9f,
+                0.34f,
+                1f,
+                2989,
+                volumeShader);
         }
 
         private static void BuildFogVolume(string volumeName, Transform parent,

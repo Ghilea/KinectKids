@@ -112,9 +112,14 @@ float floorVolumeMask(float3 p)
     float xEdge = saturate((0.5 - abs(p.x)) / max(0.03, _EdgeSoftness));
     float zEdge = saturate((0.5 - abs(p.z)) / max(0.03, _EdgeSoftness));
 
-    float height = saturate((0.24 - p.y) / 0.95);
-    height = smoothstep(0.0, 1.0, height);
-    height = pow(height, 1.8);
+    float lowBand = saturate((0.26 - p.y) / 1.02);
+    lowBand = smoothstep(0.0, 1.0, lowBand);
+
+    float tallBand = saturate((0.42 - p.y) / 1.36);
+    tallBand = smoothstep(0.0, 1.0, tallBand);
+
+    float height = max(lowBand, tallBand * 0.62);
+    height = pow(height, 1.45);
 
     return smoothstep(0.0, 1.0, xEdge) *
            smoothstep(0.0, 1.0, zEdge) *
@@ -270,11 +275,19 @@ if (_FloorMode < 0.5)
     // ingen kamerafade och extremt tät kärna.
     float solidCore =
         smoothstep(
-            0.28,
-            0.68,
+            0.20,
+            0.62,
             baseMask
         );
 
+         float bottomWeight =
+        saturate((0.24 - p.y) / 1.05);
+    bottomWeight = smoothstep(0.0, 1.0, bottomWeight);
+
+    float wallSoft =
+        1.0 - smoothstep(0.74, 1.0, abs(p.x) * 2.0);
+
+        
     density =
         _Density *
         (
