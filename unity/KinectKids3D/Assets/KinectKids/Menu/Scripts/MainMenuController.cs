@@ -168,7 +168,7 @@ namespace KinectKids3D.Platform
         private void UpdateKinectDwell()
         {
             KinectKidsInputManager input = KinectKidsInputManager.Instance;
-            if (input == null || !input.KinectConnected)
+            if (input == null || !input.PlayerDetected)
             {
                 ResetDwell();
                 return;
@@ -775,16 +775,19 @@ namespace KinectKids3D.Platform
         {
             Rect footer = new Rect(0, Screen.height * 0.925f, Screen.width, Screen.height * 0.075f);
             Fill(footer, new Color(0.025f, 0.09f, 0.16f, 0.96f));
-            string inputHint = KinectKidsInputManager.Instance != null && KinectKidsInputManager.Instance.KinectConnected
+            KinectKidsInputManager input = KinectKidsInputManager.Instance;
+            string inputHint = input != null && input.PlayerDetected
                 ? "FLYTTA HANDEN F\u00d6R ATT NAVIGERA     \u2022     H\u00c5LL KVAR F\u00d6R ATT V\u00c4LJA"
-                : "PILTANGENTER / MUS F\u00d6R ATT NAVIGERA     \u2022     ENTER F\u00d6R ATT STARTA";
+                : input != null && input.KinectConnected
+                    ? "VISA HELA KROPPEN F\u00d6R KINECT     \u2022     MUS OCH TANGENTBORD FUNGERAR UNDER TIDEN"
+                    : "PILTANGENTER / MUS F\u00d6R ATT NAVIGERA     \u2022     ENTER F\u00d6R ATT STARTA";
             GUI.Label(new Rect(Screen.width * 0.04f, footer.y, Screen.width * 0.92f, footer.height), inputHint, footerStyle);
         }
 
         private void DrawCursors()
         {
             KinectKidsInputManager input = KinectKidsInputManager.Instance;
-            if (input == null || !input.KinectConnected) return;
+            if (input == null || !input.PlayerDetected) return;
             foreach (AimSample hand in input.AimSamples)
             {
                 if (hand.PlayerIndex != 0) continue;

@@ -53,7 +53,7 @@ namespace KinectKids3D
 
         public void RetryNow()
         {
-            if (disposed || KinectConnected) return;
+            if (disposed) return;
             nextRetryAt = 0f;
             StartBridge();
         }

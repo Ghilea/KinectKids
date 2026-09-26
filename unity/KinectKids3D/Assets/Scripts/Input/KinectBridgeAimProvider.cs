@@ -21,13 +21,15 @@ namespace KinectKids3D
         private StreamReader reader;
         private Thread receiveThread;
         private Process bridgeProcess;
+        private EventWaitHandle bridgeStopEvent;
         private volatile bool stopping;
         private volatile bool receivedErrorStatus;
+        private volatile bool hasFailed;
         private bool disposed;
         private DateTime lastTrackedFrameAt = DateTime.MinValue;
         private DateTime startupDeadline = DateTime.MaxValue;
 
-        public bool HasFailed { get; private set; }
+        public bool HasFailed { get => hasFailed; private set => hasFailed = value; }
 
         public KinectBridgeAimProvider()
         {
@@ -53,7 +55,10 @@ namespace KinectKids3D
                     return false;
                 }
 
-                string pipeName = "KinectKidsV1-" + Process.GetCurrentProcess().Id;
+                string instanceId = Process.GetCurrentProcess().Id + "-" + Guid.NewGuid().ToString("N");
+                string pipeName = "KinectKidsV1-" + instanceId;
+                string stopEventName = "KinectKidsV1-Stop-" + instanceId;
+                bridgeStopEvent = new EventWaitHandle(false, EventResetMode.ManualReset, stopEventName);
                 pipe = new NamedPipeServerStream(pipeName, PipeDirection.In, 1,
                     PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                 receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "KinectKids Kinect bridge" };
@@ -62,7 +67,8 @@ namespace KinectKids3D
                 var start = new ProcessStartInfo
                 {
                     FileName = executable,
-                    Arguments = "--parent " + Process.GetCurrentProcess().Id + " --pipe " + pipeName,
+                    Arguments = "--parent " + Process.GetCurrentProcess().Id + " --pipe " + pipeName
+                        + " --stop-event " + stopEventName,
                     WorkingDirectory = Path.GetDirectoryName(executable),
                     UseShellExecute = false,
                     RedirectStandardError = true,
@@ -189,6 +195,12 @@ namespace KinectKids3D
             }
             if (!lines[0].StartsWith("F|", StringComparison.Ordinal)) return;
 
+            string[] frameHeader = lines[0].Split('|');
+            int trackedCount;
+            int positionOnlyCount;
+            if (frameHeader.Length < 4 || !int.TryParse(frameHeader[2], out trackedCount)) trackedCount = -1;
+            if (frameHeader.Length < 4 || !int.TryParse(frameHeader[3], out positionOnlyCount)) positionOnlyCount = 0;
+
             var samples = new List<AimSample>(4);
             var poses = new List<PlayerPose>(2);
             DateTime now = DateTime.UtcNow;
@@ -221,7 +233,13 @@ namespace KinectKids3D
             }
             IsAvailable = true;
             HasFailed = false;
-            status = "Kinect 360 ansluten via säker 32-bitarsbrygga";
+            status = poses.Count > 0
+                ? "Kinect ansluten – spelare spåras"
+                : positionOnlyCount > 0
+                    ? "Kinect ser en kropp men inte hela skelettet – kliv bakåt och visa huvud, armar och ben"
+                    : trackedCount > 0
+                        ? "Kinect ser en kropp men kunde inte läsa spelarens leder"
+                        : "Kinect ansluten – ingen spelare spåras. Stå framför kameran med hela kroppen synlig";
             ready.Set();
         }
 
@@ -283,20 +301,28 @@ namespace KinectKids3D
         private string EnsureBridgeExecutable()
         {
             string packaged = Path.Combine(Application.streamingAssetsPath, "KinectBridge", "KinectBridge.exe");
-            if (File.Exists(packaged)) return packaged;
-
             string root = FindProjectRoot();
+            string bridgeSource = root != null ? Path.Combine(root, "src", "KinectBridge", "Program.cs") : null;
+            if (File.Exists(packaged) && (bridgeSource == null || !File.Exists(bridgeSource)
+                || File.GetLastWriteTimeUtc(packaged) >= File.GetLastWriteTimeUtc(bridgeSource)))
+                return packaged;
             if (root == null)
             {
                 status = "KinectBridge.exe saknas i programmet";
                 return null;
             }
             string executable = Path.Combine(root, "src", "KinectBridge", "bin", "Release", "KinectBridge.exe");
-            string bridgeSource = Path.Combine(root, "src", "KinectBridge", "Program.cs");
             if (File.Exists(executable)
                 && (!File.Exists(bridgeSource)
                     || File.GetLastWriteTimeUtc(executable) >= File.GetLastWriteTimeUtc(bridgeSource)))
-                return executable;
+            {
+                if (!File.Exists(packaged) || File.GetLastWriteTimeUtc(packaged) < File.GetLastWriteTimeUtc(executable))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(packaged));
+                    File.Copy(executable, packaged, true);
+                }
+                return packaged;
+            }
 
             string script = Path.Combine(root, "scripts", "Build-KinectBridge.ps1");
             if (!File.Exists(script))
@@ -380,6 +406,19 @@ namespace KinectKids3D
             disposed = true;
             stopping = true;
             IsAvailable = false;
+            if (bridgeStopEvent != null)
+            {
+                try { bridgeStopEvent.Set(); }
+                catch (ObjectDisposedException) { }
+            }
+            if (bridgeProcess != null)
+            {
+                try
+                {
+                    if (!bridgeProcess.HasExited && !bridgeProcess.WaitForExit(3500)) bridgeProcess.Kill();
+                }
+                catch { }
+            }
             if (reader != null)
             {
                 reader.Dispose();
@@ -394,10 +433,13 @@ namespace KinectKids3D
             receiveThread = null;
             if (bridgeProcess != null)
             {
-                try { if (!bridgeProcess.HasExited) bridgeProcess.Kill(); }
-                catch { }
                 bridgeProcess.Dispose();
                 bridgeProcess = null;
+            }
+            if (bridgeStopEvent != null)
+            {
+                bridgeStopEvent.Dispose();
+                bridgeStopEvent = null;
             }
             ready.Dispose();
             lock (sync)

@@ -42,7 +42,7 @@ namespace KinectKids3D
                 Platform.PlayerInputFrame shared = Platform.KinectKidsInputManager.Instance.Frame;
                 HeightDelta = shared.HeadY;
                 HorizontalDelta = shared.CenterX;
-                runEnergy = shared.Run ? 1f : Mathf.MoveTowards(runEnergy, 0f, Time.unscaledDeltaTime * 4f);
+                runEnergy = shared.KinectRun ? 1f : Mathf.MoveTowards(runEnergy, 0f, Time.unscaledDeltaTime * 4f);
                 Current = GreveGastAction.None;
                 if (shared.Run) Current = GreveGastAction.Run;
                 if (shared.Jump) Current = GreveGastAction.Jump;

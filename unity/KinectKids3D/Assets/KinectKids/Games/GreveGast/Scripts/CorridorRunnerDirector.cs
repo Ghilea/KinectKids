@@ -1623,6 +1623,7 @@ namespace KinectKids.Games.GreveGast
         }
 
         private GUIStyle hud;
+        private GUIStyle sensorHud;
         private void OnGUI()
         {
             GUI.depth = -100;
@@ -1638,6 +1639,19 @@ namespace KinectKids.Games.GreveGast
                 else
                     GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + requestedTheme + "  |  BANA: " + lane +
                         "  |  Spring (W), byt bana (A/D), center (S), hoppa (Space)", hud);
+
+                KinectKidsInputManager input = KinectKidsInputManager.Instance;
+                if (sensorHud == null)
+                    sensorHud = new GUIStyle(hud) { fontSize = Mathf.Clamp(Screen.height / 56, 14, 22),
+                        alignment = TextAnchor.MiddleRight };
+                bool tracked = input != null && input.PlayerDetected;
+                sensorHud.normal.textColor = tracked ? new Color(0.55f, 1f, 0.65f) :
+                    new Color(1f, 0.75f, 0.45f);
+                string sensorText = tracked ? "KINECT: SPELARE HITTAD" :
+                    input != null && input.KinectConnected ? "KINECT: VISA HELA KROPPEN" :
+                    "KINECT: VÄNTAR PÅ KAMERA";
+                GUI.Label(new Rect(Mathf.Max(0f, Screen.width - 490f), 62f,
+                    Mathf.Min(Screen.width - 20f, 460f), 30f), sensorText, sensorHud);
             }
 
             Rect screen = new Rect(0f, 0f, Screen.width, Screen.height);

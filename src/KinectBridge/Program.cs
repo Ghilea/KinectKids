@@ -19,8 +19,10 @@ namespace KinectKids.Bridge
         private Process parent;
         private NamedPipeClientStream pipe;
         private StreamWriter writer;
+        private EventWaitHandle stopEvent;
         private bool stopping;
         private int startupFinished;
+        private int primaryTrackingId;
 
         private static int Main(string[] args)
         {
@@ -51,6 +53,9 @@ namespace KinectKids.Bridge
 
             string pipeName = ReadArgument(args, "--pipe");
             if (string.IsNullOrWhiteSpace(pipeName)) pipeName = "KinectKidsV1";
+            string stopEventName = ReadArgument(args, "--stop-event");
+            if (!string.IsNullOrEmpty(stopEventName))
+                stopEvent = EventWaitHandle.OpenExisting(stopEventName);
             pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.Out);
             pipe.Connect(10000);
             writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
@@ -86,7 +91,7 @@ namespace KinectKids.Bridge
                 Interlocked.Exchange(ref startupFinished, 1);
                 throw new InvalidOperationException(
                     "Kinect kunde inte starta. Stäng Kinect Explorer, Kinect Studio och andra Kinect-program, "
-                    + "kontrollera USB-anslutningen och starta sedan spelet igen.");
+                    + "koppla ur Kinect USB och ström en kort stund, anslut igen och försök på nytt.");
             }
             Interlocked.Exchange(ref startupFinished, 1);
             SendStatus("READY", "Kinect 360 ansluten via 32-bitarsbryggan");
@@ -94,7 +99,8 @@ namespace KinectKids.Bridge
             while (!stopping)
             {
                 if (parent != null && parent.HasExited) break;
-                Thread.Sleep(200);
+                if (stopEvent != null && stopEvent.WaitOne(200)) break;
+                if (stopEvent == null) Thread.Sleep(200);
             }
         }
 
@@ -128,9 +134,12 @@ namespace KinectKids.Bridge
                     DateTime now = DateTime.UtcNow;
                     List<Skeleton> tracked = skeletons
                         .Where(item => item.TrackingState == SkeletonTrackingState.Tracked)
-                        .Where(item => item.Position.Z >= 0.8f && item.Position.Z <= 4.5f)
+                        .Where(item => item.Position.Z >= 0.55f && item.Position.Z <= 5.5f)
                         .OrderBy(item => item.Position.Z)
                         .ToList();
+                    int positionOnlyCount = skeletons.Count(item =>
+                        item.TrackingState == SkeletonTrackingState.PositionOnly
+                        && item.Position.Z >= 0.55f && item.Position.Z <= 5.5f);
 
                     foreach (Skeleton body in tracked)
                         if (!firstSeen.ContainsKey(body.TrackingId)) firstSeen[body.TrackingId] = now;
@@ -138,7 +147,12 @@ namespace KinectKids.Bridge
                         firstSeen.Remove(expired);
 
                     var accepted = new List<Skeleton>();
-                    Skeleton primary = tracked.FirstOrDefault();
+                    // Keep the same child as player 0 while their tracking ID is
+                    // present. Sorting by X made a second person steal the menu
+                    // cursor and chase controls whenever they crossed sides.
+                    Skeleton primary = tracked.FirstOrDefault(item => item.TrackingId == primaryTrackingId)
+                        ?? tracked.FirstOrDefault();
+                    primaryTrackingId = primary != null ? primary.TrackingId : 0;
                     if (primary != null) accepted.Add(primary);
                     if (primary != null)
                     {
@@ -149,8 +163,7 @@ namespace KinectKids.Bridge
                         if (second != null) accepted.Add(second);
                     }
 
-                    accepted = accepted.OrderBy(body => body.Position.X).ToList();
-                    var packet = new StringBuilder("F|1");
+                    var packet = new StringBuilder("F|1|").Append(tracked.Count).Append('|').Append(positionOnlyCount);
                     for (int player = 0; player < accepted.Count; player++) AppendPlayer(packet, accepted[player], player);
                     Send(packet.ToString());
                 }
@@ -257,6 +270,7 @@ namespace KinectKids.Bridge
             if (pipe != null) pipe.Dispose();
             pipe = null;
             if (parent != null) parent.Dispose();
+            if (stopEvent != null) stopEvent.Dispose();
         }
     }
 }

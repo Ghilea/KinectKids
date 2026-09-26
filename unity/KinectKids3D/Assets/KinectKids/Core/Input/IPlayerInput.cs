@@ -14,6 +14,7 @@ namespace KinectKids3D.Platform
         public bool MoveLeft;
         public bool MoveRight;
         public bool Run;
+        public bool KinectRun;
         public bool Action;
     }
 

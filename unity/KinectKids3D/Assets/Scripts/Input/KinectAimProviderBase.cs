@@ -17,9 +17,10 @@ namespace KinectKids3D
         protected readonly object sync = new object();
         protected readonly List<AimSample> latest = new List<AimSample>(4);
         protected readonly List<PlayerPose> latestPoses = new List<PlayerPose>(2);
-        protected string status = string.Empty;
+        protected volatile string status = string.Empty;
+        private volatile bool available;
 
-        public bool IsAvailable { get; protected set; }
+        public bool IsAvailable { get => available; protected set => available = value; }
         public string Status => status;
 
         public IReadOnlyList<AimSample> GetAimSamples()

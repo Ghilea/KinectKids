@@ -28,4 +28,8 @@ Write-Host 'Bygger Kinect-bryggan som 32-bitarsprogram…' -ForegroundColor Cyan
 & $msbuild $project /restore /m /p:Configuration=$Configuration /p:Platform=x86 /verbosity:minimal
 if ($LASTEXITCODE -ne 0) { throw "Kinect-bryggan kunde inte byggas (felkod $LASTEXITCODE)." }
 if (-not (Test-Path $output)) { throw "Programfilen hittades inte: $output" }
+$packaged = Join-Path $projectRoot 'unity\KinectKids3D\Assets\StreamingAssets\KinectBridge\KinectBridge.exe'
+$packagedDirectory = Split-Path -Parent $packaged
+if (-not (Test-Path $packagedDirectory)) { New-Item -ItemType Directory -Path $packagedDirectory -Force | Out-Null }
+Copy-Item -LiteralPath $output -Destination $packaged -Force
 Write-Host "Kinect-bryggan är klar: $output" -ForegroundColor Green

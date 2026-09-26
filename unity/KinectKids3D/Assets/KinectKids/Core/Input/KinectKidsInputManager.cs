@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace KinectKids3D.Platform
 {
+    [DefaultExecutionOrder(-100)]
     public sealed class KinectKidsInputManager : MonoBehaviour, IPlayerInput
     {
         private KinectAutoAimProvider provider;
@@ -19,6 +20,8 @@ namespace KinectKids3D.Platform
         private float runEnergy;
         private float jumpUntil;
         private float duckUntil;
+        private long activeTrackingId;
+        private bool hadTrackedPlayer;
         private readonly List<AimSample> latestAimSamples = new List<AimSample>(4);
         private readonly List<PlayerPose> latestPlayerPoses = new List<PlayerPose>(2);
 
@@ -44,6 +47,13 @@ namespace KinectKids3D.Platform
         {
             if (provider == null) return;
             calibrationTime = 0f;
+            hadTrackedPlayer = false;
+            activeTrackingId = 0;
+            runEnergy = 0f;
+            jumpUntil = duckUntil = 0f;
+            frame = new PlayerInputFrame();
+            latestPlayerPoses.Clear();
+            latestAimSamples.Clear();
             provider.RetryNow();
         }
 
@@ -56,13 +66,24 @@ namespace KinectKids3D.Platform
             for (int i = 0; i < poses.Count; i++) latestPlayerPoses.Add(poses[i]);
             latestAimSamples.Clear();
             for (int i = 0; i < aims.Count; i++) latestAimSamples.Add(aims[i]);
-            bool tracked = poses.Count > 0;
+            bool tracked = KinectConnected && poses.Count > 0;
             if (tracked)
             {
                 PlayerPose pose = poses[0];
+                float bodyY = Mathf.Abs(pose.ShoulderY) > 0.001f ? pose.ShoulderY : pose.HeadY - 0.35f;
+                if (!hadTrackedPlayer || pose.TrackingId != activeTrackingId)
+                {
+                    activeTrackingId = pose.TrackingId;
+                    hadTrackedPlayer = true;
+                    calibrationTime = 0f;
+                    filteredHead = baselineHead = previousHead = pose.HeadY;
+                    filteredBody = baselineBody = previousBody = bodyY;
+                    filteredCenter = baselineCenter = pose.CenterX;
+                    runEnergy = 0f;
+                    jumpUntil = duckUntil = 0f;
+                }
                 float blend = 1f - Mathf.Exp(-10f * Time.unscaledDeltaTime);
                 filteredHead = Mathf.Lerp(filteredHead, pose.HeadY, blend);
-                float bodyY = Mathf.Abs(pose.ShoulderY) > 0.001f ? pose.ShoulderY : pose.HeadY - 0.35f;
                 filteredBody = Mathf.Lerp(filteredBody, bodyY, blend);
                 filteredCenter = Mathf.Lerp(filteredCenter, pose.CenterX, blend);
                 if (calibrationTime <= 1.6f)
@@ -72,6 +93,13 @@ namespace KinectKids3D.Platform
                     baselineBody = Mathf.Lerp(baselineBody, filteredBody, 0.07f);
                     baselineCenter = Mathf.Lerp(baselineCenter, filteredCenter, 0.07f);
                 }
+            }
+            else
+            {
+                hadTrackedPlayer = false;
+                activeTrackingId = 0;
+                runEnergy = 0f;
+                jumpUntil = duckUntil = 0f;
             }
 
             Vector2 right = frame.RightHand;
@@ -85,29 +113,33 @@ namespace KinectKids3D.Platform
                 else left = aim.Position;
             }
 
-            float bodyVelocity = (filteredBody - previousBody) / Mathf.Max(0.005f, Time.unscaledDeltaTime);
+            float bodyVelocity = tracked
+                ? (filteredBody - previousBody) / Mathf.Max(0.005f, Time.unscaledDeltaTime) : 0f;
             float velocity = Mathf.Abs(bodyVelocity);
             previousHead = filteredHead;
             previousBody = filteredBody;
-            runEnergy = Mathf.Lerp(runEnergy, Mathf.Clamp01((velocity - 0.08f) * 2.6f),
-                1f - Mathf.Exp(-7f * Time.unscaledDeltaTime));
-            float heightDelta = filteredHead - baselineHead;
-            float bodyDelta = filteredBody - baselineBody;
-            float horizontalDelta = filteredCenter - baselineCenter;
-            if (bodyDelta > 0.10f && bodyVelocity > 0.05f) jumpUntil = Time.unscaledTime + 0.34f;
-            if (bodyDelta < -0.10f && bodyVelocity < -0.05f) duckUntil = Time.unscaledTime + 0.42f;
+            if (tracked)
+                runEnergy = Mathf.Lerp(runEnergy, Mathf.Clamp01((velocity - 0.08f) * 2.6f),
+                    1f - Mathf.Exp(-7f * Time.unscaledDeltaTime));
+            float heightDelta = tracked ? filteredHead - baselineHead : 0f;
+            float bodyDelta = tracked ? filteredBody - baselineBody : 0f;
+            float horizontalDelta = tracked ? filteredCenter - baselineCenter : 0f;
+            if (tracked && bodyDelta > 0.10f && bodyVelocity > 0.05f) jumpUntil = Time.unscaledTime + 0.34f;
+            if (tracked && bodyDelta < -0.10f && bodyVelocity < -0.05f) duckUntil = Time.unscaledTime + 0.42f;
             frame = new PlayerInputFrame
             {
-                IsTracked = tracked && KinectConnected,
+                IsTracked = tracked,
                 CenterX = horizontalDelta,
                 HeadY = heightDelta,
                 RightHand = right,
                 LeftHand = left,
-                Jump = Time.unscaledTime < jumpUntil || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow),
+                Jump = Time.unscaledTime < jumpUntil || Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.UpArrow),
                 Duck = Time.unscaledTime < duckUntil || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow),
                 MoveLeft = horizontalDelta < -0.16f || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow),
                 MoveRight = horizontalDelta > 0.16f || Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow),
-                Run = runEnergy > 0.24f || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift),
+                KinectRun = tracked && runEnergy > 0.24f,
+                Run = runEnergy > 0.24f || Input.GetKey(KeyCode.W) ||
+                    Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift),
                 Action = action
             };
         }
