@@ -53,6 +53,14 @@ namespace KinectKids.Games.GreveGast.LivingFog
             if (wisps != null) wisps.Aggression = value;
         }
 
+        public void SetVisibility(float value)
+        {
+            value = Mathf.Clamp01(value);
+            if (bodyMaterial != null) bodyMaterial.SetFloat("_Opacity", value);
+            if (smokeMaterial != null) smokeMaterial.SetFloat("_Opacity", value * 0.38f);
+            if (upperTendrilMaterial != null) upperTendrilMaterial.SetFloat("_Opacity", value);
+        }
+
         private T AddPart<T>(string name) where T : Component
         {
             GameObject part = new GameObject(name);

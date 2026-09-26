@@ -72,6 +72,7 @@ namespace KinectKids.Games.GreveGast
         private SpriteRenderer player;
         private SpriteRenderer greve;
         private Transform darknessRoot;
+        private GastLivingFog livingFogMass;
         private GastFogController livingFogController;
         private Material floorFogVolumeMaterial;
         private Material foregroundFloorFogMaterial;
@@ -105,6 +106,17 @@ namespace KinectKids.Games.GreveGast
         private float playerMotionTime;
         private GreveGastAction previousRawAction = GreveGastAction.None;
         private float hitFlashUntil;
+        private const float IntroCrawlEnd = 3.2f;
+        private const float IntroLookEnd = 6.2f;
+        private const float IntroWalkEnd = 10.2f;
+        private const float IntroGreveReveal = 17.5f;
+        private const float IntroChaseStart = 22f;
+        private const float IntroWallZ = 14.5f;
+        private Transform introWall;
+        private Light introPoofLight;
+        private bool chaseStarted;
+        private bool introMusicStarted;
+        private float introElapsed;
 
         public DodgeAction CurrentDodge => currentDodge;
         public float LateralPosition => Mathf.Clamp(lateral, -1f, 1f);
@@ -122,8 +134,9 @@ namespace KinectKids.Games.GreveGast
             BuildCorridor();
             BuildIllustratedVista();
             BuildCharacters();
+            BuildIntroWall();
+            BeginIntro();
             StartMusic();
-            worldSpeed = idleSpeed;
         }
 
         private void BuildCamera()
@@ -287,6 +300,144 @@ namespace KinectKids.Games.GreveGast
             BuildDarknessFront();
         }
 
+        private void BuildIntroWall()
+        {
+            introWall = new GameObject("Castle wall with crawl opening").transform;
+            introWall.SetParent(transform, false);
+            introWall.localPosition = new Vector3(0f, 0f, IntroWallZ);
+
+            ThemeStyle stone = themeStyles[EnvironmentTheme.CastleCorridor];
+            float openingWidth = 4.6f;
+            float openingHeight = 3.7f;
+            float sideWidth = (corridorWidth - openingWidth) * 0.5f;
+            float sideX = (corridorWidth + openingWidth) * 0.25f;
+            CreatePrimitive("Left stone wall", PrimitiveType.Cube, introWall,
+                new Vector3(-sideX, corridorHeight * 0.5f, 0f),
+                new Vector3(sideWidth, corridorHeight, 0.9f), stone.wallMaterial);
+            CreatePrimitive("Right stone wall", PrimitiveType.Cube, introWall,
+                new Vector3(sideX, corridorHeight * 0.5f, 0f),
+                new Vector3(sideWidth, corridorHeight, 0.9f), stone.wallMaterial);
+            CreatePrimitive("Stone above opening", PrimitiveType.Cube, introWall,
+                new Vector3(0f, (corridorHeight + openingHeight) * 0.5f, 0f),
+                new Vector3(openingWidth, corridorHeight - openingHeight, 0.9f), stone.wallMaterial);
+
+            // The projecting stones make the opening legible from the fixed camera.
+            CreatePrimitive("Left opening jamb", PrimitiveType.Cube, introWall,
+                new Vector3(-openingWidth * 0.5f - 0.16f, openingHeight * 0.5f, -0.55f),
+                new Vector3(0.38f, openingHeight, 0.42f), stone.accentMaterial);
+            CreatePrimitive("Right opening jamb", PrimitiveType.Cube, introWall,
+                new Vector3(openingWidth * 0.5f + 0.16f, openingHeight * 0.5f, -0.55f),
+                new Vector3(0.38f, openingHeight, 0.42f), stone.accentMaterial);
+            CreatePrimitive("Opening lintel", PrimitiveType.Cube, introWall,
+                new Vector3(0f, openingHeight + 0.19f, -0.55f),
+                new Vector3(openingWidth + 0.7f, 0.38f, 0.42f), stone.accentMaterial);
+        }
+
+        private void BeginIntro()
+        {
+            worldSpeed = 0f;
+            if (darknessRoot != null) darknessRoot.gameObject.SetActive(false);
+            if (greve != null) greve.gameObject.SetActive(false);
+            if (player != null)
+            {
+                player.transform.localPosition = new Vector3(0f, 0f, IntroWallZ + 0.7f);
+                player.sprite = ResolvePlayer("duck");
+                SizeSpriteToHeight(player, playerHeight * 0.72f);
+            }
+
+            GameObject flash = new GameObject("Greve entrance flash placeholder");
+            flash.transform.SetParent(transform, false);
+            flash.transform.localPosition = new Vector3(0f, 3.2f, Mathf.Lerp(greveFarZ, greveNearZ, chase));
+            introPoofLight = flash.AddComponent<Light>();
+            introPoofLight.type = LightType.Point;
+            introPoofLight.color = new Color(0.35f, 0.12f, 0.65f);
+            introPoofLight.range = 12f;
+            introPoofLight.intensity = 0f;
+            introPoofLight.shadows = LightShadows.None;
+        }
+
+        private void DriveIntro(float dt)
+        {
+            if (player == null || greve == null) return;
+            if (introElapsed >= IntroCrawlEnd && !introMusicStarted)
+            {
+                introMusicStarted = true;
+                if (music != null) music.volume = 0.8f;
+            }
+            Vector3 position = player.transform.localPosition;
+            if (introElapsed < IntroCrawlEnd)
+            {
+                float progress = Mathf.SmoothStep(0f, 1f, introElapsed / IntroCrawlEnd);
+                position.z = Mathf.Lerp(IntroWallZ + 0.7f, IntroWallZ - 1.6f, progress);
+                position.y = 0.04f * Mathf.Sin(introElapsed * 9f);
+                player.sprite = ResolvePlayer("duck");
+                player.flipX = false;
+                SizeSpriteToHeight(player, playerHeight * 0.72f);
+            }
+            else if (introElapsed < IntroLookEnd)
+            {
+                position.z = IntroWallZ - 1.6f;
+                position.y = 0f;
+                player.sprite = ResolvePlayer("listen");
+                player.flipX = Mathf.Repeat(introElapsed - IntroCrawlEnd, 1.8f) < 0.9f;
+                SizeSpriteToHeight(player, playerHeight);
+            }
+            else if (introElapsed < IntroWalkEnd)
+            {
+                float progress = Mathf.SmoothStep(0f, 1f,
+                    (introElapsed - IntroLookEnd) / (IntroWalkEnd - IntroLookEnd));
+                position.z = Mathf.Lerp(IntroWallZ - 1.6f, playerStartZ, progress);
+                playerRunCycle += dt * 3.8f;
+                player.sprite = playerRunFrames.Length > 0
+                    ? Frame(playerRunFrames, playerRunCycle, 1f, true) : ResolvePlayer("idle");
+                player.flipX = false;
+                SizeSpriteToHeight(player, playerHeight);
+            }
+            else
+            {
+                position.z = playerStartZ;
+                position.y = 0f;
+                float lookTime = introElapsed - IntroWalkEnd;
+                bool lookLeft = Mathf.Repeat(lookTime, 5.2f) < 2.6f;
+                player.sprite = introElapsed >= IntroGreveReveal + 0.5f
+                    ? ResolvePlayer("look_back") : ResolvePlayer("listen");
+                player.flipX = lookLeft;
+                SizeSpriteToHeight(player, playerHeight);
+            }
+            player.transform.localPosition = position;
+
+            if (introElapsed >= IntroGreveReveal)
+            {
+                if (!greve.gameObject.activeSelf) greve.gameObject.SetActive(true);
+                float appear = Mathf.SmoothStep(0f, 1f,
+                    (introElapsed - IntroGreveReveal) / 0.75f);
+                greve.sprite = ResolveGreve("threaten");
+                greve.color = new Color(1f, 1f, 1f, appear);
+                SizeSpriteToHeight(greve, greveHeight * Mathf.Lerp(0.35f, 1.2f, appear));
+                greve.transform.localPosition = new Vector3(0f, 0.38f,
+                    Mathf.Lerp(greveFarZ, greveNearZ, chase));
+                if (introPoofLight != null)
+                    introPoofLight.intensity = 2.5f * Mathf.Sin(Mathf.PI * Mathf.Clamp01(
+                        (introElapsed - IntroGreveReveal) / 1.2f));
+            }
+        }
+
+        private void BeginChase()
+        {
+            chaseStarted = true;
+            elapsed = 0f;
+            worldSpeed = idleSpeed;
+            playerRunCycle = 0f;
+            if (introPoofLight != null) introPoofLight.intensity = 0f;
+            if (greve != null) greve.color = Color.white;
+            if (darknessRoot != null)
+            {
+                darknessRoot.gameObject.SetActive(true);
+                darknessRoot.localScale = Vector3.one * 0.55f;
+                if (livingFogMass != null) livingFogMass.SetVisibility(0f);
+            }
+        }
+
         private void BuildDarknessFront()
         {
             darknessRoot = new GameObject("Greve Gasts levande mörkerfront").transform;
@@ -308,12 +459,12 @@ namespace KinectKids.Games.GreveGast
 
             GameObject body = new GameObject("GastLivingFog");
             body.transform.SetParent(darknessRoot, false);
-            GastLivingFog livingMass = body.AddComponent<GastLivingFog>();
-            livingMass.Initialize(shader, corridorWidth, corridorHeight, true);
+            livingFogMass = body.AddComponent<GastLivingFog>();
+            livingFogMass.Initialize(shader, corridorWidth, corridorHeight, true);
             livingFogController = body.AddComponent<GastFogController>();
             livingFogController.showTestControls = false;
             livingFogController.aggression = chase;
-            livingMass.SetAggression(chase);
+            livingFogMass.SetAggression(chase);
         }
 
         private void BuildVolumetricFloorFog()
@@ -928,13 +1079,27 @@ namespace KinectKids.Games.GreveGast
         {
             if (body == null) return;
             float dt = Time.deltaTime;
-            elapsed += dt;
             body.Update();
+            if (!chaseStarted)
+            {
+                introElapsed += dt;
+                DriveIntro(dt);
+                if (introElapsed >= IntroChaseStart) BeginChase();
+                return;
+            }
+            elapsed += dt;
             ReadInput(dt);
             DriveWorld(dt);
             StreamSegments(dt);
             MoveIllustratedVista(dt);
             DriveCharacters(dt);
+            if (darknessRoot != null)
+            {
+                float growth = Mathf.SmoothStep(0f, 1f, elapsed / 3f);
+                darknessRoot.localScale = Vector3.one * Mathf.Lerp(0.55f, 1f, growth);
+                if (livingFogMass != null)
+                    livingFogMass.SetVisibility(Mathf.SmoothStep(0f, 1f, elapsed / 1.4f));
+            }
             TickHazards(dt);
             TickThemeSequence();
         }
@@ -1042,6 +1207,11 @@ namespace KinectKids.Games.GreveGast
         private void StreamSegments(float dt)
         {
             float move = worldSpeed * dt;
+            if (introWall != null && introWall.gameObject.activeSelf)
+            {
+                introWall.localPosition += Vector3.forward * move;
+                if (introWall.localPosition.z > 82f) introWall.gameObject.SetActive(false);
+            }
             for (int i = 0; i < segments.Count; i++)
                 segments[i].transform.localPosition += Vector3.forward * move;
 
@@ -1357,7 +1527,10 @@ namespace KinectKids.Games.GreveGast
             if (clip == null) clip = Resources.Load<AudioClip>("Audio/CustomRideMusic");
             if (clip == null) return;
             music = gameObject.AddComponent<AudioSource>();
-            music.clip = clip; music.loop = true; music.playOnAwake = false; music.volume = 0.8f; music.spatialBlend = 0f; music.Play();
+            music.clip = clip; music.loop = true; music.playOnAwake = false; music.volume = 0f; music.spatialBlend = 0f;
+            // Keep the soundtrack clock aligned with the scene from frame one.
+            // The player hears it only after leaving the wall opening.
+            music.Play();
         }
 
         private static void EnsureInputManager()
@@ -1412,6 +1585,11 @@ namespace KinectKids.Games.GreveGast
             {
                 hud = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Clamp(Screen.height / 40, 16, 30), fontStyle = FontStyle.Bold };
                 hud.normal.textColor = Color.white;
+            }
+            if (!chaseStarted)
+            {
+                GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + requestedTheme, hud);
+                return;
             }
             GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + requestedTheme + "  |  BANA: " + lane +
                 "  |  Spring (W), byt bana (A/D), center (S), hoppa (Space)", hud);
