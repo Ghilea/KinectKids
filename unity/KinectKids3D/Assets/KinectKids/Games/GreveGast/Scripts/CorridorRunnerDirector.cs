@@ -73,6 +73,8 @@ namespace KinectKids.Games.GreveGast
         private SpriteRenderer greve;
         private Transform darknessRoot;
         private GastFogController livingFogController;
+        private Material floorFogVolumeMaterial;
+        private Material foregroundFloorFogMaterial;
         private SpriteRenderer illustratedVista;
         private Sprite[] playerRunFrames;
         private Sprite[] playerJumpFrames;
@@ -91,6 +93,7 @@ namespace KinectKids.Games.GreveGast
         private float lateral;
         private float worldSpeed;
         private float chase = 0.35f;
+        private bool greveFinalReachPose;
         private float elapsed;
         private float hazardTimer = 2.2f;
         private int hazardCounter;
@@ -322,7 +325,7 @@ namespace KinectKids.Games.GreveGast
                 volumeShader = Shader.Find("KinectKids/Greve Volumetric Fog");
             if (volumeShader == null || !volumeShader.isSupported) return;
 
-            BuildFogVolume("Raymarchad blåvit 3D-golvdimma", transform,
+            floorFogVolumeMaterial = BuildFogVolume("Raymarchad blåvit 3D-golvdimma", transform,
                 new Vector3(0f, 1.55f, -3.0f),
                 new Vector3(corridorWidth * 1.16f, 4.5f, 14f),
                 new Color(0.52f, 0.70f, 1f, 0.48f),
@@ -343,7 +346,7 @@ namespace KinectKids.Games.GreveGast
             // This short volume spans the player and the space between the
             // player and camera. It is drawn over the rear mass, then below the
             // character sprites, so the visible bank lives in the foreground.
-            BuildFogVolume("Blåvit 3D-golvdimma vid spelaren", transform,
+            foregroundFloorFogMaterial = BuildFogVolume("Blåvit 3D-golvdimma vid spelaren", transform,
                 new Vector3(0f, 0.75f, -2.5f),
                 new Vector3(corridorWidth * 1.06f, 2.6f, 9f),
                 new Color(0.50f, 0.68f, 0.98f, 0.55f),
@@ -354,7 +357,7 @@ namespace KinectKids.Games.GreveGast
                 volumeShader);
         }
 
-        private static void BuildFogVolume(string volumeName, Transform parent,
+        private static Material BuildFogVolume(string volumeName, Transform parent,
             Vector3 localPosition, Vector3 localScale, Color color, float density,
             float edgeSoftness, float floorMode, int renderQueue, Shader shader)
         {
@@ -382,6 +385,7 @@ namespace KinectKids.Games.GreveGast
             renderer.material = material;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+            return material;
         }
 
         private void BuildDarknessParticleFog()
@@ -1154,13 +1158,16 @@ namespace KinectKids.Games.GreveGast
             {
                 // Greven måste alltid läsas som en hel figur under jakten. De
                 // beskurna sånghuvudena används därför inte här: flygsekvensen
-                // bär sången, med en helkroppsaccent och ett tydligt utfall nära.
+                // bär sången; nära spelaren håller Greve en stadig jaktpose.
                 Sprite sprite;
                 bool sillyDuck = false;
-                bool attacking = chase >= 0.76f;
-                float attackPulse = attacking ? Mathf.SmoothStep(0f, 1f,
-                    Mathf.PingPong(elapsed * 2.2f, 1f)) : 0f;
-                if (attacking) sprite = attackPulse > 0.22f ? ResolveGreve("reach") : ResolveGreve("chase_near");
+                bool nearPlayer = chase >= 0.76f;
+                // Enter the reaching pose only at the final approach. A wider
+                // exit threshold prevents rapid pose switching near the limit.
+                if (chase >= 0.94f) greveFinalReachPose = true;
+                else if (chase <= 0.86f) greveFinalReachPose = false;
+                if (greveFinalReachPose) sprite = ResolveGreve("reach");
+                else if (nearPlayer) sprite = ResolveGreve("chase_near");
                 else if (playerMotion == PlayerMotion.Ducking && greveDuckReactFrames.Length > 0)
                 {
                     sprite = Frame(greveDuckReactFrames, playerMotionTime, 6f, true);
@@ -1178,16 +1185,15 @@ namespace KinectKids.Games.GreveGast
                 // scaling), small in the distance and imposing near the player.
                 float chaseEase = chase * chase * (3f - 2f * chase);
                 float distanceScale = Mathf.Lerp(1.05f, 2.08f, chaseEase);
-                float attackScale = attacking ? 1f + attackPulse * 0.20f : 1f;
-                SizeSpriteToHeight(greve, greveHeight * distanceScale * attackScale * (sillyDuck ? 1.05f : 1f));
+                SizeSpriteToHeight(greve, greveHeight * distanceScale * (sillyDuck ? 1.05f : 1f));
                 Vector3 p = greve.transform.localPosition;
                 float hoverX = Mathf.Sin(elapsed * 1.15f) * Mathf.Lerp(1.15f, 0.28f, chaseEase);
                 p.x = Mathf.Lerp(p.x, lateral * laneSpacing * 0.72f + hoverX, 1f - Mathf.Exp(-4f * dt));
                 p.y = 0.38f + Mathf.Sin(elapsed * (sillyDuck ? 8f : 2.1f)) * (sillyDuck ? 0.20f : 0.22f);
-                p.z = Mathf.Lerp(greveFarZ, greveNearZ, chase) - attackPulse * Mathf.InverseLerp(0.76f, 1f, chase) * 1.35f;
+                p.z = Mathf.Lerp(greveFarZ, greveNearZ, chase);
                 greve.transform.localPosition = p;
                 greve.transform.localRotation = Quaternion.Euler(0f, 0f,
-                    sillyDuck ? Mathf.Sin(elapsed * 9f) * 7f : -hoverX * 1.8f - attackPulse * 4f);
+                    sillyDuck ? Mathf.Sin(elapsed * 9f) * 7f : -hoverX * 1.8f);
                 UpdateDarknessFront(p, chaseEase);
             }
         }
@@ -1199,6 +1205,16 @@ namespace KinectKids.Games.GreveGast
                 grevePosition.z + Mathf.Lerp(0.55f, 0.22f, chaseEase));
             if (livingFogController != null)
                 livingFogController.aggression = 0.45f + chaseEase * 0.55f;
+            // Box edges become conspicuous when Gast fills the frame. Let the
+            // local wisps remain while the two raymarched sheets dissolve.
+            float volumeFade = 1f - Mathf.SmoothStep(0f, 1f,
+                Mathf.InverseLerp(0.60f, 0.87f, chaseEase));
+            if (floorFogVolumeMaterial != null)
+                floorFogVolumeMaterial.SetColor("_FogColor",
+                    new Color(0.52f, 0.70f, 1f, 0.48f * volumeFade));
+            if (foregroundFloorFogMaterial != null)
+                foregroundFloorFogMaterial.SetColor("_FogColor",
+                    new Color(0.50f, 0.68f, 0.98f, 0.55f * volumeFade));
         }
 
         private static Sprite FrameProgress(Sprite[] frames, float progress)
