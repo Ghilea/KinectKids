@@ -8,20 +8,7 @@ namespace KinectKids3D.Platform
     {
         private KinectAutoAimProvider provider;
         private PlayerInputFrame frame;
-        private float baselineHead = 1.7f;
-        private float baselineCenter;
-        private float filteredHead = 1.7f;
-        private float baselineBody = 1.35f;
-        private float filteredBody = 1.35f;
-        private float filteredCenter;
-        private float previousHead = 1.7f;
-        private float previousBody = 1.35f;
-        private float calibrationTime;
-        private float runEnergy;
-        private float jumpUntil;
-        private float duckUntil;
-        private long activeTrackingId;
-        private bool hadTrackedPlayer;
+        private readonly KinectBodyGestureTracker gestures = new KinectBodyGestureTracker();
         private readonly List<AimSample> latestAimSamples = new List<AimSample>(4);
         private readonly List<PlayerPose> latestPlayerPoses = new List<PlayerPose>(2);
 
@@ -46,11 +33,7 @@ namespace KinectKids3D.Platform
         public void RetryKinect()
         {
             if (provider == null) return;
-            calibrationTime = 0f;
-            hadTrackedPlayer = false;
-            activeTrackingId = 0;
-            runEnergy = 0f;
-            jumpUntil = duckUntil = 0f;
+            gestures.Reset();
             frame = new PlayerInputFrame();
             latestPlayerPoses.Clear();
             latestAimSamples.Clear();
@@ -67,43 +50,11 @@ namespace KinectKids3D.Platform
             latestAimSamples.Clear();
             for (int i = 0; i < aims.Count; i++) latestAimSamples.Add(aims[i]);
             bool tracked = KinectConnected && poses.Count > 0;
-            if (tracked)
-            {
-                PlayerPose pose = poses[0];
-                float bodyY = Mathf.Abs(pose.ShoulderY) > 0.001f ? pose.ShoulderY : pose.HeadY - 0.35f;
-                if (!hadTrackedPlayer || pose.TrackingId != activeTrackingId)
-                {
-                    activeTrackingId = pose.TrackingId;
-                    hadTrackedPlayer = true;
-                    calibrationTime = 0f;
-                    filteredHead = baselineHead = previousHead = pose.HeadY;
-                    filteredBody = baselineBody = previousBody = bodyY;
-                    filteredCenter = baselineCenter = pose.CenterX;
-                    runEnergy = 0f;
-                    jumpUntil = duckUntil = 0f;
-                }
-                float blend = 1f - Mathf.Exp(-10f * Time.unscaledDeltaTime);
-                filteredHead = Mathf.Lerp(filteredHead, pose.HeadY, blend);
-                filteredBody = Mathf.Lerp(filteredBody, bodyY, blend);
-                filteredCenter = Mathf.Lerp(filteredCenter, pose.CenterX, blend);
-                if (calibrationTime <= 1.6f)
-                {
-                    calibrationTime += Time.unscaledDeltaTime;
-                    baselineHead = Mathf.Lerp(baselineHead, filteredHead, 0.07f);
-                    baselineBody = Mathf.Lerp(baselineBody, filteredBody, 0.07f);
-                    baselineCenter = Mathf.Lerp(baselineCenter, filteredCenter, 0.07f);
-                }
-            }
-            else
-            {
-                hadTrackedPlayer = false;
-                activeTrackingId = 0;
-                runEnergy = 0f;
-                jumpUntil = duckUntil = 0f;
-            }
+            KinectBodyGestureTracker.Motion motion = gestures.Update(tracked,
+                tracked ? poses[0] : default(PlayerPose), Time.unscaledDeltaTime, Time.unscaledTime);
 
-            Vector2 right = frame.RightHand;
-            Vector2 left = frame.LeftHand;
+            Vector2 right = motion.PlayerChanged ? Vector2.zero : frame.RightHand;
+            Vector2 left = motion.PlayerChanged ? Vector2.zero : frame.LeftHand;
             bool action = Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0);
             for (int i = 0; i < aims.Count; i++)
             {
@@ -113,32 +64,21 @@ namespace KinectKids3D.Platform
                 else left = aim.Position;
             }
 
-            float bodyVelocity = tracked
-                ? (filteredBody - previousBody) / Mathf.Max(0.005f, Time.unscaledDeltaTime) : 0f;
-            float velocity = Mathf.Abs(bodyVelocity);
-            previousHead = filteredHead;
-            previousBody = filteredBody;
-            if (tracked)
-                runEnergy = Mathf.Lerp(runEnergy, Mathf.Clamp01((velocity - 0.08f) * 2.6f),
-                    1f - Mathf.Exp(-7f * Time.unscaledDeltaTime));
-            float heightDelta = tracked ? filteredHead - baselineHead : 0f;
-            float bodyDelta = tracked ? filteredBody - baselineBody : 0f;
-            float horizontalDelta = tracked ? filteredCenter - baselineCenter : 0f;
-            if (tracked && bodyDelta > 0.10f && bodyVelocity > 0.05f) jumpUntil = Time.unscaledTime + 0.34f;
-            if (tracked && bodyDelta < -0.10f && bodyVelocity < -0.05f) duckUntil = Time.unscaledTime + 0.42f;
             frame = new PlayerInputFrame
             {
-                IsTracked = tracked,
-                CenterX = horizontalDelta,
-                HeadY = heightDelta,
+                IsTracked = motion.Tracked,
+                PlayerChanged = motion.PlayerChanged,
+                CenterX = motion.CenterDelta,
+                HeadY = motion.HeadDelta,
+                BodySide = motion.Side,
                 RightHand = right,
                 LeftHand = left,
-                Jump = Time.unscaledTime < jumpUntil || Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.UpArrow),
-                Duck = Time.unscaledTime < duckUntil || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow),
-                MoveLeft = horizontalDelta < -0.16f || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow),
-                MoveRight = horizontalDelta > 0.16f || Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow),
-                KinectRun = tracked && runEnergy > 0.24f,
-                Run = runEnergy > 0.24f || Input.GetKey(KeyCode.W) ||
+                Jump = motion.Jump || Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.UpArrow),
+                Duck = motion.Duck || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow),
+                MoveLeft = motion.Side < 0 || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow),
+                MoveRight = motion.Side > 0 || Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow),
+                KinectRun = motion.Run,
+                Run = motion.Run || Input.GetKey(KeyCode.W) ||
                     Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift),
                 Action = action
             };

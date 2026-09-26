@@ -106,6 +106,8 @@ namespace KinectKids.Games.GreveGast
         private float laneAnimationTime;
         private float laneAnimationStartX;
         private int laneMoveDirection;
+        private bool manualLaneMode;
+        private int lastBodySide;
         private PlayerMotion playerMotion = PlayerMotion.Running;
         private float playerMotionTime;
         private GreveGastAction previousRawAction = GreveGastAction.None;
@@ -1147,6 +1149,24 @@ namespace KinectKids.Games.GreveGast
         private void ReadInput(float dt)
         {
             currentDodge = DodgeAction.None;
+            if (body.PlayerChanged)
+            {
+                lane = Lane.Center;
+                lateral = 0f;
+                playerMotion = PlayerMotion.Running;
+                playerMotionTime = 0f;
+                laneMoveDirection = 0;
+                manualLaneMode = false;
+                lastBodySide = body.BodySide;
+                previousRawAction = GreveGastAction.None;
+                if (player != null)
+                {
+                    Vector3 position = player.transform.localPosition;
+                    position.x = 0f;
+                    player.transform.localPosition = position;
+                }
+            }
+            if (body.PlayerTracked && body.BodySide != lastBodySide) manualLaneMode = false;
 
             // A gesture starts a complete motion. Holding the pose does not
             // extend or repeat it; Kinect and keyboard both re-arm only after
@@ -1168,13 +1188,33 @@ namespace KinectKids.Games.GreveGast
 
             GreveGastAction raw = body.Current;
             bool freshAction = raw != previousRawAction;
-            if (playerMotion == PlayerMotion.Running && freshAction)
+            if (playerMotion == PlayerMotion.Running)
             {
-                if (raw == GreveGastAction.Jump) BeginMotion(PlayerMotion.Jumping);
-                else if (raw == GreveGastAction.Duck) BeginMotion(PlayerMotion.Ducking);
-                else if (raw == GreveGastAction.Left || raw == GreveGastAction.Right)
+                if (freshAction && raw == GreveGastAction.Jump) BeginMotion(PlayerMotion.Jumping);
+                else if (freshAction && raw == GreveGastAction.Duck) BeginMotion(PlayerMotion.Ducking);
+                else
                 {
-                    int direction = raw == GreveGastAction.Left ? -1 : 1;
+                    int direction = 0;
+                    if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
+                    {
+                        manualLaneMode = true;
+                        direction = -1;
+                    }
+                    else if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
+                    {
+                        manualLaneMode = true;
+                        direction = 1;
+                    }
+                    else if (body.PlayerTracked)
+                    {
+                        if (!manualLaneMode)
+                        {
+                            int desiredLane = body.BodySide + (int)Lane.Center;
+                            direction = desiredLane < (int)lane ? -1 : desiredLane > (int)lane ? 1 : 0;
+                        }
+                    }
+                    else if (freshAction && (raw == GreveGastAction.Left || raw == GreveGastAction.Right))
+                        direction = raw == GreveGastAction.Left ? -1 : 1;
                     int oldLane = (int)lane;
                     int nextLane = Mathf.Clamp(oldLane + direction, (int)Lane.Left, (int)Lane.Right);
                     if (nextLane != oldLane)
@@ -1199,6 +1239,7 @@ namespace KinectKids.Games.GreveGast
             if (playerMotion != PlayerMotion.Running) playerMotionTime += dt;
             laneAnimationTime = playerMotion == PlayerMotion.ChangingLane ? playerMotionTime : 0f;
             previousRawAction = raw;
+            lastBodySide = body.BodySide;
 
             float target = LaneX(lane);
             lateral = Mathf.Lerp(lateral, target / laneSpacing,

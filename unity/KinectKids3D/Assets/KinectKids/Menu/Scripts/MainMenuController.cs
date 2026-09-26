@@ -19,6 +19,7 @@ namespace KinectKids3D.Platform
         private int hoverTarget = int.MinValue;
         private int hoverHand = int.MinValue;
         private float dwell;
+        private float lastHoverSeenAt;
         private float nextScrollAt;
         private Rect playRect;
         private GUIStyle logoStyle;
@@ -173,16 +174,18 @@ namespace KinectKids3D.Platform
                 ResetDwell();
                 return;
             }
+            if (input.Frame.PlayerChanged) ResetDwell();
 
             int foundTarget = int.MinValue;
             int foundHand = int.MinValue;
             IReadOnlyList<AimSample> hands = input.AimSamples;
+            float hitPadding = Mathf.Max(10f, Screen.height * 0.012f);
             for (int handIndex = 0; handIndex < hands.Count && foundTarget == int.MinValue; handIndex++)
             {
                 AimSample hand = hands[handIndex];
                 if (hand.PlayerIndex != 0) continue;
                 Vector2 cursor = new Vector2(hand.Position.x * Screen.width, hand.Position.y * Screen.height);
-                if (playRect.Contains(cursor))
+                if (Expanded(playRect, hitPadding).Contains(cursor))
                 {
                     foundTarget = -1;
                     foundHand = hand.HandId;
@@ -190,7 +193,8 @@ namespace KinectKids3D.Platform
                 }
                 for (int slot = 0; slot < visibleCardRects.Length; slot++)
                 {
-                    if (!visibleCardRects[slot].Contains(cursor)) continue;
+                    if (visibleCardRects[slot].width <= 0f) continue;
+                    if (!Expanded(visibleCardRects[slot], hitPadding).Contains(cursor)) continue;
                     foundTarget = visibleGameIndices[slot];
                     foundHand = hand.HandId;
                     break;
@@ -199,15 +203,16 @@ namespace KinectKids3D.Platform
 
             if (foundTarget == int.MinValue)
             {
-                ResetDwell();
+                if (Time.unscaledTime - lastHoverSeenAt > 0.24f) ResetDwell();
                 return;
             }
-            if (foundTarget != hoverTarget || foundHand != hoverHand)
+            if (foundTarget != hoverTarget)
             {
                 hoverTarget = foundTarget;
-                hoverHand = foundHand;
                 dwell = 0f;
             }
+            hoverHand = foundHand;
+            lastHoverSeenAt = Time.unscaledTime;
             dwell += Time.unscaledDeltaTime;
 
             float required = foundTarget == -1 ? 1f : 0.42f;
@@ -222,7 +227,12 @@ namespace KinectKids3D.Platform
             hoverTarget = int.MinValue;
             hoverHand = int.MinValue;
             dwell = 0f;
+            lastHoverSeenAt = 0f;
         }
+
+        private static Rect Expanded(Rect rect, float padding) =>
+            new Rect(rect.x - padding, rect.y - padding,
+                rect.width + padding * 2f, rect.height + padding * 2f);
 
         private void ChangeSelected(int direction)
         {

@@ -27,6 +27,7 @@ namespace KinectKids3D
         private volatile bool hasFailed;
         private bool disposed;
         private DateTime lastTrackedFrameAt = DateTime.MinValue;
+        private long gestureTrackingId;
         private DateTime startupDeadline = DateTime.MaxValue;
 
         public bool HasFailed { get => hasFailed; private set => hasFailed = value; }
@@ -210,6 +211,11 @@ namespace KinectKids3D
                 if (values.Length != 15 || values[0] != "P") continue;
                 int player = ParseInt(values[1]);
                 long trackingId = ParseLong(values[2]);
+                if (player == 0 && trackingId != gestureTrackingId)
+                {
+                    gestures.Clear();
+                    gestureTrackingId = trackingId;
+                }
                 poses.Add(new PlayerPose(player, trackingId, ParseFloat(values[3]), ParseFloat(values[4]), ParseFloat(values[5])));
                 AddHand(samples, player, player * 2, ParseFloat(values[7]), ParseFloat(values[8]),
                     ParseFloat(values[9]), ParseFloat(values[10]), ParseFloat(values[5]), ParseFloat(values[6]), now);
@@ -223,7 +229,7 @@ namespace KinectKids3D
                 // Kinect 360 kan missa enstaka bildrutor när handen är långt
                 // ut från kroppen; UI och sikte ska inte blinka bort för det.
                 if (poses.Count == 0 && latestPoses.Count > 0
-                    && now - lastTrackedFrameAt < TimeSpan.FromMilliseconds(420))
+                    && now - lastTrackedFrameAt < TimeSpan.FromMilliseconds(650))
                     return;
                 latest.Clear();
                 latest.AddRange(samples);
@@ -236,7 +242,7 @@ namespace KinectKids3D
             status = poses.Count > 0
                 ? "Kinect ansluten – spelare spåras"
                 : positionOnlyCount > 0
-                    ? "Kinect ser en kropp men inte hela skelettet – kliv bakåt och visa huvud, armar och ben"
+                    ? "Kinect ser en kropp men inte hela skelettet – visa hela kroppen cirka 1–3 meter från kameran"
                     : trackedCount > 0
                         ? "Kinect ser en kropp men kunde inte läsa spelarens leder"
                         : "Kinect ansluten – ingen spelare spåras. Stå framför kameran med hela kroppen synlig";

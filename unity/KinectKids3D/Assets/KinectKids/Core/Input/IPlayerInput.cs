@@ -5,8 +5,10 @@ namespace KinectKids3D.Platform
     public struct PlayerInputFrame
     {
         public bool IsTracked;
+        public bool PlayerChanged;
         public float CenterX;
         public float HeadY;
+        public int BodySide;
         public Vector2 RightHand;
         public Vector2 LeftHand;
         public bool Jump;

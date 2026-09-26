@@ -23,6 +23,7 @@ namespace KinectKids.Bridge
         private bool stopping;
         private int startupFinished;
         private int primaryTrackingId;
+        private DateTime lastPrimaryTrackedAt = DateTime.MinValue;
 
         private static int Main(string[] args)
         {
@@ -74,11 +75,11 @@ namespace KinectKids.Bridge
             // skickas till Unity, men behåller tillräckligt snabb respons för kast.
             sensor.SkeletonStream.Enable(new TransformSmoothParameters
             {
-                Smoothing = 0.62f,
-                Correction = 0.28f,
-                Prediction = 0.22f,
-                JitterRadius = 0.075f,
-                MaxDeviationRadius = 0.18f
+                Smoothing = 0.42f,
+                Correction = 0.38f,
+                Prediction = 0.25f,
+                JitterRadius = 0.045f,
+                MaxDeviationRadius = 0.13f
             });
             sensor.SkeletonFrameReady += OnSkeletonFrameReady;
             SendStatus("INFO", "Skelettström klar - startar sensorn…");
@@ -150,13 +151,21 @@ namespace KinectKids.Bridge
                     // Keep the same child as player 0 while their tracking ID is
                     // present. Sorting by X made a second person steal the menu
                     // cursor and chase controls whenever they crossed sides.
-                    Skeleton primary = tracked.FirstOrDefault(item => item.TrackingId == primaryTrackingId)
-                        ?? tracked.FirstOrDefault();
-                    primaryTrackingId = primary != null ? primary.TrackingId : 0;
+                    Skeleton primary = tracked.FirstOrDefault(item => item.TrackingId == primaryTrackingId);
+                    if (primary != null) lastPrimaryTrackedAt = now;
+                    else if (primaryTrackingId == 0
+                        || now - lastPrimaryTrackedAt >= TimeSpan.FromMilliseconds(750))
+                    {
+                        primary = tracked.FirstOrDefault();
+                        primaryTrackingId = primary != null ? primary.TrackingId : 0;
+                        if (primary != null) lastPrimaryTrackedAt = now;
+                    }
                     if (primary != null) accepted.Add(primary);
                     if (primary != null)
                     {
-                        Skeleton second = tracked.Skip(1).FirstOrDefault(body =>
+                        Skeleton second = tracked.FirstOrDefault(body =>
+                            body.TrackingId != primary.TrackingId
+                            &&
                             now - firstSeen[body.TrackingId] >= TimeSpan.FromSeconds(2.2)
                             && Math.Abs(body.Position.X - primary.Position.X) >= 0.38f
                             && Math.Abs(body.Position.Z - primary.Position.Z) <= 0.85f);
