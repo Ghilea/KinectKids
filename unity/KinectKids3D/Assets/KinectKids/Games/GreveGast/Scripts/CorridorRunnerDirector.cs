@@ -25,6 +25,8 @@ namespace KinectKids.Games.GreveGast
         public float corridorHeight = 18f;
         public float runningSpeed = 14f;
         public float idleSpeed = 8f;
+        [Tooltip("Speed multiplier while running in place or holding Shift.")]
+        public float sprintSpeedMultiplier = 1.4f;
 
         [Header("Perspective camera")]
         [Range(40f, 80f)] public float fieldOfView = 70f;
@@ -50,7 +52,9 @@ namespace KinectKids.Games.GreveGast
 
         [Header("Chase")]
         public float catchOnHit = 0.14f;
-        public float recoverPerSecond = 0.05f;
+        [Tooltip("How quickly Greve falls behind while the player avoids damage.")]
+        public float recoverPerSecond = 0.018f;
+        [Tooltip("Additional distance gained by running in place or holding Shift.")]
         public float runDrainPerSecond = 0.05f;
         [Tooltip("Extra distance Greve Gast gains while the player ducks.")]
         public float duckPressurePerSecond = 0.11f;
@@ -117,6 +121,14 @@ namespace KinectKids.Games.GreveGast
         private bool chaseStarted;
         private bool introMusicStarted;
         private float introElapsed;
+        private const float IntroFadeDuration = 2.2f;
+        private const float FinalStageWarningDelay = 2.5f;
+        private const float FinalStageCaptureDelay = 15f;
+        private const float CaptureFadeDuration = 2.5f;
+        private float finalStageElapsed;
+        private float captureFadeElapsed;
+        private bool captureStarted;
+        private float captureMusicVolume;
 
         public DodgeAction CurrentDodge => currentDodge;
         public float LateralPosition => Mathf.Clamp(lateral, -1f, 1f);
@@ -1079,6 +1091,17 @@ namespace KinectKids.Games.GreveGast
         {
             if (body == null) return;
             float dt = Time.deltaTime;
+            if (captureStarted)
+            {
+                captureFadeElapsed += dt;
+                if (music != null)
+                {
+                    music.volume = captureMusicVolume * (1f - Mathf.SmoothStep(0f, 1f,
+                        captureFadeElapsed / CaptureFadeDuration));
+                    if (captureFadeElapsed >= CaptureFadeDuration && music.isPlaying) music.Stop();
+                }
+                return;
+            }
             body.Update();
             if (!chaseStarted)
             {
@@ -1101,7 +1124,24 @@ namespace KinectKids.Games.GreveGast
                     livingFogMass.SetVisibility(Mathf.SmoothStep(0f, 1f, elapsed / 1.4f));
             }
             TickHazards(dt);
+            TickFinalApproach(dt);
             TickThemeSequence();
+        }
+
+        private void TickFinalApproach(float dt)
+        {
+            bool finalStage = chase >= 0.94f || (greveFinalReachPose && chase > 0.86f);
+            if (!finalStage)
+            {
+                finalStageElapsed = 0f;
+                return;
+            }
+            finalStageElapsed += dt;
+            if (finalStageElapsed < FinalStageCaptureDelay) return;
+            captureStarted = true;
+            captureFadeElapsed = 0f;
+            captureMusicVolume = music != null ? music.volume : 0f;
+            worldSpeed = 0f;
         }
 
         private void ReadInput(float dt)
@@ -1197,11 +1237,15 @@ namespace KinectKids.Games.GreveGast
                 return;
             }
 
-            bool running = body.Current == GreveGastAction.Run || body.RunEnergy > 0.4f ||
-                           Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.LeftShift);
-            worldSpeed = Mathf.Lerp(worldSpeed, running ? runningSpeed : idleSpeed, 1f - Mathf.Exp(-4f * dt));
-            float chaseRate = running ? -runDrainPerSecond : recoverPerSecond;
-            chase = Mathf.Clamp01(chase + chaseRate * dt);
+            bool sprinting = body.RunEnergy > 0.4f || Input.GetKey(KeyCode.LeftShift) ||
+                             Input.GetKey(KeyCode.RightShift);
+            bool running = body.Current == GreveGastAction.Run || Input.GetKey(KeyCode.W) || sprinting;
+            float targetSpeed = sprinting ? runningSpeed * Mathf.Max(1f, sprintSpeedMultiplier)
+                : running ? runningSpeed : idleSpeed;
+            worldSpeed = Mathf.Lerp(worldSpeed, targetSpeed, 1f - Mathf.Exp(-4f * dt));
+            float retreat = Mathf.Max(0f, recoverPerSecond);
+            if (sprinting) retreat += Mathf.Max(0f, runDrainPerSecond);
+            chase = Mathf.Clamp01(chase - retreat * dt);
         }
 
         private void StreamSegments(float dt)
@@ -1581,18 +1625,56 @@ namespace KinectKids.Games.GreveGast
         private GUIStyle hud;
         private void OnGUI()
         {
+            GUI.depth = -100;
             if (hud == null)
             {
                 hud = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Clamp(Screen.height / 40, 16, 30), fontStyle = FontStyle.Bold };
                 hud.normal.textColor = Color.white;
             }
-            if (!chaseStarted)
+            if (!captureStarted)
             {
-                GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + requestedTheme, hud);
-                return;
+                if (!chaseStarted)
+                    GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + requestedTheme, hud);
+                else
+                    GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + requestedTheme + "  |  BANA: " + lane +
+                        "  |  Spring (W), byt bana (A/D), center (S), hoppa (Space)", hud);
             }
-            GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + requestedTheme + "  |  BANA: " + lane +
-                "  |  Spring (W), byt bana (A/D), center (S), hoppa (Space)", hud);
+
+            Rect screen = new Rect(0f, 0f, Screen.width, Screen.height);
+            if (chaseStarted && !captureStarted && finalStageElapsed >= FinalStageWarningDelay)
+            {
+                float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 9f);
+                GUI.color = new Color(0.8f, 0.02f, 0.05f, 0.05f + pulse * 0.17f);
+                GUI.DrawTexture(screen, Texture2D.whiteTexture);
+                GUI.color = new Color(0.85f, 0.02f, 0.04f, 0.30f + pulse * 0.46f);
+                float border = Mathf.Max(18f, Screen.height * 0.028f);
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, border), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(0f, Screen.height - border, Screen.width, border), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(0f, 0f, border, Screen.height), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(Screen.width - border, 0f, border, Screen.height), Texture2D.whiteTexture);
+            }
+
+            float black = captureStarted
+                ? Mathf.SmoothStep(0f, 1f, captureFadeElapsed / CaptureFadeDuration)
+                : !chaseStarted ? 1f - Mathf.SmoothStep(0f, 1f, introElapsed / IntroFadeDuration) : 0f;
+            if (black > 0f)
+            {
+                GUI.color = new Color(0f, 0f, 0f, black);
+                GUI.DrawTexture(screen, Texture2D.whiteTexture);
+            }
+            if (captureStarted && captureFadeElapsed > CaptureFadeDuration * 0.55f)
+            {
+                GUIStyle caughtStyle = new GUIStyle(hud)
+                {
+                    fontSize = Mathf.Clamp(Screen.height / 12, 46, 100),
+                    alignment = TextAnchor.MiddleCenter
+                };
+                caughtStyle.normal.textColor = new Color(1f, 1f, 1f,
+                    Mathf.SmoothStep(0f, 1f, (captureFadeElapsed / CaptureFadeDuration - 0.55f) / 0.45f));
+                GUI.color = Color.white;
+                GUI.Label(screen, "GREVEN TOG OSS", caughtStyle);
+            }
+            GUI.color = Color.white;
         }
 
         private void OnDestroy()
