@@ -55,7 +55,8 @@ namespace KinectKids.Games.GreveGast.LivingFog
                     : -0.19f - reach * reachMultiplier * v;
                 float lift = Mathf.Sin(v * Mathf.PI) *
                     (0.12f + LivingMassMesh.Wave(x + v * 3f, time, 31f) * 0.23f);
-                float alpha = 1f - LivingMassMesh.Smooth(0.57f, 1f, v);
+                float alpha = 1f - LivingMassMesh.Smooth(
+                    corridor ? 0.28f : 0.57f, corridor ? 0.86f : 1f, v);
                 if (corridor)
                 {
                     float wallBank = LivingMassMesh.Smooth(0.16f, 0.76f,
