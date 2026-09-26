@@ -201,25 +201,25 @@ namespace KinectKids.Games.GreveGast
                 CreateTiledMaterial(new Color(0.68f, 0.72f, 0.84f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.48f, 0.52f, 0.64f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.82f, 0.84f, 0.94f), wallTexture, accentTiling),
-                new Color(1f, 0.55f, 0.24f), "new_wall_left", "new_window");
+                new Color(1f, 0.55f, 0.24f), "new_torch", "new_window");
             themeStyles[EnvironmentTheme.GreatHall] = new ThemeStyle(EnvironmentTheme.GreatHall,
                 CreateTiledMaterial(new Color(0.84f, 0.70f, 0.58f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.78f, 0.62f, 0.58f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.48f, 0.36f, 0.40f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.86f, 0.68f, 0.34f), wallTexture, accentTiling, 0.18f),
-                new Color(1f, 0.72f, 0.35f), "new_banner", "new_armour");
+                new Color(1f, 0.72f, 0.35f), "new_banner", "new_torch");
             themeStyles[EnvironmentTheme.Kitchen] = new ThemeStyle(EnvironmentTheme.Kitchen,
                 CreateTiledMaterial(new Color(0.82f, 0.68f, 0.54f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.90f, 0.78f, 0.62f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.56f, 0.46f, 0.38f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.66f, 0.48f, 0.30f), wallTexture, accentTiling),
-                new Color(1f, 0.64f, 0.30f), "new_barrel", "new_crate");
+                new Color(1f, 0.64f, 0.30f), "new_torch", "new_chain");
             themeStyles[EnvironmentTheme.Passage] = new ThemeStyle(EnvironmentTheme.Passage,
                 CreateTiledMaterial(new Color(0.60f, 0.72f, 0.74f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.54f, 0.68f, 0.72f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.34f, 0.46f, 0.50f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.58f, 0.74f, 0.76f), wallTexture, accentTiling),
-                new Color(0.40f, 0.72f, 0.78f), "new_door", "new_pillar");
+                new Color(0.40f, 0.72f, 0.78f), "new_door", "new_torch");
         }
 
         private static Material CreateTiledMaterial(Color tint, Texture2D texture, Vector2 tiling, float metallic = 0f)
@@ -1542,16 +1542,28 @@ namespace KinectKids.Games.GreveGast
             root.transform.localPosition = new Vector3(LaneX(obstacleLane), 0f, cameraPosition.z - 1.5f);
             RunHazard hazard = new RunHazard { root = root.transform, lane = obstacleLane, jump = jump };
             BuildHazardWarning(hazard);
-            if (jump)
+            // The environment art has floor-level pivots. Keep physical obstacles
+            // in the running lanes instead of reusing them as wall decorations.
+            string spriteKey = jump
+                ? (index % 4 == 0 ? "new_rubble" : "new_rubble_pillar")
+                : (index % 4 == 1 ? "new_barrel" : "new_crate");
+            Sprite sprite = GreveChaseSprites.Environment(spriteKey);
+            if (sprite != null)
             {
-                GameObject obstacle = CreatePrimitive("Low obstacle", PrimitiveType.Cube, root.transform,
-                    new Vector3(0f, 0.55f, 0f), new Vector3(2.2f, 1.1f, 0.9f), themeStyles[requestedTheme].accentMaterial);
-                obstacle.transform.localRotation = Quaternion.Euler(0f, 18f, 0f);
+                GameObject obstacle = new GameObject("Floor obstacle " + spriteKey);
+                obstacle.transform.SetParent(root.transform, false);
+                obstacle.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+                SpriteRenderer renderer = obstacle.AddComponent<SpriteRenderer>();
+                renderer.sprite = sprite;
+                renderer.sortingOrder = 12;
+                SizeSpriteToHeight(renderer, jump ? (spriteKey == "new_rubble" ? 1.15f : 1.5f) : 2.3f);
             }
             else
             {
-                CreatePrimitive("Tall obstacle", PrimitiveType.Cube, root.transform,
-                    new Vector3(0f, 1.25f, 0f), new Vector3(2.0f, 2.5f, 1.2f), themeStyles[requestedTheme].accentMaterial);
+                CreatePrimitive("Fallback obstacle", PrimitiveType.Cube, root.transform,
+                    new Vector3(0f, jump ? 0.55f : 1.15f, 0f),
+                    new Vector3(2.2f, jump ? 1.1f : 2.3f, 0.9f),
+                    themeStyles[requestedTheme].accentMaterial);
             }
             hazards.Add(hazard);
         }
@@ -1816,8 +1828,8 @@ namespace KinectKids.Games.GreveGast
             practicalLight.color = style.lightColor;
             ClearDecorations();
             float side = variant % 2 == 0 ? -1f : 1f;
-            AddWallDecoration(style.decorationA, side, -3.2f, 4.2f, 2.7f);
-            AddWallDecoration(style.decorationB, -side, 3.8f, 5.4f, 3.1f);
+            AddWallDecoration(style.decorationA, side, -3.2f);
+            AddWallDecoration(style.decorationB, -side, 3.8f);
             AddThemeProp(style.theme, side);
         }
 
@@ -1826,10 +1838,20 @@ namespace KinectKids.Games.GreveGast
             return CorridorRunnerDirector.CreatePrimitive(objectName, PrimitiveType.Cube, transform, position, scale, material).GetComponent<Renderer>();
         }
 
-        private void AddWallDecoration(string spriteKey, float side, float z, float y, float height)
+        private void AddWallDecoration(string spriteKey, float side, float z)
         {
             Sprite sprite = spriteKey.StartsWith("haz_") ? GreveChaseSprites.Hazard(spriteKey) : GreveChaseSprites.Environment(spriteKey);
             if (sprite == null) return;
+            float y;
+            float height;
+            switch (spriteKey)
+            {
+                case "new_door": y = 0f; height = 5.4f; break;
+                case "new_banner": y = 7.5f; height = 5.2f; break;
+                case "new_chain": y = 10.5f; height = 5.5f; break;
+                case "new_window": y = 5.0f; height = 3.4f; break;
+                default: y = 4.5f; height = 2.0f; break; // wall torch
+            }
             GameObject go = new GameObject("Wall plane " + spriteKey);
             go.transform.SetParent(transform, false);
             // The sprite plane lies in the wall's YZ plane instead of turning to
@@ -1849,20 +1871,24 @@ namespace KinectKids.Games.GreveGast
             switch (theme)
             {
                 case CorridorRunnerDirector.EnvironmentTheme.GreatHall:
-                    key = variant % 2 == 0 ? "new_armour" : "new_banner";
-                    height = variant % 2 == 0 ? 4.8f : 5.8f;
+                    if (variant % 2 != 0) return;
+                    key = "new_armour";
+                    height = 4.2f;
                     break;
                 case CorridorRunnerDirector.EnvironmentTheme.Kitchen:
+                    if (variant % 3 == 2) return;
                     key = variant % 2 == 0 ? "new_barrel" : "new_crate";
                     height = variant % 2 == 0 ? 2.2f : 2.0f;
                     break;
                 case CorridorRunnerDirector.EnvironmentTheme.Passage:
+                    if (variant % 3 == 2) return;
                     key = variant % 2 == 0 ? "new_rubble" : "new_rubble_pillar";
                     height = variant % 2 == 0 ? 1.8f : 2.6f;
                     break;
                 default:
-                    key = variant % 3 == 0 ? "new_armour" : "new_pillar";
-                    height = variant % 3 == 0 ? 4.5f : 4.2f;
+                    if (variant % 3 != 0) return;
+                    key = "new_armour";
+                    height = 4.5f;
                     break;
             }
 
@@ -1870,14 +1896,18 @@ namespace KinectKids.Games.GreveGast
             if (sprite == null) return;
             GameObject go = new GameObject("Floor prop " + key);
             go.transform.SetParent(transform, false);
-            go.transform.localPosition = new Vector3(side * (halfWidth - 1.15f), 0f, 0.4f);
-            go.transform.localRotation = Quaternion.Euler(0f, side < 0f ? 8f : -8f, 0f);
             SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
             renderer.sortingOrder = 8;
             float spriteHeight = sprite.bounds.size.y;
             float scale = spriteHeight > 0.001f ? height / spriteHeight : 1f;
             go.transform.localScale = Vector3.one * scale;
+            // Keep the whole silhouette inside the wall and its bottom on the
+            // floor. This also leaves the three playable lanes unobstructed.
+            float halfPropWidth = sprite.bounds.size.x * scale * 0.5f;
+            float floorX = halfWidth - 0.12f - halfPropWidth - 0.35f;
+            go.transform.localPosition = new Vector3(side * floorX, 0.02f, 0.4f);
+            go.transform.localRotation = Quaternion.Euler(0f, side < 0f ? 5f : -5f, 0f);
             decorations.Add(renderer);
         }
 
