@@ -29,6 +29,7 @@ namespace KinectKids3D
         private DateTime lastTrackedFrameAt = DateTime.MinValue;
         private long gestureTrackingId;
         private DateTime startupDeadline = DateTime.MaxValue;
+        private long lastPacketTicks;
 
         public bool HasFailed { get => hasFailed; private set => hasFailed = value; }
 
@@ -78,6 +79,7 @@ namespace KinectKids3D
                 };
                 bridgeProcess = Process.Start(start);
                 if (bridgeProcess == null) throw new InvalidOperationException("KinectBridge.exe kunde inte startas.");
+                Interlocked.Exchange(ref lastPacketTicks, DateTime.UtcNow.Ticks);
                 bridgeProcess.EnableRaisingEvents = true;
                 bridgeProcess.Exited += OnBridgeExited;
                 startupDeadline = DateTime.UtcNow.AddSeconds(18);
@@ -96,8 +98,18 @@ namespace KinectKids3D
 
         public void CheckStartupTimeout()
         {
-            if (disposed || IsAvailable || HasFailed || DateTime.UtcNow < startupDeadline) return;
-            status = "Kinect hittades men sensorn svarade inte - försöker ansluta igen";
+            if (disposed || HasFailed) return;
+            if (IsAvailable)
+            {
+                if (DateTime.UtcNow.Ticks - Interlocked.Read(ref lastPacketTicks) < TimeSpan.FromSeconds(6).Ticks)
+                    return;
+                status = "Kinect slutade svara - försöker ansluta igen";
+            }
+            else
+            {
+                if (DateTime.UtcNow < startupDeadline) return;
+                status = "Kinect hittades men sensorn svarade inte - försöker ansluta igen";
+            }
             IsAvailable = false;
             HasFailed = true;
             try
@@ -170,6 +182,7 @@ namespace KinectKids3D
 
         private void ParsePacket(string packet)
         {
+            Interlocked.Exchange(ref lastPacketTicks, DateTime.UtcNow.Ticks);
             string[] lines = packet.Split(new[] { '~' }, StringSplitOptions.RemoveEmptyEntries);
             if (lines.Length == 0) return;
             if (lines[0].StartsWith("S|", StringComparison.Ordinal))

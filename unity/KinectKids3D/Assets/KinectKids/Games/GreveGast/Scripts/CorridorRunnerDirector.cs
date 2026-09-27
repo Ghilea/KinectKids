@@ -52,10 +52,10 @@ namespace KinectKids.Games.GreveGast
 
         [Header("Chase")]
         public float catchOnHit = 0.14f;
-        [Tooltip("How quickly Greve falls behind while the player avoids damage.")]
-        public float recoverPerSecond = 0.018f;
+        [Tooltip("How quickly Greve closes in when the player lets the corridor carry them.")]
+        public float passivePressurePerSecond = 0.028f;
         [Tooltip("Additional distance gained by running in place or holding Shift.")]
-        public float runDrainPerSecond = 0.05f;
+        public float runDrainPerSecond = 0.055f;
         [Tooltip("Extra distance Greve Gast gains while the player ducks.")]
         public float duckPressurePerSecond = 0.11f;
         public float hitPressurePerSecond = 0.14f;
@@ -71,6 +71,7 @@ namespace KinectKids.Games.GreveGast
         private Transform hazardRoot;
         private readonly List<EnvironmentSegment3D> segments = new List<EnvironmentSegment3D>();
         private readonly List<RunHazard> hazards = new List<RunHazard>();
+        private Material hazardShadowMaterial;
         private readonly Dictionary<EnvironmentTheme, ThemeStyle> themeStyles = new Dictionary<EnvironmentTheme, ThemeStyle>();
 
         private SpriteRenderer player;
@@ -100,7 +101,7 @@ namespace KinectKids.Games.GreveGast
         private float chase = 0.35f;
         private bool greveFinalReachPose;
         private float elapsed;
-        private float hazardTimer = 2.2f;
+        private float hazardTimer = 1.8f;
         private int hazardCounter;
         private float playerRunCycle;
         private float laneAnimationTime;
@@ -201,25 +202,25 @@ namespace KinectKids.Games.GreveGast
                 CreateTiledMaterial(new Color(0.68f, 0.72f, 0.84f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.48f, 0.52f, 0.64f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.82f, 0.84f, 0.94f), wallTexture, accentTiling),
-                new Color(1f, 0.55f, 0.24f), "new_torch", "new_window");
+                new Color(1f, 0.55f, 0.24f), "env_8", "new_window");
             themeStyles[EnvironmentTheme.GreatHall] = new ThemeStyle(EnvironmentTheme.GreatHall,
                 CreateTiledMaterial(new Color(0.84f, 0.70f, 0.58f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.78f, 0.62f, 0.58f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.48f, 0.36f, 0.40f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.86f, 0.68f, 0.34f), wallTexture, accentTiling, 0.18f),
-                new Color(1f, 0.72f, 0.35f), "new_banner", "new_torch");
+                new Color(1f, 0.72f, 0.35f), "new_banner", "env_8");
             themeStyles[EnvironmentTheme.Kitchen] = new ThemeStyle(EnvironmentTheme.Kitchen,
                 CreateTiledMaterial(new Color(0.82f, 0.68f, 0.54f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.90f, 0.78f, 0.62f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.56f, 0.46f, 0.38f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.66f, 0.48f, 0.30f), wallTexture, accentTiling),
-                new Color(1f, 0.64f, 0.30f), "new_torch", "new_chain");
+                new Color(1f, 0.64f, 0.30f), "env_8", "new_chain");
             themeStyles[EnvironmentTheme.Passage] = new ThemeStyle(EnvironmentTheme.Passage,
                 CreateTiledMaterial(new Color(0.60f, 0.72f, 0.74f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.54f, 0.68f, 0.72f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.34f, 0.46f, 0.50f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.58f, 0.74f, 0.76f), wallTexture, accentTiling),
-                new Color(0.40f, 0.72f, 0.78f), "new_door", "new_torch");
+                new Color(1f, 0.53f, 0.25f), "new_door", "new_window");
         }
 
         private static Material CreateTiledMaterial(Color tint, Texture2D texture, Vector2 tiling, float metallic = 0f)
@@ -233,21 +234,14 @@ namespace KinectKids.Games.GreveGast
 
         private void BuildLighting()
         {
-            RenderSettings.ambientLight = new Color(0.20f, 0.21f, 0.27f);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.11f, 0.12f, 0.16f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = worldCamera.backgroundColor;
             RenderSettings.fogStartDistance = 24f;
             RenderSettings.fogEndDistance = 88f;
 
-            GameObject lightGo = new GameObject("Corridor Key Light");
-            lightGo.transform.SetParent(transform, false);
-            lightGo.transform.localRotation = Quaternion.Euler(42f, -28f, 0f);
-            Light key = lightGo.AddComponent<Light>();
-            key.type = LightType.Directional;
-            key.color = new Color(0.78f, 0.82f, 1f);
-            key.intensity = 0.75f;
-            key.shadows = LightShadows.Soft;
         }
 
         private void BuildCorridor()
@@ -493,8 +487,8 @@ namespace KinectKids.Games.GreveGast
             floorFogVolumeMaterial = BuildFogVolume("Raymarchad blåvit 3D-golvdimma", transform,
                 new Vector3(0f, 1.55f, -3.0f),
                 new Vector3(corridorWidth * 1.16f, 4.5f, 14f),
-                new Color(0.52f, 0.70f, 1f, 0.48f),
-                2.2f,
+                new Color(0.37f, 0.48f, 0.68f, 0.25f),
+                1.25f,
                 0.30f,
                 1f,
                 2989,
@@ -514,8 +508,8 @@ namespace KinectKids.Games.GreveGast
             foregroundFloorFogMaterial = BuildFogVolume("Blåvit 3D-golvdimma vid spelaren", transform,
                 new Vector3(0f, 0.75f, -2.5f),
                 new Vector3(corridorWidth * 1.06f, 2.6f, 9f),
-                new Color(0.50f, 0.68f, 0.98f, 0.55f),
-                1.9f,
+                new Color(0.36f, 0.46f, 0.65f, 0.27f),
+                1.1f,
                 0.22f,
                 1f,
                 3001,
@@ -827,8 +821,8 @@ namespace KinectKids.Games.GreveGast
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.01f, 0.04f);
             main.startSize = new ParticleSystem.MinMaxCurve(2.0f, 3.5f);
             main.startColor = new ParticleSystem.MinMaxGradient(
-                new Color(0.56f, 0.74f, 1f, 0.19f),
-                new Color(0.96f, 0.99f, 1f, 0.32f));
+                new Color(0.46f, 0.59f, 0.80f, 0.10f),
+                new Color(0.75f, 0.82f, 0.94f, 0.18f));
             main.maxParticles = 280;
             ParticleSystem.ColorOverLifetimeModule lifetimeColor = wisps.colorOverLifetime;
             lifetimeColor.enabled = false;
@@ -891,8 +885,8 @@ namespace KinectKids.Games.GreveGast
             ParticleSystem.MainModule foregroundMain = foreground.main;
             foregroundMain.startSize = new ParticleSystem.MinMaxCurve(2.1f, 3.4f);
             foregroundMain.startColor = new ParticleSystem.MinMaxGradient(
-                new Color(0.60f, 0.76f, 1f, 0.14f),
-                new Color(0.94f, 0.98f, 1f, 0.25f));
+                new Color(0.48f, 0.58f, 0.75f, 0.07f),
+                new Color(0.74f, 0.79f, 0.91f, 0.13f));
             foregroundMain.maxParticles = 135;
             ParticleSystem.EmissionModule foregroundEmission = foreground.emission;
             foregroundEmission.rateOverTime = 18f;
@@ -1080,7 +1074,7 @@ namespace KinectKids.Games.GreveGast
             go.transform.localRotation = worldCamera.transform.localRotation;
             SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
-            renderer.sortingOrder = 30;
+            renderer.sortingOrder = DepthSortOrder(position.z);
             Material actorMaterial = new Material(Shader.Find("Sprites/Default"));
             actorMaterial.name = actorName + " foreground sprite material";
             actorMaterial.renderQueue = 3020;
@@ -1121,7 +1115,8 @@ namespace KinectKids.Games.GreveGast
             if (darknessRoot != null)
             {
                 float growth = Mathf.SmoothStep(0f, 1f, elapsed / 3f);
-                darknessRoot.localScale = Vector3.one * Mathf.Lerp(0.55f, 1f, growth);
+                darknessRoot.localScale = new Vector3(0.84f, 0.86f, 1f) *
+                    Mathf.Lerp(0.55f, 1f, growth);
                 if (livingFogMass != null)
                     livingFogMass.SetVisibility(Mathf.SmoothStep(0f, 1f, elapsed / 1.4f));
             }
@@ -1284,9 +1279,11 @@ namespace KinectKids.Games.GreveGast
             float targetSpeed = sprinting ? runningSpeed * Mathf.Max(1f, sprintSpeedMultiplier)
                 : running ? runningSpeed : idleSpeed;
             worldSpeed = Mathf.Lerp(worldSpeed, targetSpeed, 1f - Mathf.Exp(-4f * dt));
-            float retreat = Mathf.Max(0f, recoverPerSecond);
-            if (sprinting) retreat += Mathf.Max(0f, runDrainPerSecond);
-            chase = Mathf.Clamp01(chase - retreat * dt);
+            // Forward motion alone is not an escape. Greve gains ground until
+            // the player actively sprints; dodging only prevents a hit.
+            float chasePressure = Mathf.Max(0f, passivePressurePerSecond) * (running ? 0.5f : 1f);
+            if (sprinting) chasePressure -= Mathf.Max(0f, runDrainPerSecond);
+            chase = Mathf.Clamp01(chase + chasePressure * dt);
         }
 
         private void StreamSegments(float dt)
@@ -1408,6 +1405,7 @@ namespace KinectKids.Games.GreveGast
                 if (playerMotion == PlayerMotion.Ducking)
                     p.z = playerZ - Mathf.Sin(Mathf.Clamp01(playerMotionTime / Mathf.Max(0.1f, playerDuckDuration)) * Mathf.PI) * 0.42f;
                 player.transform.localPosition = p;
+                player.sortingOrder = DepthSortOrder(p.z);
             }
             if (greve != null)
             {
@@ -1447,6 +1445,7 @@ namespace KinectKids.Games.GreveGast
                 p.y = 0.38f + Mathf.Sin(elapsed * (sillyDuck ? 8f : 2.1f)) * (sillyDuck ? 0.20f : 0.22f);
                 p.z = Mathf.Lerp(greveFarZ, greveNearZ, chase);
                 greve.transform.localPosition = p;
+                greve.sortingOrder = DepthSortOrder(p.z);
                 greve.transform.localRotation = Quaternion.Euler(0f, 0f,
                     sillyDuck ? Mathf.Sin(elapsed * 9f) * 7f : -hoverX * 1.8f);
                 UpdateDarknessFront(p, chaseEase);
@@ -1466,10 +1465,10 @@ namespace KinectKids.Games.GreveGast
                 Mathf.InverseLerp(0.60f, 0.87f, chaseEase));
             if (floorFogVolumeMaterial != null)
                 floorFogVolumeMaterial.SetColor("_FogColor",
-                    new Color(0.52f, 0.70f, 1f, 0.48f * volumeFade));
+                    new Color(0.37f, 0.48f, 0.68f, 0.25f * volumeFade));
             if (foregroundFloorFogMaterial != null)
                 foregroundFloorFogMaterial.SetColor("_FogColor",
-                    new Color(0.50f, 0.68f, 0.98f, 0.55f * volumeFade));
+                    new Color(0.36f, 0.46f, 0.65f, 0.27f * volumeFade));
         }
 
         private static Sprite FrameProgress(Sprite[] frames, float progress)
@@ -1499,20 +1498,8 @@ namespace KinectKids.Games.GreveGast
             {
                 RunHazard hazard = hazards[i];
                 hazard.root.localPosition += Vector3.forward * (worldSpeed * dt);
-                if (hazard.warning != null)
-                {
-                    hazard.warningTime += dt;
-                    float pulse = 0.82f + Mathf.Abs(Mathf.Sin(hazard.warningTime * 7f)) * 0.18f;
-                    hazard.warning.transform.localScale = hazard.warningBaseScale * pulse;
-                    Color warningColor = hazard.warning.color;
-                    warningColor.a = 0.62f + Mathf.Abs(Mathf.Sin(hazard.warningTime * 7f)) * 0.38f;
-                    hazard.warning.color = warningColor;
-
-                    // The marker warns first, then disappears once the physical
-                    // obstacle itself has travelled clearly into the corridor.
-                    if (hazard.root.localPosition.z > cameraPosition.z + 6f)
-                        hazard.warning.gameObject.SetActive(false);
-                }
+                if (hazard.sprite != null)
+                    hazard.sprite.sortingOrder = DepthSortOrder(hazard.root.localPosition.z);
                 if (!hazard.resolved && hazard.root.localPosition.z >= player.transform.localPosition.z - 0.35f)
                 {
                     hazard.resolved = true;
@@ -1521,13 +1508,12 @@ namespace KinectKids.Games.GreveGast
                 if (hazard.root.localPosition.z > 82f)
                 {
                     if (hazard.root != null) Destroy(hazard.root.gameObject);
-                    if (hazard.warning != null) Destroy(hazard.warning.gameObject);
                     hazards.RemoveAt(i);
                 }
             }
             hazardTimer -= dt;
             if (hazardTimer > 0f) return;
-            hazardTimer = Mathf.Lerp(2.8f, 1.5f, chase);
+            hazardTimer = Mathf.Lerp(2.1f, 1.25f, chase);
             SpawnHazard(hazardCounter++);
         }
 
@@ -1541,11 +1527,15 @@ namespace KinectKids.Games.GreveGast
             // the camera and move away from it on the same +Z axis as the track.
             root.transform.localPosition = new Vector3(LaneX(obstacleLane), 0f, cameraPosition.z - 1.5f);
             RunHazard hazard = new RunHazard { root = root.transform, lane = obstacleLane, jump = jump };
-            BuildHazardWarning(hazard);
+            if (hazardShadowMaterial == null)
+                hazardShadowMaterial = MaterialFactory.Solid(new Color(0.07f, 0.07f, 0.09f));
+            CreatePrimitive("Obstacle floor shadow", PrimitiveType.Cylinder, root.transform,
+                new Vector3(0f, 0.012f, 0f), new Vector3(jump ? 2.2f : 2.7f, 0.018f, 1.2f),
+                hazardShadowMaterial);
             // The environment art has floor-level pivots. Keep physical obstacles
             // in the running lanes instead of reusing them as wall decorations.
             string spriteKey = jump
-                ? (index % 4 == 0 ? "new_rubble" : "new_rubble_pillar")
+                ? (index % 4 == 0 ? "new_spike_trap" : "new_rubble")
                 : (index % 4 == 1 ? "new_barrel" : "new_crate");
             Sprite sprite = GreveChaseSprites.Environment(spriteKey);
             if (sprite != null)
@@ -1555,8 +1545,10 @@ namespace KinectKids.Games.GreveGast
                 obstacle.transform.localPosition = new Vector3(0f, 0.04f, 0f);
                 SpriteRenderer renderer = obstacle.AddComponent<SpriteRenderer>();
                 renderer.sprite = sprite;
-                renderer.sortingOrder = 12;
-                SizeSpriteToHeight(renderer, jump ? (spriteKey == "new_rubble" ? 1.15f : 1.5f) : 2.3f);
+                renderer.sharedMaterial = player.sharedMaterial;
+                renderer.sortingOrder = DepthSortOrder(root.transform.localPosition.z);
+                hazard.sprite = renderer;
+                SizeSpriteToHeight(renderer, jump ? (spriteKey == "new_spike_trap" ? 0.9f : 1.25f) : 2.3f);
             }
             else
             {
@@ -1568,23 +1560,6 @@ namespace KinectKids.Games.GreveGast
             hazards.Add(hazard);
         }
 
-        private void BuildHazardWarning(RunHazard hazard)
-        {
-            Sprite warningSprite = GreveChaseSprites.Hazard(hazard.jump ? "haz_20" : "haz_10");
-            if (warningSprite == null) return;
-
-            GameObject go = new GameObject(hazard.jump ? "Jump warning" : "Lane warning");
-            go.transform.SetParent(hazardRoot, false);
-            go.transform.localPosition = new Vector3(LaneX(hazard.lane), 0.18f, playerZ + 3.2f);
-            go.transform.localRotation = worldCamera.transform.localRotation;
-            SpriteRenderer warning = go.AddComponent<SpriteRenderer>();
-            warning.sprite = warningSprite;
-            warning.sortingOrder = 40;
-            SizeSpriteToHeight(warning, 1.35f);
-            hazard.warning = warning;
-            hazard.warningBaseScale = go.transform.localScale;
-        }
-
         private bool Avoided(RunHazard hazard)
         {
             bool sameLane = Mathf.Abs(lateral * laneSpacing - LaneX(hazard.lane)) < laneSpacing * 0.45f;
@@ -1594,14 +1569,12 @@ namespace KinectKids.Games.GreveGast
 
         private void ResolveHazard(RunHazard hazard, bool avoided)
         {
-            if (hazard.warning != null) hazard.warning.gameObject.SetActive(false);
-            if (avoided) { chase = Mathf.Clamp01(chase - 0.05f); return; }
+            if (avoided) return;
             chase = Mathf.Clamp01(chase + catchOnHit);
             hitFlashUntil = Time.unscaledTime + 0.48f;
             currentDodge = DodgeAction.None;
             laneMoveDirection = 0;
-            Renderer[] renderers = hazard.root.GetComponentsInChildren<Renderer>();
-            for (int i = 0; i < renderers.Length; i++) renderers[i].material.color = new Color(0.9f, 0.15f, 0.12f);
+            if (hazard.sprite != null) hazard.sprite.color = new Color(0.9f, 0.15f, 0.12f);
         }
 
         /// <summary>Streams a new theme in on recycled far segments without interrupting play.</summary>
@@ -1744,6 +1717,16 @@ namespace KinectKids.Games.GreveGast
             GUI.color = Color.white;
         }
 
+        private int DepthSortOrder(float z)
+        {
+            // All actor and obstacle sprites share a render queue. Sorting by
+            // their ground position then lets a passing barrel cover the child
+            // before it moves behind them, regardless of the image's flat mesh.
+            // Keep even the farthest Greve sprite above the living darkness
+            // while retaining depth order among actors and obstacles.
+            return 300 + Mathf.RoundToInt((playerZ - z) * 10f);
+        }
+
         private void OnDestroy()
         {
             if (music != null) music.Stop();
@@ -1756,9 +1739,7 @@ namespace KinectKids.Games.GreveGast
             public Lane lane;
             public bool jump;
             public bool resolved;
-            public SpriteRenderer warning;
-            public Vector3 warningBaseScale;
-            public float warningTime;
+            public SpriteRenderer sprite;
         }
 
         internal sealed class ThemeStyle
@@ -1784,7 +1765,6 @@ namespace KinectKids.Games.GreveGast
         private readonly List<Renderer> ceilingRenderers = new List<Renderer>();
         private readonly List<Renderer> accentRenderers = new List<Renderer>();
         private readonly List<SpriteRenderer> decorations = new List<SpriteRenderer>();
-        private Light practicalLight;
         private int variant;
         private float halfWidth;
         public CorridorRunnerDirector.EnvironmentTheme Theme { get; private set; }
@@ -1811,13 +1791,6 @@ namespace KinectKids.Games.GreveGast
                 new Vector3(3.2f, 1.9f, 0.72f), placeholder));
             accentRenderers.Add(AddBox("Arch crown", new Vector3(0f, height - 0.28f, boundaryZ),
                 new Vector3(width, 0.62f, 0.72f), placeholder));
-
-            GameObject lightGo = new GameObject("Theme practical light");
-            lightGo.transform.SetParent(transform, false);
-            lightGo.transform.localPosition = new Vector3(0f, height - 0.8f, 0f);
-            practicalLight = lightGo.AddComponent<Light>();
-            practicalLight.type = LightType.Point; practicalLight.range = length * 0.9f; practicalLight.intensity = 1.1f;
-            practicalLight.shadows = LightShadows.None;
         }
 
         public void ApplyTheme(CorridorRunnerDirector.ThemeStyle style)
@@ -1825,11 +1798,14 @@ namespace KinectKids.Games.GreveGast
             Theme = style.theme;
             SetMaterials(floorRenderers, style.floorMaterial); SetMaterials(wallRenderers, style.wallMaterial);
             SetMaterials(ceilingRenderers, style.ceilingMaterial); SetMaterials(accentRenderers, style.accentMaterial);
-            practicalLight.color = style.lightColor;
             ClearDecorations();
             float side = variant % 2 == 0 ? -1f : 1f;
-            AddWallDecoration(style.decorationA, side, -3.2f);
-            AddWallDecoration(style.decorationB, -side, 3.8f);
+            AddWallDecoration("new_torch", side, -5.1f, style.lightColor);
+            AddWallDecoration("new_torch", -side, 5.1f, style.lightColor);
+            AddWallDecoration(style.decorationA, side, -1.7f, style.lightColor);
+            AddWallDecoration(style.decorationB, -side, 1.7f, style.lightColor);
+            if (variant % 3 == 0)
+                AddWallDecoration("env_8", side, 2.4f, style.lightColor);
             AddThemeProp(style.theme, side);
         }
 
@@ -1838,7 +1814,7 @@ namespace KinectKids.Games.GreveGast
             return CorridorRunnerDirector.CreatePrimitive(objectName, PrimitiveType.Cube, transform, position, scale, material).GetComponent<Renderer>();
         }
 
-        private void AddWallDecoration(string spriteKey, float side, float z)
+        private void AddWallDecoration(string spriteKey, float side, float z, Color lightColor)
         {
             Sprite sprite = spriteKey.StartsWith("haz_") ? GreveChaseSprites.Hazard(spriteKey) : GreveChaseSprites.Environment(spriteKey);
             if (sprite == null) return;
@@ -1850,6 +1826,7 @@ namespace KinectKids.Games.GreveGast
                 case "new_banner": y = 7.5f; height = 5.2f; break;
                 case "new_chain": y = 10.5f; height = 5.5f; break;
                 case "new_window": y = 5.0f; height = 3.4f; break;
+                case "env_8": y = 5.0f; height = 3.4f; break;
                 default: y = 4.5f; height = 2.0f; break; // wall torch
             }
             GameObject go = new GameObject("Wall plane " + spriteKey);
@@ -1862,6 +1839,20 @@ namespace KinectKids.Games.GreveGast
             float spriteHeight = sprite.bounds.size.y;
             go.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? height / spriteHeight : 1f);
             decorations.Add(renderer);
+            if (spriteKey == "new_torch")
+            {
+                GameObject flameLight = new GameObject("Torch light");
+                flameLight.transform.SetParent(go.transform, false);
+                // Counter the sprite scale so the light stays beside the flame.
+                flameLight.transform.localPosition = new Vector3(0f, 1.5f / go.transform.localScale.y,
+                    1.0f / go.transform.localScale.z);
+                Light light = flameLight.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.color = lightColor;
+                light.range = 10f;
+                light.intensity = 2.3f;
+                light.shadows = LightShadows.None;
+            }
         }
 
         private void AddThemeProp(CorridorRunnerDirector.EnvironmentTheme theme, float side)

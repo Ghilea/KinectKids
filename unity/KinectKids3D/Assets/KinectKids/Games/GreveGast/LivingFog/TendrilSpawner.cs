@@ -87,14 +87,14 @@ namespace KinectKids.Games.GreveGast.LivingFog
                             (Next(random) - 0.5f) * 0.55f,
                             -0.42f - Next(random) * 0.3f);
                 float duration = 3.0f + Next(random) * 2.8f;
-                float corridorLengthScale = fromUpperMass ? 0.78f :
-                    fromFloor ? 0.78f : 0.85f;
+                float corridorLengthScale = fromUpperMass ? 0.63f :
+                    fromFloor ? 0.66f : 0.70f;
                 tendril.Configure(start, travel,
                     (2.1f + Next(random) * 2.4f) *
                         (corridorMode ? corridorLengthScale : 1f),
-                    fromFloor ? 0.12f + Next(random) * 0.10f
+                    (fromFloor ? 0.12f + Next(random) * 0.10f
                         : fromUpperMass ? 0.11f + Next(random) * 0.08f
-                        : 0.16f + Next(random) * 0.12f,
+                        : 0.16f + Next(random) * 0.12f) * (corridorMode ? 0.8f : 1f),
                     0.48f + Next(random) * 0.62f,
                     duration, duration * (0.12f + Next(random) * 0.58f),
                     5f + Next(random) * 71f, fromFloor);

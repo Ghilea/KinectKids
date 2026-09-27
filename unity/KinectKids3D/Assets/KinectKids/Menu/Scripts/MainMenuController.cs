@@ -32,16 +32,16 @@ namespace KinectKids3D.Platform
         private GUIStyle kinectTitleStyle;
         private GUIStyle kinectDetailStyle;
         private GUIStyle kinectButtonStyle;
-        private AudioSource voice;
         private AudioSource music;
         private AudioSource songPreview;
+        private Texture2D menuLogo;
+        private Sprite gateGreve;
         private readonly AudioClip[] songs = new AudioClip[4];
         private int selectedSong;
         private int keyboardFocus;
         private bool keyboardNavigationActive;
         private int hoveredMenuItem = -1;
         private bool showAdventurePicker;
-        private bool showKinectPanel;
         private bool showSongsPanel;
         private bool showInformation;
         private string informationTitle;
@@ -69,9 +69,6 @@ namespace KinectKids3D.Platform
         private void Awake()
         {
             EnsurePlatformAndCamera();
-            voice = gameObject.AddComponent<AudioSource>();
-            voice.spatialBlend = 0f;
-            voice.playOnAwake = false;
             music = gameObject.AddComponent<AudioSource>();
             music.spatialBlend = 0f;
             music.playOnAwake = false;
@@ -109,13 +106,14 @@ namespace KinectKids3D.Platform
                         break;
                     }
             }
-            AnnounceSelected();
             if (menuMusic == null) menuMusic = Resources.Load<AudioClip>("Audio/MenuTheme");
             if (menuMusic != null)
             {
                 music.clip = menuMusic;
                 music.Play();
             }
+            menuLogo = Resources.Load<Texture2D>("KinectKidsMenuLogo");
+            gateGreve = Resources.Load<Sprite>("GreveChase/GreveGast/greve_reach");
             LoadSongs();
         }
 
@@ -140,17 +138,17 @@ namespace KinectKids3D.Platform
                 if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space)) PlaySelectedSong();
                 return;
             }
-            if (!showAdventurePicker && !showKinectPanel && !showInformation)
+            if (!showAdventurePicker && !showInformation)
             {
-                if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W)) { keyboardFocus = (keyboardFocus + 8) % 9; keyboardNavigationActive = true; }
-                if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S)) { keyboardFocus = (keyboardFocus + 1) % 9; keyboardNavigationActive = true; }
+                if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W)) { keyboardFocus = (keyboardFocus + 3) % 4; keyboardNavigationActive = true; }
+                if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S)) { keyboardFocus = (keyboardFocus + 1) % 4; keyboardNavigationActive = true; }
             }
             if (showAdventurePicker && (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))) ChangeSelected(-1);
             if (showAdventurePicker && (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))) ChangeSelected(1);
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
             {
                 if (showAdventurePicker) Play();
-                else if (!showKinectPanel && !showInformation) ActivateMenuItem(keyboardFocus);
+                else if (!showInformation) ActivateMenuItem(keyboardFocus);
             }
             if (Input.GetKeyDown(KeyCode.F5)) RetryKinect();
 
@@ -244,25 +242,6 @@ namespace KinectKids3D.Platform
         {
             if (index == selected) return;
             selected = index;
-            AnnounceSelected();
-        }
-
-        private void AnnounceSelected()
-        {
-            if (voice == null || registry == null || registry.games == null || registry.games.Length == 0) return;
-            string scene = registry.games[selected].sceneName;
-            string key = scene == "GreveGast" ? "menu_greve_gast" :
-                scene == "Spokjakten" ? "menu_spooky" :
-                scene == "Matematikbanan" ? "menu_math" :
-                scene == "Bokstavsjakten" ? "menu_swedish" :
-                scene == "Formverkstan" ? "menu_shapes" :
-                scene == "Monsterjakten" ? "menu_patterns" :
-                scene == "SimonSager" ? "menu_simon" : "menu_balloons";
-            AudioClip clip = Resources.Load<AudioClip>("Voice/" + key);
-            if (clip == null) return;
-            voice.Stop();
-            voice.clip = clip;
-            voice.Play();
         }
 
         private void Play()
@@ -316,16 +295,39 @@ namespace KinectKids3D.Platform
             Texture2D concept = background != null ? background : cardSheet;
             if (concept != null) GUI.DrawTexture(new Rect(0f, 0f, DesignWidth, DesignHeight), concept, ScaleMode.StretchToFill);
             else Fill(new Rect(0f, 0f, DesignWidth, DesignHeight), new Color(0.02f, 0.06f, 0.14f));
+            DrawMenuArtwork();
 
             playRect = ToScreen(new Rect(47f, 250f, 365f, 120f), scale, offsetX, offsetY);
             if (!showAdventurePicker)
                 for (int i = 0; i < visibleCardRects.Length; i++) visibleCardRects[i] = Rect.zero;
-            if (!showAdventurePicker && !showKinectPanel && !showSongsPanel && !showInformation) DrawConceptHotspots();
-            DrawKinectIndicator();
+            if (!showAdventurePicker && !showSongsPanel && !showInformation) DrawConceptHotspots();
+            DrawKinectStatusBadge();
             if (showAdventurePicker) DrawAdventurePicker();
-            else if (showKinectPanel) DrawKinectOverlay();
             else if (showSongsPanel) DrawSongsOverlay();
             else if (showInformation) DrawInformationOverlay();
+        }
+
+        private void DrawMenuArtwork()
+        {
+            if (menuLogo != null)
+                GUI.DrawTexture(new Rect(25f, 18f, 430f, 215f), menuLogo, ScaleMode.ScaleToFit, true);
+            if (gateGreve != null)
+                GUI.DrawTexture(new Rect(1000f, 360f, 250f, 295f), gateGreve.texture, ScaleMode.ScaleToFit, true);
+
+            if (iconSheet == null) return;
+            float shimmer = 0.55f + Mathf.Sin(Time.unscaledTime * 2.4f) * 0.24f;
+            DrawSheetTinted(new Rect(1190f, 105f, 84f, 83f),
+                new Rect(1480f, 430f, 165f, 135f), shimmer);
+            DrawSheetTinted(new Rect(685f, 142f, 72f, 72f),
+                new Rect(1480f, 430f, 165f, 135f), shimmer * 0.75f);
+        }
+
+        private void DrawSheetTinted(Rect destination, Rect sourcePixels, float alpha)
+        {
+            Color old = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, alpha);
+            DrawSheet(destination, sourcePixels);
+            GUI.color = old;
         }
 
         private void DrawConceptHotspots()
@@ -341,25 +343,14 @@ namespace KinectKids3D.Platform
             {
                 StartStory();
             }
-            if (InvisibleButton(new Rect(505f, 776f, 318f, 116f))) Play();
-            if (InvisibleButton(new Rect(66f, 378f, 350f, 96f)) || InvisibleButton(new Rect(830f, 790f, 282f, 101f)))
+            if (InvisibleButton(new Rect(66f, 378f, 350f, 96f)))
             {
                 showAdventurePicker = true;
-                showKinectPanel = false;
                 showInformation = false;
                 showSongsPanel = false;
             }
             if (InvisibleButton(new Rect(68f, 480f, 350f, 95f))) OpenSongsPanel();
             if (InvisibleButton(new Rect(68f, 580f, 350f, 95f))) ShowInformation("INSTÄLLNINGAR", "Använd helskärm och ställ ljudnivån på datorn före spelet.");
-            if (InvisibleButton(new Rect(68f, 680f, 350f, 96f)))
-            {
-                showKinectPanel = true;
-                showAdventurePicker = false;
-                showInformation = false;
-                showSongsPanel = false;
-            }
-            if (InvisibleButton(new Rect(1120f, 790f, 220f, 101f))) ShowInformation("FÖRÄLDRAR", "Välj ett äventyr och kontrollera Kinect under Kalibrera innan barnet börjar spela.");
-            if (InvisibleButton(new Rect(1350f, 790f, 245f, 101f))) CloseOverlay();
         }
 
         private static Rect[] ConceptButtonRects() => new[]
@@ -367,12 +358,7 @@ namespace KinectKids3D.Platform
             new Rect(47f, 250f, 365f, 120f),
             new Rect(66f, 378f, 350f, 96f),
             new Rect(68f, 480f, 350f, 95f),
-            new Rect(68f, 580f, 350f, 95f),
-            new Rect(68f, 680f, 350f, 96f),
-            new Rect(505f, 776f, 318f, 116f),
-            new Rect(830f, 790f, 282f, 101f),
-            new Rect(1120f, 790f, 220f, 101f),
-            new Rect(1350f, 790f, 245f, 101f)
+            new Rect(68f, 580f, 350f, 95f)
         };
 
         private void DrawMenuButtons(Rect[] targets)
@@ -383,16 +369,14 @@ namespace KinectKids3D.Platform
                 new Rect(36f, 48f, 264f, 100f),
                 new Rect(40f, 152f, 260f, 84f),
                 new Rect(36f, 248f, 264f, 80f),
-                new Rect(36f, 344f, 264f, 80f),
-                new Rect(36f, 436f, 264f, 84f)
+                new Rect(36f, 344f, 264f, 80f)
             };
             Rect[] hoverSources =
             {
                 new Rect(1384f, 48f, 256f, 100f),
                 new Rect(1388f, 152f, 256f, 84f),
                 new Rect(1392f, 248f, 252f, 80f),
-                new Rect(1392f, 344f, 252f, 80f),
-                new Rect(1392f, 436f, 252f, 84f)
+                new Rect(1392f, 344f, 252f, 80f)
             };
             for (int i = 0; i < normalSources.Length; i++)
             {
@@ -448,28 +432,29 @@ namespace KinectKids3D.Platform
             switch (item)
             {
                 case 0:
-                    showAdventurePicker = true;
-                    showKinectPanel = false;
-                    showInformation = false;
+                    StartStory();
                     break;
-                case 5: Play(); break;
-                case 1:
-                case 6: showAdventurePicker = true; showKinectPanel = false; showInformation = false; break;
+                case 1: showAdventurePicker = true; showInformation = false; break;
                 case 2: OpenSongsPanel(); break;
                 case 3: ShowInformation("INSTÄLLNINGAR", "Använd helskärm och ställ ljudnivån på datorn före spelet."); break;
-                case 4: showKinectPanel = true; showAdventurePicker = false; showInformation = false; break;
-                case 7: ShowInformation("FÖRÄLDRAR", "Välj ett äventyr och kontrollera Kinect under Kalibrera innan barnet börjar spela."); break;
-                case 8: CloseOverlay(); break;
             }
         }
 
-        private void DrawKinectIndicator()
+        private void DrawKinectStatusBadge()
         {
             KinectKidsInputManager input = KinectKidsInputManager.Instance;
             bool connected = input != null && input.KinectConnected;
-            GUIStyle indicator = new GUIStyle(footerStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 22 };
-            indicator.normal.textColor = connected ? new Color(0.35f, 1f, 0.50f) : new Color(1f, 0.50f, 0.20f);
-            GUI.Label(new Rect(374f, 700f, 34f, 34f), "●", indicator);
+            bool tracked = input != null && input.PlayerDetected;
+            Color edge = tracked ? new Color(0.28f, 0.86f, 0.47f)
+                : connected ? new Color(0.34f, 0.72f, 0.95f) : new Color(0.96f, 0.62f, 0.24f);
+            Rect badge = new Rect(1205f, 810f, 425f, 88f);
+            DrawFramedPanel(badge, edge, new Color(0.025f, 0.065f, 0.13f, 0.94f), 3f);
+            string title = tracked ? "KINECT: SPELARE HITTAD"
+                : connected ? "KINECT: ANSLUTEN" : "KINECT: SÖKER";
+            string detail = tracked ? "Styr med händerna"
+                : connected ? "Ställ dig framför kameran" : "Ansluter automatiskt · musen fungerar";
+            GUI.Label(new Rect(1224f, 818f, 385f, 34f), title, kinectTitleStyle);
+            GUI.Label(new Rect(1224f, 851f, 385f, 33f), detail, kinectDetailStyle);
         }
 
         private void DrawAdventurePicker()
@@ -505,27 +490,6 @@ namespace KinectKids3D.Platform
             if (GUI.Button(close, GUIContent.none, GUIStyle.none)) CloseOverlay();
         }
 
-        private void DrawKinectOverlay()
-        {
-            KinectKidsInputManager input = KinectKidsInputManager.Instance;
-            bool connected = input != null && input.KinectConnected;
-            bool tracked = input != null && input.PlayerDetected;
-            Fill(new Rect(0f, 0f, DesignWidth, DesignHeight), new Color(0f, 0f, 0f, 0.72f));
-            Rect panel = new Rect(440f, 180f, 792f, 560f);
-            DrawFramedPanel(panel, new Color(0.84f, 0.53f, 0.18f), new Color(0.025f, 0.075f, 0.16f, 0.99f), 7f);
-            string title = tracked ? "KINECT KLAR – SPELARE HITTAD" : connected ? "KINECT ANSLUTEN" : "KINECT INTE KLAR";
-            GUI.Label(new Rect(485f, 220f, 702f, 80f), title, gameTitleStyle);
-            GUI.Label(new Rect(515f, 320f, 642f, 150f), input != null ? input.Status : "Kinect-systemet startar…", bodyStyle);
-            Rect retry = new Rect(535f, 560f, 285f, 85f);
-            Rect close = new Rect(850f, 560f, 285f, 85f);
-            DrawFramedPanel(retry, new Color(0.90f, 0.58f, 0.16f), new Color(0.08f, 0.32f, 0.48f), 4f);
-            DrawFramedPanel(close, new Color(0.65f, 0.42f, 0.18f), new Color(0.20f, 0.08f, 0.08f), 4f);
-            GUI.Label(retry, "FÖRSÖK IGEN", footerStyle);
-            GUI.Label(close, "TILLBAKA", footerStyle);
-            if (GUI.Button(retry, GUIContent.none, GUIStyle.none)) RetryKinect();
-            if (GUI.Button(close, GUIContent.none, GUIStyle.none)) CloseOverlay();
-        }
-
         private void DrawInformationOverlay()
         {
             Fill(new Rect(0f, 0f, DesignWidth, DesignHeight), new Color(0f, 0f, 0f, 0.72f));
@@ -545,15 +509,14 @@ namespace KinectKids3D.Platform
             informationText = text;
             showInformation = true;
             showAdventurePicker = false;
-            showKinectPanel = false;
             showSongsPanel = false;
         }
 
         private void OpenSongsPanel()
         {
+            if (music != null && music.isPlaying) music.Pause();
             showSongsPanel = true;
             showAdventurePicker = false;
-            showKinectPanel = false;
             showInformation = false;
         }
 
@@ -603,12 +566,13 @@ namespace KinectKids3D.Platform
 
         private void CloseOverlay()
         {
+            bool leavingSongs = showSongsPanel;
             KinectKidsStoryMode.Cancel();
             showAdventurePicker = false;
-            showKinectPanel = false;
             showSongsPanel = false;
             showInformation = false;
             if (songPreview != null) songPreview.Stop();
+            if (leavingSongs && music != null) music.UnPause();
         }
 
         private static bool InvisibleButton(Rect rect) => GUI.Button(rect, GUIContent.none, GUIStyle.none);
