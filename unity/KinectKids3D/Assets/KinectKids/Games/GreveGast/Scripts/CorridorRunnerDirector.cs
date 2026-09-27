@@ -14,7 +14,7 @@ namespace KinectKids.Games.GreveGast
     /// </summary>
     public sealed class CorridorRunnerDirector : MonoBehaviour, IDodgeSource
     {
-        public enum EnvironmentTheme { CastleCorridor, GreatHall, Kitchen, Passage }
+        public enum EnvironmentTheme { CastleCorridor, GreatHall, Kitchen, Passage, Stairwell, Cellar }
         public enum Lane { Left, Center, Right }
         private enum PlayerMotion { Running, Jumping, Ducking, ChangingLane, Hit, Recovering }
 
@@ -94,6 +94,9 @@ namespace KinectKids.Games.GreveGast
         private GreveGastBodyInput body;
         private AudioSource music;
         private EnvironmentTheme requestedTheme = EnvironmentTheme.CastleCorridor;
+        private EnvironmentTheme activeTheme = EnvironmentTheme.CastleCorridor;
+        private EnvironmentTheme transitionFrom = EnvironmentTheme.CastleCorridor;
+        private int transitionStep = -1;
         private Lane lane = Lane.Center;
         private DodgeAction currentDodge = DodgeAction.None;
         private float lateral;
@@ -128,14 +131,16 @@ namespace KinectKids.Games.GreveGast
         private const float FinalStageWarningDelay = 2.5f;
         private const float FinalStageCaptureDelay = 15f;
         private const float CaptureFadeDuration = 2.5f;
+        private const float CaptureMenuDelay = 3f;
         private float finalStageElapsed;
         private float captureFadeElapsed;
         private bool captureStarted;
+        private bool captureReturnStarted;
         private float captureMusicVolume;
 
         public DodgeAction CurrentDodge => currentDodge;
         public float LateralPosition => Mathf.Clamp(lateral, -1f, 1f);
-        public EnvironmentTheme CurrentTheme => requestedTheme;
+        public EnvironmentTheme CurrentTheme => activeTheme;
         private bool WorldPaused => false;
 
         private void Start()
@@ -221,6 +226,18 @@ namespace KinectKids.Games.GreveGast
                 CreateTiledMaterial(new Color(0.34f, 0.46f, 0.50f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.58f, 0.74f, 0.76f), wallTexture, accentTiling),
                 new Color(1f, 0.53f, 0.25f), "new_door", "new_window");
+            themeStyles[EnvironmentTheme.Stairwell] = new ThemeStyle(EnvironmentTheme.Stairwell,
+                CreateTiledMaterial(new Color(0.55f, 0.51f, 0.50f), floorTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.55f, 0.51f, 0.52f), wallTexture, wallTiling),
+                CreateTiledMaterial(new Color(0.36f, 0.33f, 0.38f), wallTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.45f, 0.39f, 0.36f), wallTexture, accentTiling),
+                new Color(1f, 0.48f, 0.20f), "new_torch", "new_chain");
+            themeStyles[EnvironmentTheme.Cellar] = new ThemeStyle(EnvironmentTheme.Cellar,
+                CreateTiledMaterial(new Color(0.42f, 0.46f, 0.51f), floorTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.42f, 0.46f, 0.55f), wallTexture, wallTiling),
+                CreateTiledMaterial(new Color(0.27f, 0.30f, 0.38f), wallTexture, floorTiling),
+                CreateTiledMaterial(new Color(0.35f, 0.38f, 0.44f), wallTexture, accentTiling),
+                new Color(1f, 0.46f, 0.18f), "new_door", "new_chain");
         }
 
         private static Material CreateTiledMaterial(Color tint, Texture2D texture, Vector2 tiling, float metallic = 0f)
@@ -1089,12 +1106,17 @@ namespace KinectKids.Games.GreveGast
             float dt = Time.deltaTime;
             if (captureStarted)
             {
-                captureFadeElapsed += dt;
+                captureFadeElapsed += Time.unscaledDeltaTime;
                 if (music != null)
                 {
                     music.volume = captureMusicVolume * (1f - Mathf.SmoothStep(0f, 1f,
                         captureFadeElapsed / CaptureFadeDuration));
                     if (captureFadeElapsed >= CaptureFadeDuration && music.isPlaying) music.Stop();
+                }
+                if (!captureReturnStarted && captureFadeElapsed >= CaptureFadeDuration + CaptureMenuDelay)
+                {
+                    captureReturnStarted = true;
+                    ReturnToMenu();
                 }
                 return;
             }
@@ -1109,6 +1131,7 @@ namespace KinectKids.Games.GreveGast
             elapsed += dt;
             ReadInput(dt);
             DriveWorld(dt);
+            TickThemeSequence();
             StreamSegments(dt);
             MoveIllustratedVista(dt);
             DriveCharacters(dt);
@@ -1122,7 +1145,6 @@ namespace KinectKids.Games.GreveGast
             }
             TickHazards(dt);
             TickFinalApproach(dt);
-            TickThemeSequence();
         }
 
         private void TickFinalApproach(float dt)
@@ -1317,7 +1339,25 @@ namespace KinectKids.Games.GreveGast
                 Vector3 p = recycled.transform.localPosition;
                 p.z = nearestZ - segmentLength;
                 recycled.transform.localPosition = p;
-                recycled.ApplyTheme(themeStyles[requestedTheme]);
+                if (transitionStep >= 0 && transitionStep < 2)
+                {
+                    recycled.ApplyTransition(themeStyles[transitionFrom],
+                        themeStyles[requestedTheme], (transitionStep + 1f) / 3f);
+                    transitionStep++;
+                }
+                else
+                {
+                    recycled.ApplyTheme(themeStyles[requestedTheme]);
+                    transitionStep = -1;
+                }
+            }
+            float closest = float.MaxValue;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                float distance = Mathf.Abs(segments[i].transform.localPosition.z - playerZ);
+                if (distance >= closest) continue;
+                closest = distance;
+                activeTheme = segments[i].Theme;
             }
         }
 
@@ -1578,18 +1618,49 @@ namespace KinectKids.Games.GreveGast
         }
 
         /// <summary>Streams a new theme in on recycled far segments without interrupting play.</summary>
-        public void RequestTheme(EnvironmentTheme theme) { requestedTheme = theme; }
+        public void RequestTheme(EnvironmentTheme theme)
+        {
+            if (theme == requestedTheme || !themeStyles.ContainsKey(theme)) return;
+            transitionFrom = requestedTheme;
+            requestedTheme = theme;
+            transitionStep = 0;
+        }
 
         private void TickThemeSequence()
         {
             if (elapsed >= kitchenTransitionAt && requestedTheme == EnvironmentTheme.CastleCorridor)
                 RequestTheme(EnvironmentTheme.Kitchen);
             if (!cycleAllThemes) return;
-            if (elapsed >= kitchenTransitionAt + 34f) RequestTheme(EnvironmentTheme.Passage);
-            else if (elapsed >= kitchenTransitionAt + 17f) RequestTheme(EnvironmentTheme.GreatHall);
+            if (elapsed >= kitchenTransitionAt + 58f) RequestTheme(EnvironmentTheme.Passage);
+            else if (elapsed >= kitchenTransitionAt + 41f) RequestTheme(EnvironmentTheme.GreatHall);
+            else if (elapsed >= kitchenTransitionAt + 24f) RequestTheme(EnvironmentTheme.Cellar);
+            else if (elapsed >= kitchenTransitionAt + 17f) RequestTheme(EnvironmentTheme.Stairwell);
         }
 
         private float LaneX(Lane value) { return ((int)value - 1) * laneSpacing; }
+
+        private static string ThemeLabel(EnvironmentTheme theme)
+        {
+            switch (theme)
+            {
+                case EnvironmentTheme.Kitchen: return "Kök";
+                case EnvironmentTheme.Stairwell: return "Trappa till källaren";
+                case EnvironmentTheme.Cellar: return "Källare";
+                case EnvironmentTheme.GreatHall: return "Stora salen";
+                case EnvironmentTheme.Passage: return "Passage";
+                default: return "Slottets korridor";
+            }
+        }
+
+        private static void ReturnToMenu()
+        {
+            if (KinectKidsPlatformRoot.IsActive)
+                KinectKidsPlatformRoot.Instance.Scenes.LoadMenu();
+            else if (Application.CanStreamedLevelBeLoaded(KinectKidsSceneLoader.MainMenuScene))
+                UnityEngine.SceneManagement.SceneManager.LoadScene(KinectKidsSceneLoader.MainMenuScene);
+            else
+                LauncherReturnService.ReturnToLauncher();
+        }
 
         private void StartMusic()
         {
@@ -1661,9 +1732,9 @@ namespace KinectKids.Games.GreveGast
             if (!captureStarted)
             {
                 if (!chaseStarted)
-                    GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + requestedTheme, hud);
+                    GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + ThemeLabel(activeTheme), hud);
                 else
-                    GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + requestedTheme + "  |  BANA: " + lane +
+                    GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + ThemeLabel(activeTheme) + "  |  BANA: " + lane +
                         "  |  Spring (W), byt bana (A/D), center (S), hoppa (Space)", hud);
 
                 KinectKidsInputManager input = KinectKidsInputManager.Instance;
@@ -1765,14 +1836,18 @@ namespace KinectKids.Games.GreveGast
         private readonly List<Renderer> ceilingRenderers = new List<Renderer>();
         private readonly List<Renderer> accentRenderers = new List<Renderer>();
         private readonly List<SpriteRenderer> decorations = new List<SpriteRenderer>();
+        private readonly List<GameObject> details = new List<GameObject>();
+        private readonly List<Material> transitionMaterials = new List<Material>();
         private int variant;
         private float halfWidth;
+        private float segmentLength;
         public CorridorRunnerDirector.EnvironmentTheme Theme { get; private set; }
 
         public void Build(float length, float width, float height, int segmentVariant)
         {
             variant = segmentVariant;
             halfWidth = width * 0.5f;
+            segmentLength = length;
             Material placeholder = MaterialFactory.Solid(Color.gray);
             floorRenderers.Add(AddBox("Floor", new Vector3(0f, -0.12f, 0f), new Vector3(width, 0.24f, length + 0.08f), placeholder));
             wallRenderers.Add(AddBox("Left wall", new Vector3(-width * 0.5f, height * 0.5f, 0f), new Vector3(0.24f, height, length + 0.08f), placeholder));
@@ -1795,18 +1870,91 @@ namespace KinectKids.Games.GreveGast
 
         public void ApplyTheme(CorridorRunnerDirector.ThemeStyle style)
         {
+            ClearDecorations();
+            ClearTransitionMaterials();
             Theme = style.theme;
             SetMaterials(floorRenderers, style.floorMaterial); SetMaterials(wallRenderers, style.wallMaterial);
             SetMaterials(ceilingRenderers, style.ceilingMaterial); SetMaterials(accentRenderers, style.accentMaterial);
+            AddThemeDetails(style, style, 1f);
+        }
+
+        public void ApplyTransition(CorridorRunnerDirector.ThemeStyle from,
+            CorridorRunnerDirector.ThemeStyle to, float blend)
+        {
             ClearDecorations();
+            ClearTransitionMaterials();
+            Theme = blend < 0.5f ? from.theme : to.theme;
+            SetMaterials(floorRenderers, BlendMaterial(from.floorMaterial, to.floorMaterial, blend));
+            SetMaterials(wallRenderers, BlendMaterial(from.wallMaterial, to.wallMaterial, blend));
+            SetMaterials(ceilingRenderers, BlendMaterial(from.ceilingMaterial, to.ceilingMaterial, blend));
+            SetMaterials(accentRenderers, BlendMaterial(from.accentMaterial, to.accentMaterial, blend));
+            AddThemeDetails(from, to, blend);
+        }
+
+        private void AddThemeDetails(CorridorRunnerDirector.ThemeStyle from,
+            CorridorRunnerDirector.ThemeStyle to, float blend)
+        {
+            CorridorRunnerDirector.ThemeStyle dominant = blend < 0.5f ? from : to;
+            Color flame = Color.Lerp(from.lightColor, to.lightColor, blend);
             float side = variant % 2 == 0 ? -1f : 1f;
-            AddWallDecoration("new_torch", side, -5.1f, style.lightColor);
-            AddWallDecoration("new_torch", -side, 5.1f, style.lightColor);
-            AddWallDecoration(style.decorationA, side, -1.7f, style.lightColor);
-            AddWallDecoration(style.decorationB, -side, 1.7f, style.lightColor);
+            AddWallDecoration("new_torch", side, -5.1f, flame);
+            AddWallDecoration("new_torch", -side, 5.1f, flame);
+            AddWallDecoration(from.decorationA, side, -1.7f, flame);
+            AddWallDecoration(to.decorationB, -side, 1.7f, flame);
             if (variant % 3 == 0)
-                AddWallDecoration("env_8", side, 2.4f, style.lightColor);
-            AddThemeProp(style.theme, side);
+                AddWallDecoration("env_8", side, 2.4f, flame);
+            AddThemeProp(dominant.theme, side);
+            if (dominant.theme == CorridorRunnerDirector.EnvironmentTheme.Kitchen && variant % 3 == 0)
+                AddKitchenVista();
+            if (dominant.theme == CorridorRunnerDirector.EnvironmentTheme.Stairwell)
+                AddStairDetails(accentRenderers[0].sharedMaterial);
+        }
+
+        private void AddKitchenVista()
+        {
+            Sprite sprite = GreveChaseSprites.Environment("new_kitchen_vista");
+            if (sprite == null) return;
+            GameObject vista = new GameObject("Kitchen hearth and hanging pans");
+            vista.transform.SetParent(transform, false);
+            vista.transform.localPosition = new Vector3(0f, 0.02f, segmentLength * 0.34f);
+            SpriteRenderer renderer = vista.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.sortingOrder = 8;
+            float spriteHeight = sprite.bounds.size.y;
+            vista.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? 7f / spriteHeight : 1f);
+            decorations.Add(renderer);
+        }
+
+        private Material BlendMaterial(Material from, Material to, float blend)
+        {
+            Material material = new Material(from);
+            Color tint = Color.Lerp(from.color, to.color, blend);
+            if (material.HasProperty("_Color")) material.SetColor("_Color", tint);
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", tint);
+            transitionMaterials.Add(material);
+            return material;
+        }
+
+        private void AddStairDetails(Material stone)
+        {
+            // The treads descend into the distance while keeping the playable
+            // lanes clear of colliders in this 2.5D runner.
+            for (int step = 0; step < 6; step++)
+            {
+                float z = -segmentLength * 0.38f + step * segmentLength * 0.15f;
+                float rise = 0.72f - step * 0.11f;
+                GameObject tread = CorridorRunnerDirector.CreatePrimitive("Cellar stair tread " + step,
+                    PrimitiveType.Cube, transform, new Vector3(0f, rise * 0.5f, z),
+                    new Vector3(halfWidth * 1.55f, rise, segmentLength * 0.15f), stone);
+                details.Add(tread);
+            }
+            for (int side = -1; side <= 1; side += 2)
+            {
+                GameObject rail = CorridorRunnerDirector.CreatePrimitive("Stair side wall", PrimitiveType.Cube,
+                    transform, new Vector3(side * halfWidth * 0.78f, 0.55f, 0f),
+                    new Vector3(0.48f, 1.1f, segmentLength * 0.87f), stone);
+                details.Add(rail);
+            }
         }
 
         private Renderer AddBox(string objectName, Vector3 position, Vector3 scale, Material material)
@@ -1876,6 +2024,13 @@ namespace KinectKids.Games.GreveGast
                     key = variant % 2 == 0 ? "new_rubble" : "new_rubble_pillar";
                     height = variant % 2 == 0 ? 1.8f : 2.6f;
                     break;
+                case CorridorRunnerDirector.EnvironmentTheme.Stairwell:
+                    return;
+                case CorridorRunnerDirector.EnvironmentTheme.Cellar:
+                    if (variant % 3 == 2) return;
+                    key = variant % 2 == 0 ? "new_barrel" : "new_rubble";
+                    height = variant % 2 == 0 ? 2.1f : 1.4f;
+                    break;
                 default:
                     if (variant % 3 != 0) return;
                     key = "new_armour";
@@ -1906,7 +2061,18 @@ namespace KinectKids.Games.GreveGast
         {
             for (int i = 0; i < decorations.Count; i++) if (decorations[i] != null) Destroy(decorations[i].gameObject);
             decorations.Clear();
+            for (int i = 0; i < details.Count; i++) if (details[i] != null) Destroy(details[i]);
+            details.Clear();
         }
+
+        private void ClearTransitionMaterials()
+        {
+            for (int i = 0; i < transitionMaterials.Count; i++)
+                if (transitionMaterials[i] != null) Destroy(transitionMaterials[i]);
+            transitionMaterials.Clear();
+        }
+
+        private void OnDestroy() { ClearTransitionMaterials(); }
 
         private static void SetMaterials(List<Renderer> renderers, Material material)
         {
