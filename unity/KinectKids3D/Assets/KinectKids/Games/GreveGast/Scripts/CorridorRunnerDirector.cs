@@ -76,6 +76,11 @@ namespace KinectKids.Games.GreveGast
 
         private SpriteRenderer player;
         private SpriteRenderer greve;
+        private SpriteRenderer introPortrait;
+        private SpriteRenderer[] choirGhosts;
+        private Sprite[] portraitFrames;
+        private Sprite[] choirFrames;
+        private readonly List<Vector2> choirSections = new List<Vector2>();
         private Transform darknessRoot;
         private GastLivingFog livingFogMass;
         private GastFogController livingFogController;
@@ -155,6 +160,8 @@ namespace KinectKids.Games.GreveGast
             BuildIllustratedVista();
             BuildCharacters();
             BuildIntroWall();
+            BuildIntroPortrait();
+            ReadChoirSections();
             BeginIntro();
             StartMusic();
         }
@@ -207,7 +214,7 @@ namespace KinectKids.Games.GreveGast
                 CreateTiledMaterial(new Color(0.68f, 0.72f, 0.84f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.48f, 0.52f, 0.64f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.82f, 0.84f, 0.94f), wallTexture, accentTiling),
-                new Color(1f, 0.55f, 0.24f), "env_8", "new_window");
+                new Color(1f, 0.55f, 0.24f), "env_8", "sheet_window");
             themeStyles[EnvironmentTheme.GreatHall] = new ThemeStyle(EnvironmentTheme.GreatHall,
                 CreateTiledMaterial(new Color(0.84f, 0.70f, 0.58f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.78f, 0.62f, 0.58f), wallTexture, wallTiling),
@@ -322,7 +329,55 @@ namespace KinectKids.Games.GreveGast
                 new Vector3(0f, 0f, Mathf.Max(playerZ, playerStartZ)));
             greve = BuildActor("Greve Gast (singing)", greveStart, greveHeight,
                 new Vector3(0f, 0.25f, greveFarZ));
+            BuildChoirGhosts();
             BuildDarknessFront();
+        }
+
+        private void BuildIntroPortrait()
+        {
+            portraitFrames = GreveEnvironmentSheets.Portrait;
+            if (portraitFrames.Length == 0 || portraitFrames[0] == null || introWall == null) return;
+            GameObject painting = new GameObject("Greve emerges from painting");
+            painting.transform.SetParent(introWall, false);
+            painting.transform.localPosition = new Vector3(0f, 0.08f, -0.85f);
+            painting.transform.localRotation = worldCamera.transform.localRotation;
+            introPortrait = painting.AddComponent<SpriteRenderer>();
+            introPortrait.sprite = portraitFrames[0];
+            introPortrait.sortingOrder = 14;
+            SizeSpriteToHeight(introPortrait, 4.3f);
+            introPortrait.enabled = false;
+        }
+
+        private void BuildChoirGhosts()
+        {
+            choirFrames = GreveEnvironmentSheets.Choir;
+            if (choirFrames.Length == 0 || choirFrames[0] == null) return;
+            choirGhosts = new SpriteRenderer[2];
+            for (int i = 0; i < choirGhosts.Length; i++)
+            {
+                float side = i == 0 ? -1f : 1f;
+                choirGhosts[i] = BuildActor("Singing little ghost " + i, choirFrames[0], 2.6f,
+                    new Vector3(side * (corridorWidth * 0.5f - 1.8f), 0.9f, 8.5f));
+                choirGhosts[i].flipX = i == 1;
+                choirGhosts[i].color = new Color(1f, 1f, 1f, 0f);
+            }
+        }
+
+        private void ReadChoirSections()
+        {
+            TextAsset timelineJson = Resources.Load<TextAsset>("GreveGast/GreveGastTimeline");
+            if (timelineJson == null) return;
+            GreveGastTimelineData timeline = JsonUtility.FromJson<GreveGastTimelineData>(timelineJson.text);
+            if (timeline == null || timeline.sections == null) return;
+            for (int i = 0; i < timeline.sections.Length; i++)
+            {
+                GreveGastSection section = timeline.sections[i];
+                if (section == null || string.IsNullOrEmpty(section.name) ||
+                    !section.name.ToLowerInvariant().Contains("refr")) continue;
+                float end = i + 1 < timeline.sections.Length
+                    ? timeline.sections[i + 1].start : timeline.songLength;
+                choirSections.Add(new Vector2(section.start, end));
+            }
         }
 
         private void BuildIntroWall()
@@ -384,6 +439,20 @@ namespace KinectKids.Games.GreveGast
         private void DriveIntro(float dt)
         {
             if (player == null || greve == null) return;
+            if (introPortrait != null)
+            {
+                float portraitProgress = Mathf.Clamp01(
+                    (introElapsed - (IntroGreveReveal - 0.9f)) / 2.2f);
+                int frame = Mathf.Min(portraitFrames.Length - 1,
+                    Mathf.FloorToInt(portraitProgress * portraitFrames.Length));
+                if (portraitFrames[frame] != null && introPortrait.sprite != portraitFrames[frame])
+                {
+                    introPortrait.sprite = portraitFrames[frame];
+                    SizeSpriteToHeight(introPortrait, 4.3f);
+                }
+                introPortrait.enabled = introElapsed >= IntroGreveReveal - 0.9f &&
+                    introElapsed < IntroGreveReveal + 2.5f;
+            }
             if (introElapsed >= IntroCrawlEnd && !introMusicStarted)
             {
                 introMusicStarted = true;
@@ -431,11 +500,12 @@ namespace KinectKids.Games.GreveGast
             }
             player.transform.localPosition = position;
 
-            if (introElapsed >= IntroGreveReveal)
+            float emergeAt = IntroGreveReveal + 0.65f;
+            if (introElapsed >= emergeAt)
             {
                 if (!greve.gameObject.activeSelf) greve.gameObject.SetActive(true);
                 float appear = Mathf.SmoothStep(0f, 1f,
-                    (introElapsed - IntroGreveReveal) / 0.75f);
+                    (introElapsed - emergeAt) / 0.75f);
                 greve.sprite = ResolveGreve("threaten");
                 greve.color = new Color(1f, 1f, 1f, appear);
                 SizeSpriteToHeight(greve, greveHeight * Mathf.Lerp(0.35f, 1.2f, appear));
@@ -443,7 +513,7 @@ namespace KinectKids.Games.GreveGast
                     Mathf.Lerp(greveFarZ, greveNearZ, chase));
                 if (introPoofLight != null)
                     introPoofLight.intensity = 2.5f * Mathf.Sin(Mathf.PI * Mathf.Clamp01(
-                        (introElapsed - IntroGreveReveal) / 1.2f));
+                        (introElapsed - emergeAt) / 1.2f));
             }
         }
 
@@ -1135,6 +1205,7 @@ namespace KinectKids.Games.GreveGast
             StreamSegments(dt);
             MoveIllustratedVista(dt);
             DriveCharacters(dt);
+            UpdateChoirGhosts();
             if (darknessRoot != null)
             {
                 float growth = Mathf.SmoothStep(0f, 1f, elapsed / 3f);
@@ -1539,7 +1610,15 @@ namespace KinectKids.Games.GreveGast
                 RunHazard hazard = hazards[i];
                 hazard.root.localPosition += Vector3.forward * (worldSpeed * dt);
                 if (hazard.sprite != null)
+                {
                     hazard.sprite.sortingOrder = DepthSortOrder(hazard.root.localPosition.z);
+                    if (hazard.frames != null && hazard.frames.Length > 0)
+                    {
+                        hazard.animationTime += dt;
+                        hazard.sprite.sprite = hazard.frames[
+                            Mathf.FloorToInt(hazard.animationTime * 7f) % hazard.frames.Length];
+                    }
+                }
                 if (!hazard.resolved && hazard.root.localPosition.z >= player.transform.localPosition.z - 0.35f)
                 {
                     hazard.resolved = true;
@@ -1574,21 +1653,26 @@ namespace KinectKids.Games.GreveGast
                 hazardShadowMaterial);
             // The environment art has floor-level pivots. Keep physical obstacles
             // in the running lanes instead of reusing them as wall decorations.
-            string spriteKey = jump
+            bool swingingAxe = !jump && index % 6 == 3;
+            string spriteKey = swingingAxe ? "sheet_axe" : jump
                 ? (index % 4 == 0 ? "new_spike_trap" : "new_rubble")
                 : (index % 4 == 1 ? "new_barrel" : "new_crate");
-            Sprite sprite = GreveChaseSprites.Environment(spriteKey);
+            Sprite[] animation = swingingAxe ? GreveEnvironmentSheets.SwingingAxe : null;
+            Sprite sprite = swingingAxe && animation.Length > 0
+                ? animation[0] : GreveChaseSprites.Environment(spriteKey);
             if (sprite != null)
             {
                 GameObject obstacle = new GameObject("Floor obstacle " + spriteKey);
                 obstacle.transform.SetParent(root.transform, false);
-                obstacle.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+                obstacle.transform.localPosition = new Vector3(0f, swingingAxe ? 0.75f : 0.04f, 0f);
                 SpriteRenderer renderer = obstacle.AddComponent<SpriteRenderer>();
                 renderer.sprite = sprite;
                 renderer.sharedMaterial = player.sharedMaterial;
                 renderer.sortingOrder = DepthSortOrder(root.transform.localPosition.z);
                 hazard.sprite = renderer;
-                SizeSpriteToHeight(renderer, jump ? (spriteKey == "new_spike_trap" ? 0.9f : 1.25f) : 2.3f);
+                hazard.frames = animation;
+                SizeSpriteToHeight(renderer, swingingAxe ? 3.4f :
+                    jump ? (spriteKey == "new_spike_trap" ? 0.9f : 1.25f) : 2.3f);
             }
             else
             {
@@ -1598,6 +1682,38 @@ namespace KinectKids.Games.GreveGast
                     themeStyles[requestedTheme].accentMaterial);
             }
             hazards.Add(hazard);
+        }
+
+        private void UpdateChoirGhosts()
+        {
+            if (choirGhosts == null || music == null || choirFrames == null) return;
+            float songTime = music.time;
+            float visibility = 0f;
+            for (int section = 0; section < choirSections.Count; section++)
+            {
+                Vector2 range = choirSections[section];
+                if (songTime < range.x || songTime >= range.y) continue;
+                visibility = Mathf.Min(Mathf.InverseLerp(range.x, range.x + 0.8f, songTime),
+                    1f - Mathf.InverseLerp(range.y - 0.8f, range.y, songTime));
+                break;
+            }
+            for (int i = 0; i < choirGhosts.Length; i++)
+            {
+                SpriteRenderer ghost = choirGhosts[i];
+                if (ghost == null) continue;
+                int frame = Mathf.FloorToInt(songTime * 4f + i * 1.5f) % choirFrames.Length;
+                if (choirFrames[frame] != null && ghost.sprite != choirFrames[frame])
+                {
+                    ghost.sprite = choirFrames[frame];
+                    SizeSpriteToHeight(ghost, 2.6f);
+                }
+                float side = i == 0 ? -1f : 1f;
+                float emerge = Mathf.SmoothStep(0f, 1f, visibility);
+                ghost.transform.localPosition = new Vector3(
+                    side * (corridorWidth * 0.5f - Mathf.Lerp(1.8f, 3.5f, emerge)),
+                    0.9f + Mathf.Sin(songTime * 2.8f + i * 1.7f) * 0.18f, 8.5f);
+                ghost.color = new Color(1f, 1f, 1f, emerge);
+            }
         }
 
         private bool Avoided(RunHazard hazard)
@@ -1811,6 +1927,8 @@ namespace KinectKids.Games.GreveGast
             public bool jump;
             public bool resolved;
             public SpriteRenderer sprite;
+            public Sprite[] frames;
+            public float animationTime;
         }
 
         internal sealed class ThemeStyle
@@ -1836,6 +1954,7 @@ namespace KinectKids.Games.GreveGast
         private readonly List<Renderer> ceilingRenderers = new List<Renderer>();
         private readonly List<Renderer> accentRenderers = new List<Renderer>();
         private readonly List<SpriteRenderer> decorations = new List<SpriteRenderer>();
+        private readonly List<AnimatedDecoration> animatedDecorations = new List<AnimatedDecoration>();
         private readonly List<GameObject> details = new List<GameObject>();
         private readonly List<Material> transitionMaterials = new List<Material>();
         private int variant;
@@ -1866,6 +1985,17 @@ namespace KinectKids.Games.GreveGast
                 new Vector3(3.2f, 1.9f, 0.72f), placeholder));
             accentRenderers.Add(AddBox("Arch crown", new Vector3(0f, height - 0.28f, boundaryZ),
                 new Vector3(width, 0.62f, 0.72f), placeholder));
+        }
+
+        private void Update()
+        {
+            for (int i = 0; i < animatedDecorations.Count; i++)
+            {
+                AnimatedDecoration decoration = animatedDecorations[i];
+                if (decoration.renderer == null || decoration.frames == null || decoration.frames.Length == 0) continue;
+                decoration.renderer.sprite = decoration.frames[
+                    Mathf.FloorToInt(Time.time * decoration.framesPerSecond + variant) % decoration.frames.Length];
+            }
         }
 
         public void ApplyTheme(CorridorRunnerDirector.ThemeStyle style)
@@ -1904,25 +2034,51 @@ namespace KinectKids.Games.GreveGast
             if (variant % 3 == 0)
                 AddWallDecoration("env_8", side, 2.4f, flame);
             AddThemeProp(dominant.theme, side);
-            if (dominant.theme == CorridorRunnerDirector.EnvironmentTheme.Kitchen && variant % 3 == 0)
-                AddKitchenVista();
+            if (dominant.theme == CorridorRunnerDirector.EnvironmentTheme.Kitchen)
+            {
+                AddCauldron(side);
+                if (variant % 3 == 0) AddVista(GreveEnvironmentSheets.KitchenHearth,
+                    "Kitchen hearth", 7f);
+            }
             if (dominant.theme == CorridorRunnerDirector.EnvironmentTheme.Stairwell)
+            {
                 AddStairDetails(accentRenderers[0].sharedMaterial);
+                if (variant % 3 == 0) AddVista(GreveEnvironmentSheets.Staircase,
+                    "Stairway down", 8f);
+            }
+            if (dominant.theme == CorridorRunnerDirector.EnvironmentTheme.Cellar && variant % 3 == 0)
+                AddVista(GreveEnvironmentSheets.CellarArch, "Cellar entrance", 7f);
         }
 
-        private void AddKitchenVista()
+        private void AddVista(Sprite sprite, string name, float height)
         {
-            Sprite sprite = GreveChaseSprites.Environment("new_kitchen_vista");
             if (sprite == null) return;
-            GameObject vista = new GameObject("Kitchen hearth and hanging pans");
+            GameObject vista = new GameObject(name);
             vista.transform.SetParent(transform, false);
             vista.transform.localPosition = new Vector3(0f, 0.02f, segmentLength * 0.34f);
             SpriteRenderer renderer = vista.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
             renderer.sortingOrder = 8;
             float spriteHeight = sprite.bounds.size.y;
-            vista.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? 7f / spriteHeight : 1f);
+            vista.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? height / spriteHeight : 1f);
             decorations.Add(renderer);
+        }
+
+        private void AddCauldron(float side)
+        {
+            Sprite[] frames = GreveEnvironmentSheets.Cauldron;
+            if (frames.Length == 0 || frames[0] == null) return;
+            GameObject pot = new GameObject("Bubbling kitchen cauldron");
+            pot.transform.SetParent(transform, false);
+            pot.transform.localPosition = new Vector3(side * (halfWidth - 2.4f), 0.02f, 0.7f);
+            SpriteRenderer renderer = pot.AddComponent<SpriteRenderer>();
+            renderer.sprite = frames[0];
+            renderer.sortingOrder = 8;
+            float spriteHeight = frames[0].bounds.size.y;
+            pot.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? 2.3f / spriteHeight : 1f);
+            decorations.Add(renderer);
+            animatedDecorations.Add(new AnimatedDecoration { renderer = renderer,
+                frames = frames, framesPerSecond = 4f });
         }
 
         private Material BlendMaterial(Material from, Material to, float blend)
@@ -1964,7 +2120,9 @@ namespace KinectKids.Games.GreveGast
 
         private void AddWallDecoration(string spriteKey, float side, float z, Color lightColor)
         {
-            Sprite sprite = spriteKey.StartsWith("haz_") ? GreveChaseSprites.Hazard(spriteKey) : GreveChaseSprites.Environment(spriteKey);
+            Sprite sprite = spriteKey == "sheet_window" ? GreveEnvironmentSheets.CastleWindow :
+                spriteKey.StartsWith("haz_") ? GreveChaseSprites.Hazard(spriteKey) :
+                GreveChaseSprites.Environment(spriteKey);
             if (sprite == null) return;
             float y;
             float height;
@@ -1974,6 +2132,7 @@ namespace KinectKids.Games.GreveGast
                 case "new_banner": y = 7.5f; height = 5.2f; break;
                 case "new_chain": y = 10.5f; height = 5.5f; break;
                 case "new_window": y = 5.0f; height = 3.4f; break;
+                case "sheet_window": y = 4.8f; height = 4.2f; break;
                 case "env_8": y = 5.0f; height = 3.4f; break;
                 default: y = 4.5f; height = 2.0f; break; // wall torch
             }
@@ -2061,6 +2220,7 @@ namespace KinectKids.Games.GreveGast
         {
             for (int i = 0; i < decorations.Count; i++) if (decorations[i] != null) Destroy(decorations[i].gameObject);
             decorations.Clear();
+            animatedDecorations.Clear();
             for (int i = 0; i < details.Count; i++) if (details[i] != null) Destroy(details[i]);
             details.Clear();
         }
@@ -2073,6 +2233,13 @@ namespace KinectKids.Games.GreveGast
         }
 
         private void OnDestroy() { ClearTransitionMaterials(); }
+
+        private sealed class AnimatedDecoration
+        {
+            public SpriteRenderer renderer;
+            public Sprite[] frames;
+            public float framesPerSecond;
+        }
 
         private static void SetMaterials(List<Renderer> renderers, Material material)
         {
