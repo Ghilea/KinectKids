@@ -15,7 +15,7 @@ namespace KinectKids3D.Platform
 
         private readonly Rect[] visibleCardRects = new Rect[8];
         private readonly int[] visibleGameIndices = new int[8];
-        private int selected;
+        private int selected = -1;
         private int hoverTarget = int.MinValue;
         private int hoverHand = int.MinValue;
         private float dwell;
@@ -32,12 +32,21 @@ namespace KinectKids3D.Platform
         private GUIStyle kinectTitleStyle;
         private GUIStyle kinectDetailStyle;
         private GUIStyle kinectButtonStyle;
+        private GUIStyle pickerTitleStyle;
+        private GUIStyle pickerSongTitleStyle;
+        private GUIStyle pickerTagStyle;
+        private GUIStyle pickerHeadingStyle;
+        private GUIStyle pickerBodyStyle;
+        private GUIStyle pickerHintStyle;
+        private int activatedDwellTarget = int.MinValue;
+        private Texture2D pickerBanner;
+        private Texture2D pickerPlayingBanner;
         private AudioSource music;
         private AudioSource songPreview;
         private Texture2D menuLogo;
         private Sprite gateGreve;
         private readonly AudioClip[] songs = new AudioClip[4];
-        private int selectedSong;
+        private int selectedSong = -1;
         private int keyboardFocus;
         private bool keyboardNavigationActive;
         private int hoveredMenuItem = -1;
@@ -97,15 +106,6 @@ namespace KinectKids3D.Platform
 
         private void Start()
         {
-            if (registry != null && registry.games != null)
-            {
-                for (int i = 0; i < registry.games.Length; i++)
-                    if (registry.games[i] != null && registry.games[i].sceneName == "Spokjakten")
-                    {
-                        selected = i;
-                        break;
-                    }
-            }
             if (menuMusic == null) menuMusic = Resources.Load<AudioClip>("Audio/MenuTheme");
             if (menuMusic != null)
             {
@@ -133,9 +133,10 @@ namespace KinectKids3D.Platform
             if (Input.GetKeyDown(KeyCode.Escape)) CloseOverlay();
             if (showSongsPanel)
             {
-                if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A)) SelectSong(-1);
-                if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D)) SelectSong(1);
+                if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.UpArrow)) SelectSong(-1);
+                if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.DownArrow)) SelectSong(1);
                 if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space)) PlaySelectedSong();
+                UpdateKinectDwell();
                 return;
             }
             if (!showAdventurePicker && !showInformation)
@@ -143,8 +144,10 @@ namespace KinectKids3D.Platform
                 if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W)) { keyboardFocus = (keyboardFocus + 3) % 4; keyboardNavigationActive = true; }
                 if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S)) { keyboardFocus = (keyboardFocus + 1) % 4; keyboardNavigationActive = true; }
             }
-            if (showAdventurePicker && (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))) ChangeSelected(-1);
-            if (showAdventurePicker && (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))) ChangeSelected(1);
+            if (showAdventurePicker && (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))) ChangeSelected(-2);
+            if (showAdventurePicker && (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))) ChangeSelected(2);
+            if (showAdventurePicker && Input.GetKeyDown(KeyCode.LeftArrow)) ChangeSelected(-1);
+            if (showAdventurePicker && Input.GetKeyDown(KeyCode.RightArrow)) ChangeSelected(1);
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
             {
                 if (showAdventurePicker) Play();
@@ -170,9 +173,14 @@ namespace KinectKids3D.Platform
             if (input == null || !input.PlayerDetected)
             {
                 ResetDwell();
+                activatedDwellTarget = int.MinValue;
                 return;
             }
-            if (input.Frame.PlayerChanged) ResetDwell();
+            if (input.Frame.PlayerChanged)
+            {
+                ResetDwell();
+                activatedDwellTarget = int.MinValue;
+            }
 
             int foundTarget = int.MinValue;
             int foundHand = int.MinValue;
@@ -185,7 +193,7 @@ namespace KinectKids3D.Platform
                 Vector2 cursor = new Vector2(hand.Position.x * Screen.width, hand.Position.y * Screen.height);
                 if (Expanded(playRect, hitPadding).Contains(cursor))
                 {
-                    foundTarget = -1;
+                    foundTarget = showAdventurePicker || showSongsPanel || showInformation ? -2 : -1;
                     foundHand = hand.HandId;
                     break;
                 }
@@ -201,9 +209,16 @@ namespace KinectKids3D.Platform
 
             if (foundTarget == int.MinValue)
             {
-                if (Time.unscaledTime - lastHoverSeenAt > 0.24f) ResetDwell();
+                if (Time.unscaledTime - lastHoverSeenAt > 0.24f)
+                {
+                    ResetDwell();
+                    activatedDwellTarget = int.MinValue;
+                }
                 return;
             }
+            // A held hand activates a card once. Move away before choosing again.
+            if (foundTarget == activatedDwellTarget) return;
+            activatedDwellTarget = int.MinValue;
             if (foundTarget != hoverTarget)
             {
                 hoverTarget = foundTarget;
@@ -213,12 +228,17 @@ namespace KinectKids3D.Platform
             lastHoverSeenAt = Time.unscaledTime;
             dwell += Time.unscaledDeltaTime;
 
-            float required = foundTarget == -1 ? 1f : 0.42f;
+            float required = DwellDuration;
             if (dwell < required) return;
-            if (foundTarget == -1) Play();
-            else if (foundTarget != selected) SetSelected(foundTarget);
+            activatedDwellTarget = foundTarget;
+            if (foundTarget == -2) CloseOverlay();
+            else if (showAdventurePicker && foundTarget >= 0) { SetSelected(foundTarget); Play(); }
+            else if (showSongsPanel && foundTarget >= 0) { selectedSong = foundTarget; PlaySelectedSong(); }
+            else if (foundTarget == -1) StartStory();
             ResetDwell();
         }
+
+        private const float DwellDuration = 1f;
 
         private void ResetDwell()
         {
@@ -235,7 +255,9 @@ namespace KinectKids3D.Platform
         private void ChangeSelected(int direction)
         {
             if (registry == null || registry.games == null || registry.games.Length == 0) return;
-            SetSelected((selected + direction + registry.games.Length) % registry.games.Length);
+            int count = registry.games.Length;
+            SetSelected(selected < 0 ? direction < 0 ? count - 1 : 0
+                : ((selected + direction) % count + count) % count);
         }
 
         private void SetSelected(int index)
@@ -246,7 +268,7 @@ namespace KinectKids3D.Platform
 
         private void Play()
         {
-            if (registry == null || registry.games == null || selected >= registry.games.Length) return;
+            if (registry == null || registry.games == null || selected < 0 || selected >= registry.games.Length) return;
             GameDefinition game = registry.games[selected];
             if (game == null || !game.isAvailable) return;
 
@@ -298,8 +320,7 @@ namespace KinectKids3D.Platform
             DrawMenuArtwork();
 
             playRect = ToScreen(new Rect(47f, 250f, 365f, 120f), scale, offsetX, offsetY);
-            if (!showAdventurePicker)
-                for (int i = 0; i < visibleCardRects.Length; i++) visibleCardRects[i] = Rect.zero;
+            for (int i = 0; i < visibleCardRects.Length; i++) visibleCardRects[i] = Rect.zero;
             if (!showAdventurePicker && !showSongsPanel && !showInformation) DrawConceptHotspots();
             DrawKinectStatusBadge();
             if (showAdventurePicker) DrawAdventurePicker();
@@ -345,9 +366,7 @@ namespace KinectKids3D.Platform
             }
             if (InvisibleButton(new Rect(66f, 378f, 350f, 96f)))
             {
-                showAdventurePicker = true;
-                showInformation = false;
-                showSongsPanel = false;
+                OpenAdventurePicker();
             }
             if (InvisibleButton(new Rect(68f, 480f, 350f, 95f))) OpenSongsPanel();
             if (InvisibleButton(new Rect(68f, 580f, 350f, 95f))) ShowInformation("INSTÄLLNINGAR", "Använd helskärm och ställ ljudnivån på datorn före spelet.");
@@ -434,7 +453,7 @@ namespace KinectKids3D.Platform
                 case 0:
                     StartStory();
                     break;
-                case 1: showAdventurePicker = true; showInformation = false; break;
+                case 1: OpenAdventurePicker(); break;
                 case 2: OpenSongsPanel(); break;
                 case 3: ShowInformation("INSTÄLLNINGAR", "Använd helskärm och ställ ljudnivån på datorn före spelet."); break;
             }
@@ -459,48 +478,41 @@ namespace KinectKids3D.Platform
 
         private void DrawAdventurePicker()
         {
-            Fill(new Rect(0f, 0f, DesignWidth, DesignHeight), new Color(0f, 0f, 0f, 0.72f));
-            Rect panel = new Rect(310f, 95f, 1052f, 750f);
-            DrawFramedPanel(panel, new Color(0.83f, 0.52f, 0.18f), new Color(0.025f, 0.065f, 0.14f, 0.98f), 6f);
-            GUI.Label(new Rect(350f, 115f, 972f, 80f), "VÄLJ ÄVENTYR", gameTitleStyle);
+            Rect panel = new Rect(230f, 55f, 1212f, 830f);
+            DrawPickerPanel(panel, "VÄLJ ÄVENTYR", "Välj ett äventyr och börja spela");
             int count = registry.games.Length;
             for (int i = 0; i < count; i++)
             {
+                GameDefinition game = registry.games[i];
+                if (game == null) continue;
                 int column = i % 2;
                 int row = i / 2;
-                Rect rect = new Rect(365f + column * 490f, 215f + row * 125f, 440f, 98f);
+                Rect rect = new Rect(panel.x + 56f + column * 562f, panel.y + 164f + row * 124f, 538f, 108f);
                 if (i < visibleCardRects.Length)
                 {
-                    visibleCardRects[i] = ToScreen(rect, menuScale, menuOffsetX, menuOffsetY);
+                    visibleCardRects[i] = game.isAvailable ? ToScreen(rect, menuScale, menuOffsetX, menuOffsetY) : Rect.zero;
                     visibleGameIndices[i] = i;
                 }
-                Color edge = i == selected ? new Color(1f, 0.68f, 0.15f) : new Color(0.48f, 0.32f, 0.17f);
-                DrawFramedPanel(rect, edge, new Color(0.04f, 0.11f, 0.22f, 0.98f), i == selected ? 5f : 3f);
-                GUI.Label(new Rect(rect.x + 22f, rect.y + 8f, rect.width - 44f, 48f), registry.games[i].displayName.ToUpperInvariant(), cardTitleStyle);
-                GUI.Label(new Rect(rect.x + 22f, rect.y + 53f, rect.width - 44f, 30f), Tagline(registry.games[i].sceneName), cardTagStyle);
-                if (GUI.Button(rect, GUIContent.none, GUIStyle.none)) SetSelected(i);
+                bool active = i == selected || rect.Contains(DesignMousePosition()) || hoverTarget == i;
+                DrawPickerCard(rect, game.displayName, game.isAvailable ? Tagline(game.sceneName) : "Kommer snart",
+                    game.sceneName, game.preview, active, false, game.isAvailable);
+                bool previousEnabled = GUI.enabled;
+                GUI.enabled = previousEnabled && game.isAvailable;
+                if (InvisibleButton(rect)) { SetSelected(i); Play(); }
+                GUI.enabled = previousEnabled;
             }
-            Rect start = new Rect(550f, 735f, 300f, 82f);
-            Rect close = new Rect(875f, 735f, 250f, 82f);
-            DrawFramedPanel(start, new Color(1f, 0.69f, 0.14f), new Color(0.05f, 0.43f, 0.20f), 5f);
-            DrawFramedPanel(close, new Color(0.69f, 0.43f, 0.18f), new Color(0.20f, 0.08f, 0.08f), 4f);
-            GUI.Label(start, "STARTA", gameTitleStyle);
-            GUI.Label(close, "TILLBAKA", footerStyle);
-            if (GUI.Button(start, GUIContent.none, GUIStyle.none)) Play();
-            if (GUI.Button(close, GUIContent.none, GUIStyle.none)) CloseOverlay();
+            DrawPickerBack(new Rect(panel.center.x - 145f, panel.yMax - 145f, 290f, 73f));
         }
 
         private void DrawInformationOverlay()
         {
-            Fill(new Rect(0f, 0f, DesignWidth, DesignHeight), new Color(0f, 0f, 0f, 0.72f));
-            Rect panel = new Rect(440f, 210f, 792f, 500f);
-            DrawFramedPanel(panel, new Color(0.84f, 0.53f, 0.18f), new Color(0.025f, 0.075f, 0.16f, 0.99f), 7f);
-            GUI.Label(new Rect(490f, 250f, 692f, 80f), informationTitle, gameTitleStyle);
-            GUI.Label(new Rect(515f, 360f, 642f, 150f), informationText, bodyStyle);
-            Rect close = new Rect(690f, 585f, 292f, 82f);
-            DrawFramedPanel(close, new Color(0.73f, 0.46f, 0.18f), new Color(0.20f, 0.08f, 0.08f), 4f);
-            GUI.Label(close, "TILLBAKA", footerStyle);
-            if (GUI.Button(close, GUIContent.none, GUIStyle.none)) CloseOverlay();
+            Rect panel = new Rect(390f, 195f, 892f, 550f);
+            DrawPickerPanel(panel, informationTitle, "Gör dig redo för äventyret");
+            if (buttonSheet != null)
+                DrawButtonSprite(new Rect(panel.x + 66f, panel.y + 214f, 92f, 92f),
+                    new Rect(62f, 350f, 56f, 66f), 1f);
+            GUI.Label(new Rect(panel.x + 190f, panel.y + 210f, panel.width - 265f, 180f), informationText, pickerBodyStyle);
+            DrawPickerBack(new Rect(panel.center.x - 145f, panel.yMax - 145f, 290f, 73f));
         }
 
         private void ShowInformation(string title, string text)
@@ -512,21 +524,34 @@ namespace KinectKids3D.Platform
             showSongsPanel = false;
         }
 
+        private void OpenAdventurePicker()
+        {
+            selected = -1;
+            showAdventurePicker = true;
+            showInformation = false;
+            showSongsPanel = false;
+            ResetDwell();
+        }
+
         private void OpenSongsPanel()
         {
             if (music != null && music.isPlaying) music.Pause();
             showSongsPanel = true;
             showAdventurePicker = false;
             showInformation = false;
+            selectedSong = -1;
+            ResetDwell();
         }
 
         private void SelectSong(int direction)
         {
-            selectedSong = (selectedSong + direction + songs.Length) % songs.Length;
+            selectedSong = selectedSong < 0 ? direction < 0 ? songs.Length - 1 : 0
+                : (selectedSong + direction + songs.Length) % songs.Length;
         }
 
         private void PlaySelectedSong()
         {
+            if (selectedSong < 0 || selectedSong >= songs.Length) return;
             AudioClip clip = songs[selectedSong];
             if (clip == null || songPreview == null) return;
             songPreview.Stop();
@@ -537,23 +562,23 @@ namespace KinectKids3D.Platform
 
         private void DrawSongsOverlay()
         {
-            Fill(new Rect(0f, 0f, DesignWidth, DesignHeight), new Color(0f, 0f, 0f, 0.72f));
-            Rect panel = new Rect(350f, 125f, 972f, 690f);
-            DrawFramedPanel(panel, new Color(0.86f, 0.55f, 0.16f), new Color(0.025f, 0.065f, 0.14f, 0.99f), 7f);
-            GUI.Label(new Rect(400f, 155f, 872f, 80f), "SÅNGER", gameTitleStyle);
+            Rect panel = new Rect((DesignWidth - 706f) * 0.5f, 55f, 706f, 830f);
+            DrawPickerPanel(panel, "SÅNGER", "Välj en sång att lyssna på");
             for (int i = 0; i < songs.Length; i++)
             {
-                Rect row = new Rect(435f, 255f + i * 92f, 902f, 70f);
-                bool active = i == selectedSong;
-                DrawFramedPanel(row, active ? new Color(1f, 0.68f, 0.16f) : new Color(0.42f, 0.29f, 0.18f),
-                    active ? new Color(0.10f, 0.30f, 0.42f) : new Color(0.035f, 0.12f, 0.22f), active ? 5f : 3f);
-                GUI.Label(new Rect(row.x + 24f, row.y, row.width - 48f, row.height), SongName(i), footerStyle);
-                if (GUI.Button(row, GUIContent.none, GUIStyle.none)) { selectedSong = i; PlaySelectedSong(); }
+                Rect row = new Rect(panel.x + 84f, panel.y + 164f + i * 124f, 538f, 108f);
+                bool playing = songPreview != null && songPreview.isPlaying && songPreview.clip == songs[i];
+                bool active = i == selectedSong || row.Contains(DesignMousePosition()) || hoverTarget == i;
+                visibleCardRects[i] = songs[i] != null ? ToScreen(row, menuScale, menuOffsetX, menuOffsetY) : Rect.zero;
+                visibleGameIndices[i] = i;
+                DrawPickerCard(row, SongName(i), string.Empty,
+                    i == 0 ? "GreveGast" : i == 1 ? "Kitchen" : "Gnista", null, active, playing, songs[i] != null, true);
+                bool previousEnabled = GUI.enabled;
+                GUI.enabled = previousEnabled && songs[i] != null;
+                if (InvisibleButton(row)) { selectedSong = i; PlaySelectedSong(); }
+                GUI.enabled = previousEnabled;
             }
-            Rect close = new Rect(685f, 705f, 302f, 72f);
-            DrawFramedPanel(close, new Color(0.70f, 0.45f, 0.18f), new Color(0.20f, 0.08f, 0.08f), 4f);
-            GUI.Label(close, "TILLBAKA", footerStyle);
-            if (GUI.Button(close, GUIContent.none, GUIStyle.none)) CloseOverlay();
+            DrawPickerBack(new Rect(panel.center.x - 145f, panel.yMax - 145f, 290f, 73f));
         }
 
         private static string SongName(int index)
@@ -562,6 +587,205 @@ namespace KinectKids3D.Platform
             if (index == 1) return "GNISTAS GASTVAGN";
             if (index == 2) return "GNISTA";
             return "DÄR GNISTORNA VAKNAR";
+        }
+
+        private void DrawPickerPanel(Rect panel, string title, string subtitle)
+        {
+            Fill(new Rect(0f, 0f, DesignWidth, DesignHeight), new Color(0.005f, 0.012f, 0.035f, 0.78f));
+            Fill(new Rect(panel.x + 10f, panel.y + 16f, panel.width, panel.height), new Color(0f, 0f, 0f, 0.35f));
+            DrawOrnateFrame(panel);
+            GUI.Label(new Rect(panel.x + 70f, panel.y + 38f, panel.width - 140f, 63f), title, pickerHeadingStyle);
+            GUI.Label(new Rect(panel.x + 70f, panel.y + 108f, panel.width - 140f, 32f), subtitle, pickerHintStyle);
+        }
+
+        private void DrawOrnateFrame(Rect rect)
+        {
+            Fill(new Rect(rect.x + 22f, rect.y + 22f, rect.width - 44f, rect.height - 44f),
+                new Color(0.025f, 0.045f, 0.105f, 0.98f));
+            if (buttonSheet == null) return;
+            // Every edge shares its source coordinates and thickness with its
+            // adjoining corners. This preserves the rail alignment at each seam.
+            const float corner = 64f;
+            DrawButtonSprite(new Rect(rect.x + 20f, rect.y + 20f, rect.width - 40f, rect.height - 40f),
+                new Rect(105f, 625f, 360f, 100f), 0.65f);
+            DrawButtonSprite(new Rect(rect.x + corner, rect.y, rect.width - 2f * corner, corner), new Rect(152f, 568f, 2f, 64f), 1f);
+            DrawButtonSprite(new Rect(rect.x + corner, rect.yMax - corner, rect.width - 2f * corner, corner), new Rect(175f, 726f, 2f, 64f), 1f);
+            DrawButtonSprite(new Rect(rect.x, rect.y + corner, corner, rect.height - 2f * corner), new Rect(24f, 638f, 64f, 64f), 1f);
+            DrawButtonSprite(new Rect(rect.xMax - corner, rect.y + corner, corner, rect.height - 2f * corner), new Rect(467f, 638f, 64f, 64f), 1f);
+            DrawButtonSprite(new Rect(rect.x, rect.y, corner, corner), new Rect(24f, 568f, 64f, 64f), 1f);
+            DrawButtonSprite(new Rect(rect.xMax - corner, rect.y, corner, corner), new Rect(467f, 568f, 64f, 64f), 1f);
+            DrawButtonSprite(new Rect(rect.x, rect.yMax - corner, corner, corner), new Rect(24f, 726f, 64f, 64f), 1f);
+            DrawButtonSprite(new Rect(rect.xMax - corner, rect.yMax - corner, corner, corner), new Rect(467f, 726f, 64f, 64f), 1f);
+            // The crest starts 39 atlas pixels above the frame's top slice.
+            // Preserve that offset so both portions share the same gold rail.
+            DrawButtonSprite(new Rect(rect.center.x - 64f, rect.y - 39f, 128f, 86f), new Rect(215f, 529f, 128f, 86f), 1f);
+        }
+
+        private void DrawPickerCard(Rect rect, string title, string subtitle, string scene,
+            Sprite preview, bool active, bool playing, bool available, bool songCard = false)
+        {
+            Color previous = GUI.color;
+            GUI.color = available ? Color.white : new Color(0.65f, 0.65f, 0.7f, 0.85f);
+            if (buttonSheet != null)
+            {
+                if (pickerBanner == null) pickerBanner = IsolateBanner(buttonSheet, out pickerPlayingBanner);
+                GUI.DrawTexture(rect, playing ? pickerPlayingBanner : pickerBanner, ScaleMode.StretchToFill, true);
+            }
+            else DrawFramedPanel(rect, new Color(0.76f, 0.53f, 0.22f), new Color(0.04f, 0.1f, 0.2f), 2f);
+            Rect illustration = new Rect(rect.x + 20f, rect.y + 13f, 96f, rect.height - 26f);
+            if (preview != null) DrawSpritePreview(illustration, preview);
+            else DrawPickerIllustration(illustration, scene);
+            GUI.color = previous;
+            if (songCard)
+            {
+                Rect titleRect = new Rect(rect.x + 134f, rect.y + 20f,
+                    rect.width - 134f - (playing ? 90f : 40f), rect.height - 40f);
+                pickerSongTitleStyle.fontSize = 25;
+                float textWidth = pickerSongTitleStyle.CalcSize(new GUIContent(title)).x;
+                if (textWidth > titleRect.width)
+                    pickerSongTitleStyle.fontSize = Mathf.Max(16, Mathf.FloorToInt(25f * titleRect.width / textWidth));
+                GUI.Label(titleRect, title, pickerSongTitleStyle);
+            }
+            else
+            {
+                GUI.Label(new Rect(rect.x + 134f, rect.y + 25f, rect.width - 190f, 37f), title, pickerTitleStyle);
+                GUI.Label(new Rect(rect.x + 134f, rect.y + 65f, rect.width - 190f, 26f), subtitle, pickerTagStyle);
+            }
+            if (available && playing)
+            {
+                Rect indicator = new Rect(rect.xMax - 72f, rect.center.y - 14f, 22f, 28f);
+                for (int i = 0; i < 3; i++)
+                {
+                    float height = 7f + (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 5f + i * 1.7f)) * 18f;
+                    Fill(new Rect(indicator.x + i * 7f, indicator.yMax - height, 4f, height), new Color(0.4f, 0.95f, 1f));
+                }
+            }
+            if (active && available)
+            {
+                if (buttonSheet != null)
+                {
+                    DrawButtonSpriteTinted(new Rect(rect.x + 4f, rect.y + 4f, 36f, 40f), new Rect(44f, 800f, 104f, 116f), 0.55f);
+                    DrawButtonSpriteTinted(new Rect(rect.xMax - 40f, rect.yMax - 44f, 36f, 40f), new Rect(44f, 800f, 104f, 116f), 0.45f);
+                }
+            }
+        }
+
+        private static Texture2D IsolateBanner(Texture2D atlas, out Texture2D playingTexture)
+        {
+            const int left = 850, top = 600, width = 306, height = 110;
+            Color[] pixels = atlas.GetPixels(left, atlas.height - top - height, width, height);
+            bool[] connected = new bool[pixels.Length];
+            Queue<int> pending = new Queue<int>();
+            // The opaque centre belongs to the banner. Keep its connected
+            // silhouette and discard glow fragments from neighbouring buttons.
+            int seed = (height / 2) * width + width / 2;
+            connected[seed] = true;
+            pending.Enqueue(seed);
+            while (pending.Count > 0)
+            {
+                int index = pending.Dequeue();
+                int x = index % width, y = index / width;
+                for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int nx = x + dx, ny = y + dy;
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                    int neighbour = ny * width + nx;
+                    // Faint glow can bridge the banner to neighbouring art.
+                    // Follow its solid silhouette first, then restore its fringe.
+                    if (connected[neighbour] || pixels[neighbour].a <= 0.2f) continue;
+                    connected[neighbour] = true;
+                    pending.Enqueue(neighbour);
+                }
+            }
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                if (connected[i]) continue;
+                int x = i % width, y = i / width;
+                bool fringe = false;
+                for (int dy = -1; dy <= 1 && !fringe; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int nx = x + dx, ny = y + dy;
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                    if (connected[ny * width + nx]) { fringe = true; break; }
+                }
+                if (!fringe) pixels[i] = Color.clear;
+            }
+            Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                name = "Isolated menu banner",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            texture.SetPixels(pixels);
+            texture.Apply(false, true);
+            // Recolour the warm metal pixels; retain the navy interior and the
+            // original highlights and shading of the illustrated frame.
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                Color pixel = pixels[i];
+                if (pixel.a <= 0f || pixel.r <= pixel.b * 1.4f || pixel.g <= pixel.b * 1.2f) continue;
+                Color.RGBToHSV(pixel, out _, out float saturation, out float brightness);
+                Color cyan = Color.HSVToRGB(0.51f, Mathf.Clamp(saturation, 0.45f, 0.75f), brightness);
+                cyan.a = pixel.a;
+                pixels[i] = cyan;
+            }
+            playingTexture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                name = "Playing song cyan frame",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            playingTexture.SetPixels(pixels);
+            playingTexture.Apply(false, true);
+            return texture;
+        }
+
+        private void OnDestroy()
+        {
+            if (pickerBanner != null) Destroy(pickerBanner);
+            if (pickerPlayingBanner != null) Destroy(pickerPlayingBanner);
+        }
+
+        private void DrawPickerIllustration(Rect rect, string scene)
+        {
+            if (iconSheet == null) return;
+            Rect source;
+            switch (scene)
+            {
+                case "GreveGast": source = new Rect(785f, 18f, 333f, 338f); break;
+                case "Spokjakten": case "SimonSager": source = new Rect(525f, 26f, 267f, 323f); break;
+                case "Matematikbanan": case "Bokstavsjakten": case "Gnista": source = new Rect(1125f, 20f, 264f, 340f); break;
+                case "Kitchen": source = new Rect(811f, 786f, 180f, 85f); break;
+                case "Monsterjakten": source = new Rect(1159f, 640f, 137f, 108f); break;
+                case "Formverkstan": source = new Rect(1420f, 420f, 221f, 168f); break;
+                default: source = new Rect(1290f, 410f, 142f, 195f); break;
+            }
+            DrawTexturePartContained(rect, iconSheet, source);
+            if (scene == "Matematikbanan" || scene == "Bokstavsjakten")
+                GUI.Label(new Rect(rect.x, rect.yMax - 26f, rect.width, 26f),
+                    scene == "Matematikbanan" ? "1 2 3" : "ABC", pickerHintStyle);
+        }
+
+        private static void DrawSpritePreview(Rect rect, Sprite sprite)
+        {
+            Rect pixels = sprite.textureRect;
+            float scale = Mathf.Min(rect.width / pixels.width, rect.height / pixels.height);
+            Rect fitted = new Rect(rect.center.x - pixels.width * scale * 0.5f,
+                rect.center.y - pixels.height * scale * 0.5f, pixels.width * scale, pixels.height * scale);
+            GUI.DrawTextureWithTexCoords(fitted, sprite.texture, new Rect(pixels.x / sprite.texture.width,
+                pixels.y / sprite.texture.height, pixels.width / sprite.texture.width, pixels.height / sprite.texture.height));
+        }
+
+        private void DrawPickerBack(Rect rect)
+        {
+            playRect = ToScreen(rect, menuScale, menuOffsetX, menuOffsetY);
+            if (buttonSheet != null)
+                DrawButtonSprite(rect, new Rect(1154f, 689f, 275f, 96f), 1f);
+            else GUI.Label(rect, "Tillbaka", footerStyle);
+            if (buttonSheet != null && (rect.Contains(DesignMousePosition()) || hoverTarget == -2)) DrawSparkles(rect, 0.55f);
+            if (InvisibleButton(rect)) CloseOverlay();
         }
 
         private void CloseOverlay()
@@ -771,7 +995,7 @@ namespace KinectKids3D.Platform
                 GUI.DrawTexture(new Rect(point.x - size * 0.5f, point.y - size * 0.5f, size, size), Texture2D.whiteTexture);
                 if (hand.HandId == hoverHand)
                 {
-                    float required = hoverTarget == -1 ? 1f : 0.42f;
+                    float required = DwellDuration;
                     GUI.color = Color.white;
                     GUI.DrawTexture(new Rect(point.x - size * 0.6f, point.y + size * 0.62f,
                         size * 1.2f * Mathf.Clamp01(dwell / required), 7f), Texture2D.whiteTexture);
@@ -806,6 +1030,16 @@ namespace KinectKids3D.Platform
             kinectTitleStyle = NewStyle(Mathf.Clamp(Screen.height / 62, 14, 22), FontStyle.Bold, TextAnchor.MiddleLeft, Color.white);
             kinectDetailStyle = NewStyle(Mathf.Clamp(Screen.height / 78, 12, 17), FontStyle.Normal, TextAnchor.UpperLeft, Color.white);
             kinectDetailStyle.wordWrap = true;
+            // Overlay coordinates are already scaled by GUI.matrix. Keep font
+            // sizes in design pixels so text scales once with the artwork.
+            pickerTitleStyle = NewStyle(25, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(1f, 0.95f, 0.83f));
+            pickerTitleStyle.clipping = TextClipping.Clip;
+            pickerSongTitleStyle = new GUIStyle(pickerTitleStyle) { wordWrap = false };
+            pickerTagStyle = NewStyle(16, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.7f, 0.8f, 0.94f));
+            pickerHeadingStyle = NewStyle(42, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(1f, 0.79f, 0.35f));
+            pickerBodyStyle = NewStyle(26, FontStyle.Normal, TextAnchor.UpperLeft, new Color(0.88f, 0.91f, 0.97f));
+            pickerBodyStyle.wordWrap = true;
+            pickerHintStyle = NewStyle(20, FontStyle.Normal, TextAnchor.MiddleCenter, new Color(0.72f, 0.82f, 0.93f));
             kinectButtonStyle = new GUIStyle(GUI.skin.button)
             {
                 fontSize = Mathf.Clamp(Screen.height / 78, 12, 17),
