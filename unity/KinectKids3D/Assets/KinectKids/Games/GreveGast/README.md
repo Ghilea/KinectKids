@@ -50,6 +50,35 @@ The newly cut `new_*` environment sprites supply corridor decorations, fog and
 the illustrated kitchen vista. Missing sequences still fall back to the
 earlier single-pose sprites.
 
+## Song timeline (work in progress)
+
+The active runner uses `Resources/Audio/Music/GreveGastsJakt.wav` as its
+non-looping master. The editor creates `Assets/Resources/GastSong.asset` and
+the `KinectKids/Greve Gast/Cue Editor` window edits sections, cue timing,
+global/section/cue offsets, vocal marks and lead windows. Runtime cue position
+is read from `AudioSource.timeSamples / clip.frequency`; only cues with a vocal
+time and a non-`Untimed` status are dispatched. The 21.5 s SPRING mark is an
+estimate from Dennis and is visibly labelled as such. Untimed HOPPA, DUCKA,
+VÄNSTER and HÖGER markers are seeded for the first refrain and do not trigger
+gameplay. Existing keyboard and Kinect controls continue to operate the
+runner.
+
+Open **KinectKids → Greve Gast → Cue Editor** to edit the timeline. Use its
+playhead to add voice marks, set a cue's status after checking the WAV, and
+adjust the independent offsets. The editor displays the decoded master
+waveform and can validate IDs and cue bounds. Sections 4–17 deliberately have
+no fabricated boundaries. The former `Resources/GreveGast/GreveGastTimeline.json`
+is an older estimate-only plan; it is not authoritative runtime data.
+
+The active game's existing sprite sequences animate the chase, player jump,
+slide, lane changes, singing, and duck reaction. The source artwork does not
+provide a separately rigged face, mouth, arms, hat, and coat, so the remaining
+fine-grained Gast gestures are still whole-sprite prototypes. The full song
+cue pass, authored cue-driven hazard placement/result grading, connected pause
+and seek lifecycle, and visual in-Unity review remain unfinished; don't mark
+the corresponding cues Verified until they have been listened to and played
+in the scene.
+
 ## Controls
 
 Same as the platform (`W`/up = jump, `S`/down = duck, `A`/`D` or arrows = weave,

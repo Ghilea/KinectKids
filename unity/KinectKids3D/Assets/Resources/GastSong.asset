@@ -1,0 +1,251 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 829726e723244cb3ae5e17b02e71a112, type: 3}
+  m_Name: GastSong
+  m_EditorClassIdentifier:
+  master: {fileID: 8300000, guid: 9067d3fe7b8cded4eac52700f1c59e3b, type: 3}
+  globalOffsetSeconds: 0
+  sections:
+  - id: section_01
+    title: Introduktion
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_02
+    title: Första versen
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_03
+    title: Första refrängen
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_04
+    title: Instrumental jakt
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_05
+    title: Köket
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_06
+    title: Rörelseföljd
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_07
+    title: Refräng och vasen
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_08
+    title: Galleriet
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_09
+    title: Ny rörelsepaus
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_10
+    title: Falsk trygghet
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_11
+    title: Källaren
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_12
+    title: Kommandon och svar
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_13
+    title: Sista uppbyggnaden
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_14
+    title: Slutrefräng
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_15
+    title: Finalrörelser
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_16
+    title: Nedräkning
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  - id: section_17
+    title: Slutet
+    hasStartTime: 0
+    startSeconds: 0
+    startTimingStatus: 0
+    hasEndTime: 0
+    endSeconds: 0
+    endTimingStatus: 0
+    offsetSeconds: 0
+  cues:
+  - id: intro_spring_01
+    sectionId: section_01
+    lyric: SPRING (startmarkör från Dennis)
+    gameplayCommand: 0
+    hasVocalTime: 1
+    vocalTimeSeconds: 21.5
+    timingStatus: 1
+    cueOffsetSeconds: 0
+    gestureLeadSeconds: 0.45
+    warningLeadSeconds: 1.2
+    impactOffsetSeconds: 0.8
+    windowBeforeSeconds: 0.35
+    windowAfterSeconds: 0.35
+    action: 3
+    command: 5
+    reactionDurationSeconds: 0.8
+  - id: command_jump_01
+    sectionId: section_03
+    lyric: HOPPA
+    gameplayCommand: 1
+    hasVocalTime: 0
+    vocalTimeSeconds: 0
+    timingStatus: 0
+    cueOffsetSeconds: 0
+    gestureLeadSeconds: 0.45
+    warningLeadSeconds: 1.2
+    impactOffsetSeconds: 0.8
+    windowBeforeSeconds: 0.35
+    windowAfterSeconds: 0.35
+    action: 6
+    command: 1
+    reactionDurationSeconds: 0.8
+  - id: command_slide_01
+    sectionId: section_03
+    lyric: DUCKA
+    gameplayCommand: 1
+    hasVocalTime: 0
+    vocalTimeSeconds: 0
+    timingStatus: 0
+    cueOffsetSeconds: 0
+    gestureLeadSeconds: 0.45
+    warningLeadSeconds: 1.2
+    impactOffsetSeconds: 0.8
+    windowBeforeSeconds: 0.35
+    windowAfterSeconds: 0.35
+    action: 7
+    command: 2
+    reactionDurationSeconds: 0.8
+  - id: command_left_01
+    sectionId: section_03
+    lyric: VÄNSTER
+    gameplayCommand: 1
+    hasVocalTime: 0
+    vocalTimeSeconds: 0
+    timingStatus: 0
+    cueOffsetSeconds: 0
+    gestureLeadSeconds: 0.45
+    warningLeadSeconds: 1.2
+    impactOffsetSeconds: 0.8
+    windowBeforeSeconds: 0.35
+    windowAfterSeconds: 0.35
+    action: 8
+    command: 3
+    reactionDurationSeconds: 0.8
+  - id: command_right_01
+    sectionId: section_03
+    lyric: HÖGER
+    gameplayCommand: 1
+    hasVocalTime: 0
+    vocalTimeSeconds: 0
+    timingStatus: 0
+    cueOffsetSeconds: 0
+    gestureLeadSeconds: 0.45
+    warningLeadSeconds: 1.2
+    impactOffsetSeconds: 0.8
+    windowBeforeSeconds: 0.35
+    windowAfterSeconds: 0.35
+    action: 9
+    command: 4
+    reactionDurationSeconds: 0.8

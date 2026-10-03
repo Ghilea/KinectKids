@@ -99,6 +99,12 @@ namespace KinectKids.Games.GreveGast
         private Sprite[] greveDuckReactFrames;
         private GreveGastBodyInput body;
         private AudioSource music;
+        private GastSongClock songClock;
+        private GastSongAsset gastSong;
+        private GastCueTimeline gastCueTimeline;
+        private float lastSongCueTime;
+        private float lastGestureCueTime = -1f;
+        private GastCueAction activeGestureCue;
         private EnvironmentTheme requestedTheme = EnvironmentTheme.CastleCorridor;
         private EnvironmentTheme activeTheme = EnvironmentTheme.CastleCorridor;
         private EnvironmentTheme transitionFrom = EnvironmentTheme.CastleCorridor;
@@ -1275,6 +1281,7 @@ namespace KinectKids.Games.GreveGast
                 return;
             }
             elapsed += dt;
+            TickSongCues();
             ReadInput(dt);
             DriveWorld(dt);
             TickThemeSequence();
@@ -1607,6 +1614,19 @@ namespace KinectKids.Games.GreveGast
                 if (chase >= 0.94f) greveFinalReachPose = true;
                 else if (chase <= 0.86f) greveFinalReachPose = false;
                 if (greveFinalReachPose) sprite = ResolveGreve("reach");
+                else if (lastGestureCueTime >= 0f && songClock != null && songClock.TimeSeconds - lastGestureCueTime < 1.1f)
+                {
+                    switch (activeGestureCue)
+                    {
+                        case GastCueAction.ChaseLaunch: sprite = ResolveGreve("threaten"); break;
+                        case GastCueAction.CommandJump: sprite = ResolveGreve("cast"); break;
+                        case GastCueAction.CommandSlide: sprite = ResolveGreve("lean"); break;
+                        case GastCueAction.CommandLaneLeft:
+                        case GastCueAction.CommandLaneRight: sprite = ResolveGreve("cast"); break;
+                        default: sprite = nearPlayer ? ResolveGreve("chase_near") :
+                            (greveFlyFrames.Length > 0 ? Frame(greveFlyFrames, elapsed, 7.5f, true) : ResolveGreve("chase")); break;
+                    }
+                }
                 else if (nearPlayer) sprite = ResolveGreve("chase_near");
                 else if (playerMotion == PlayerMotion.Ducking && greveDuckReactFrames.Length > 0)
                 {
@@ -1866,10 +1886,44 @@ namespace KinectKids.Games.GreveGast
             if (clip == null) clip = Resources.Load<AudioClip>("Audio/CustomRideMusic");
             if (clip == null) return;
             music = gameObject.AddComponent<AudioSource>();
-            music.clip = clip; music.loop = true; music.playOnAwake = false; music.volume = 0f; music.spatialBlend = 0f;
-            // Keep the soundtrack clock aligned with the scene from frame one.
-            // The player hears it only after leaving the wall opening.
-            music.Play();
+            music.clip = clip; music.loop = false; music.playOnAwake = false; music.volume = 0f; music.spatialBlend = 0f;
+            songClock = new GastSongClock(music, clip);
+            gastSong = Resources.Load<GastSongAsset>("GastSong");
+            if (gastSong != null)
+            {
+                gastCueTimeline = new GastCueTimeline(gastSong);
+                gastCueTimeline.Cue += OnGastCue;
+            }
+            songClock.PlayFrom(0f);
+        }
+
+        private void TickSongCues()
+        {
+            if (music == null || gastCueTimeline == null || music.clip == null) return;
+            float now = songClock.TimeSeconds;
+            if (now < lastSongCueTime)
+            {
+                gastCueTimeline.RestoreAt(now);
+                lastSongCueTime = now;
+                return;
+            }
+            gastCueTimeline.Tick(lastSongCueTime, now);
+            lastSongCueTime = now;
+        }
+
+        private void OnGastCue(GastSongCue cue, string phase)
+        {
+            if (phase == "gesture")
+            {
+                activeGestureCue = cue.action;
+                lastGestureCueTime = songClock.TimeSeconds;
+            }
+            else if (phase == "warning" && cue.gameplayCommand)
+            {
+                // Timed obstacle authoring is deliberately driven by song cues;
+                // untimed commands never enter this path.
+                Debug.Log("Gast cue warning: " + cue.id + " / " + cue.command, this);
+            }
         }
 
         private static void EnsureInputManager()
