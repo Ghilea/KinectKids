@@ -30,6 +30,11 @@ eller mipmapping används.
 
 Introduktionen följer ljudets klocka. Med SPRING-markören vid 21 sekunder börjar
 taunt vid 12 sekunder, greven lämnar tavlan vid 14,5 och övergår till idle vid 16.
+Kameran börjar med tavlan nära och centrerad. Vid cirka 4 sekunder börjar en
+mjuk utzoomning till en gemensam vy över tavlan och spelaren, klar vid 10,2.
+Den vyn hålls under framträdandet. Från idle vid 16 sekunder glider kameran
+till spelvyn, klar vid 20. Kamerans position, rotation och synfält återställs
+exakt före jaktstart. Rumstext och Kinect-status visas först när jakten börjar.
 Vid 21 sekunder startar både jakten och `shout_run`, utan gestförsprång.
 Starttiden definieras i `ApplyIntroTiming` i GastSongEditor och läses från samma
 markör av spelet. Ändringar i markörens effektiva tid flyttar även framträdandet.

@@ -159,7 +159,12 @@ namespace KinectKids.Games.GreveGast
         private Light introPoofLight;
         private bool chaseStarted;
         private float introElapsed;
-        private const float IntroFadeDuration = 2.2f;
+        private const float IntroFadeDuration = 0.8f;
+        private const float IntroCloseFieldOfView = 32f;
+        private const float IntroMediumFieldOfView = 52f;
+        private Vector3 introCloseCameraPosition;
+        private Vector3 introMediumCameraPosition;
+        private Quaternion introMediumCameraRotation;
         private const float FinalStageWarningDelay = 2.5f;
         private const float FinalStageCaptureDelay = 15f;
         private const float CaptureFadeDuration = 2.5f;
@@ -196,7 +201,7 @@ namespace KinectKids.Games.GreveGast
 
         private void BuildCamera()
         {
-            GameObject cameraGo = new GameObject("Locked Perspective Camera");
+            GameObject cameraGo = new GameObject("Intro and gameplay camera");
             cameraGo.tag = "MainCamera";
             cameraGo.transform.SetParent(transform, false);
             cameraGo.transform.localPosition = cameraPosition;
@@ -442,6 +447,8 @@ namespace KinectKids.Games.GreveGast
 
         private void BeginIntro()
         {
+            PrepareIntroCamera();
+            DriveIntroCamera();
             worldSpeed = 0f;
             if (darknessRoot != null) darknessRoot.gameObject.SetActive(false);
             if (greve != null) greve.gameObject.SetActive(false);
@@ -541,10 +548,56 @@ namespace KinectKids.Games.GreveGast
                     introPoofLight.intensity = 2.5f * Mathf.Sin(Mathf.PI * Mathf.Clamp01(
                         (introElapsed - emergeAt) / 1.2f));
             }
+            DriveIntroCamera();
+        }
+
+        private void PrepareIntroCamera()
+        {
+            Vector3 portraitCenter = introPortrait != null
+                ? transform.InverseTransformPoint(introPortrait.bounds.center)
+                : new Vector3(0f, 6.7f, IntroWallZ - 0.85f);
+            Vector3 portraitSize = introPortrait != null ? introPortrait.bounds.size : new Vector3(3.8f, 4.3f, 0f);
+            float halfAngle = IntroCloseFieldOfView * 0.5f * Mathf.Deg2Rad;
+            // Fit the painting tightly in both landscape and portrait screens.
+            float distance = Mathf.Max(portraitSize.y, portraitSize.x / Mathf.Max(0.1f, worldCamera.aspect)) /
+                (2f * Mathf.Tan(halfAngle) * 0.90f);
+            introCloseCameraPosition = portraitCenter - Vector3.forward * distance;
+            introMediumCameraPosition = Vector3.Lerp(cameraPosition, portraitCenter, 0.18f);
+            introMediumCameraPosition.y = Mathf.Max(cameraPosition.y, playerHeight * 1.65f);
+            Vector3 playerCenter = new Vector3(0f, playerHeight * 0.5f, playerStartZ);
+            Vector3 mediumFocus = Vector3.Lerp(portraitCenter, playerCenter, 0.58f);
+            introMediumCameraRotation = Quaternion.LookRotation(mediumFocus - introMediumCameraPosition, Vector3.up);
+        }
+
+        private void DriveIntroCamera()
+        {
+            if (worldCamera == null) return;
+            float revealStart = Mathf.Min(4f, IntroPortraitStart * 0.33f);
+            float revealEnd = Mathf.Min(IntroWalkEnd, IntroPortraitStart - 0.8f);
+            float gameplayZoomStart = IntroGreveEmerge + GreveEmergenceDuration;
+            float gameplayZoomEnd = IntroChaseStart - 1f;
+            if (introElapsed < gameplayZoomStart)
+            {
+                float reveal = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(revealStart, revealEnd, introElapsed));
+                worldCamera.transform.localPosition = Vector3.Lerp(introCloseCameraPosition, introMediumCameraPosition, reveal);
+                worldCamera.transform.localRotation = Quaternion.Slerp(Quaternion.identity, introMediumCameraRotation, reveal);
+                worldCamera.fieldOfView = Mathf.Lerp(IntroCloseFieldOfView, IntroMediumFieldOfView, reveal);
+            }
+            else
+            {
+                float zoom = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(gameplayZoomStart, gameplayZoomEnd, introElapsed));
+                worldCamera.transform.localPosition = Vector3.Lerp(introMediumCameraPosition, cameraPosition, zoom);
+                worldCamera.transform.localRotation = Quaternion.Slerp(introMediumCameraRotation, Quaternion.identity, zoom);
+                worldCamera.fieldOfView = Mathf.Lerp(IntroMediumFieldOfView, fieldOfView, zoom);
+            }
         }
 
         private void BeginChase()
         {
+            // Restore the exact configured gameplay view before input and hazards begin.
+            worldCamera.transform.localPosition = cameraPosition;
+            worldCamera.transform.localRotation = Quaternion.identity;
+            worldCamera.fieldOfView = fieldOfView;
             chaseStarted = true;
             elapsed = 0f;
             worldSpeed = Mathf.Max(0f, corridorSpeed);
@@ -2182,7 +2235,7 @@ namespace KinectKids.Games.GreveGast
                 hud = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Clamp(Screen.height / 40, 16, 30), fontStyle = FontStyle.Bold };
                 hud.normal.textColor = Color.white;
             }
-            if (!captureStarted)
+            if (!captureStarted && chaseStarted)
             {
                 GUI.Label(new Rect(30, chaseStarted ? 94f : 24f, 1050, 34), "RUM: " + ThemeLabel(activeTheme), hud);
 
