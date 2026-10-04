@@ -44,9 +44,9 @@ namespace KinectKids.Games.GreveGast
         public float cueOffsetSeconds;
         public float gestureLeadSeconds = 0.45f;
         public float warningLeadSeconds = 1.2f;
-        public float impactOffsetSeconds = 0.8f;
+        public float impactOffsetSeconds;
         public float windowBeforeSeconds = 0.35f;
-        public float windowAfterSeconds = 0.35f;
+        public float windowAfterSeconds = 0.5f;
         public GastCueAction action;
         public GastGameplayCommand command;
         public float reactionDurationSeconds = 0.8f;

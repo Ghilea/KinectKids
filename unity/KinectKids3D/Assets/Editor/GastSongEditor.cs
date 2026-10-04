@@ -6,12 +6,19 @@ namespace KinectKids3D.Editor
 {
     public sealed class GastSongEditor : EditorWindow
     {
+        private const string ActiveSongPath = "Assets/Resources/GastSong.asset";
         private GastSongAsset song;
         private AudioSource preview;
         private Vector2 scroll;
         private string sectionFilter = "All";
         private float[] waveform;
         private GastSongAsset waveformOwner;
+
+        private void OnEnable()
+        { song = AssetDatabase.LoadAssetAtPath<GastSongAsset>(ActiveSongPath); }
+
+        private void Update()
+        { if (Application.isPlaying || (preview != null && preview.isPlaying)) Repaint(); }
 
         [MenuItem("KinectKids/Greve Gast/Cue Editor")]
         private static void Open() => GetWindow<GastSongEditor>("Gast Cue Editor");
@@ -31,15 +38,33 @@ namespace KinectKids3D.Editor
             EditorApplication.delayCall += () =>
             {
                 const string path = "Assets/Resources/GastSong.asset";
-                if (AssetDatabase.LoadAssetAtPath<GastSongAsset>(path) != null) return;
-                CreateSongAsset();
-                Debug.Log("Created editable Greve Gast song timeline at " + path + ".");
+                GastSongAsset asset = AssetDatabase.LoadAssetAtPath<GastSongAsset>(path);
+                if (asset == null)
+                {
+                    CreateSongAsset();
+                    Debug.Log("Created editable Greve Gast song timeline at " + path + ".");
+                }
+                else if (ApplyCommandTimes(asset))
+                {
+                    EditorUtility.SetDirty(asset);
+                    AssetDatabase.SaveAssetIfDirty(asset);
+                    Debug.Log("Updated active GastSong command times from GastSongEditor.cs.", asset);
+                }
             };
         }
 
         private void OnGUI()
         {
-            song = (GastSongAsset)EditorGUILayout.ObjectField("Song data", song, typeof(GastSongAsset), false);
+            CorridorRunnerDirector runner = Application.isPlaying
+                ? Object.FindFirstObjectByType<CorridorRunnerDirector>() : null;
+            song = runner != null && runner.SongData != null ? runner.SongData
+                : AssetDatabase.LoadAssetAtPath<GastSongAsset>(ActiveSongPath);
+            using (new EditorGUI.DisabledScope(true))
+                EditorGUILayout.ObjectField("Active game timeline", song, typeof(GastSongAsset), false);
+            EditorGUILayout.LabelField("Asset", AssetDatabase.GetAssetPath(song));
+            EditorGUILayout.HelpBox("Kommandonas sångtider ändras på ett ställe: ApplyCommandTimes i GastSongEditor.cs. De förs automatiskt över till denna asset efter kompilering. Övriga inställningar här sparas automatiskt.", MessageType.Info);
+            if (runner != null)
+                EditorGUILayout.LabelField("Game song position", TimeLabel(runner.SongTimeSeconds));
             if (song == null)
             {
                 EditorGUILayout.HelpBox("Create the editable song timeline. Audio master: Audio/Music/GreveGastsJakt.wav.", MessageType.Info);
@@ -73,6 +98,7 @@ namespace KinectKids3D.Editor
                 EditorGUI.DrawRect(rect, new Color(0.1f, 0.1f, 0.1f));
                 DrawWaveform(rect);
             }
+            EditorGUI.BeginChangeCheck();
             song.globalOffsetSeconds = EditorGUILayout.FloatField("Global offset", song.globalOffsetSeconds);
             scroll = EditorGUILayout.BeginScrollView(scroll);
             EditorGUILayout.LabelField("Sections", EditorStyles.boldLabel);
@@ -108,16 +134,24 @@ namespace KinectKids3D.Editor
                     cue.sectionId = EditorGUILayout.TextField("Section", cue.sectionId);
                     cue.lyric = EditorGUILayout.TextField("Lyric / note", cue.lyric);
                     cue.hasVocalTime = EditorGUILayout.Toggle("Has vocal time", cue.hasVocalTime);
-                    using (new EditorGUI.DisabledScope(!cue.hasVocalTime))
+                    bool sourceTimed = IsSourceTimedCommand(cue.id);
+                    using (new EditorGUI.DisabledScope(!cue.hasVocalTime || sourceTimed))
                     {
                         cue.vocalTimeSeconds = EditorGUILayout.FloatField("Vocal time (s)", cue.vocalTimeSeconds);
-                        EditorGUILayout.LabelField("Effective time", TimeLabel(cue.EffectiveTime(song)));
                     }
+                    if (sourceTimed) EditorGUILayout.LabelField("Time source", "GastSongEditor.cs / ApplyCommandTimes");
                     cue.timingStatus = (GastTimingStatus)EditorGUILayout.EnumPopup("Timing", cue.timingStatus);
                     cue.cueOffsetSeconds = EditorGUILayout.FloatField("Cue offset", cue.cueOffsetSeconds);
                     cue.gestureLeadSeconds = EditorGUILayout.FloatField("Gesture lead", cue.gestureLeadSeconds);
                     cue.warningLeadSeconds = EditorGUILayout.FloatField("Warning lead", cue.warningLeadSeconds);
                     cue.impactOffsetSeconds = EditorGUILayout.FloatField("Impact offset", cue.impactOffsetSeconds);
+                    float vocal = cue.EffectiveTime(song);
+                    EditorGUILayout.LabelField("Vocal including offsets", TimeLabel(vocal));
+                    if (cue.gameplayCommand)
+                    {
+                        EditorGUILayout.LabelField("Obstacle appears", TimeLabel(vocal - cue.warningLeadSeconds));
+                        EditorGUILayout.LabelField("Meets player", TimeLabel(vocal + cue.impactOffsetSeconds));
+                    }
                     cue.windowBeforeSeconds = EditorGUILayout.FloatField("Window before", cue.windowBeforeSeconds);
                     cue.windowAfterSeconds = EditorGUILayout.FloatField("Window after", cue.windowAfterSeconds);
                     cue.action = (GastCueAction)EditorGUILayout.EnumPopup("Action", cue.action);
@@ -126,12 +160,17 @@ namespace KinectKids3D.Editor
                 }
             }
             EditorGUILayout.EndScrollView();
-            if (GUI.changed) { EditorUtility.SetDirty(song); }
+            if (EditorGUI.EndChangeCheck())
+            {
+                EditorUtility.SetDirty(song);
+                AssetDatabase.SaveAssetIfDirty(song);
+            }
         }
 
         private AudioSource EnsurePreview()
         {
             if (preview == null) { var go = EditorUtility.CreateGameObjectWithHideFlags("Gast song preview", HideFlags.HideAndDontSave, typeof(AudioSource)); preview = go.GetComponent<AudioSource>(); preview.clip = song.master; preview.loop = false; }
+            if (preview.clip != song.master) { preview.Stop(); preview.clip = song.master; }
             return preview;
         }
         private void DrawWaveform(Rect rect)
@@ -173,6 +212,7 @@ namespace KinectKids3D.Editor
             float t = preview != null ? preview.time : 0f;
             song.cues.Add(new GastSongCue { id = "cue_" + System.Guid.NewGuid().ToString("N").Substring(0, 8), sectionId = "section_01", lyric = "", hasVocalTime = true, vocalTimeSeconds = t, timingStatus = GastTimingStatus.Estimated });
             EditorUtility.SetDirty(song);
+            AssetDatabase.SaveAssetIfDirty(song);
         }
         private void ValidateSong()
         {
@@ -197,14 +237,41 @@ namespace KinectKids3D.Editor
             string[] names = { "Introduktion", "Första versen", "Första refrängen", "Instrumental jakt", "Köket", "Rörelseföljd", "Refräng och vasen", "Galleriet", "Ny rörelsepaus", "Falsk trygghet", "Källaren", "Kommandon och svar", "Sista uppbyggnaden", "Slutrefräng", "Rörelser", "Nedräkning", "Slutet" };
             for (int i = 0; i < names.Length; i++) asset.sections.Add(new GastSongSection { id = "section_" + (i + 1).ToString("00"), title = names[i], hasStartTime = false, hasEndTime = false });
             asset.cues.Add(new GastSongCue { id = "intro_spring_01", sectionId = "section_01", lyric = "SPRING (startmarkör från Dennis)", hasVocalTime = true, vocalTimeSeconds = 21.5f, timingStatus = GastTimingStatus.Estimated, action = GastCueAction.ChaseLaunch, command = GastGameplayCommand.RunStart, gameplayCommand = false });
-            AddUntimed(asset, "command_jump_01", "section_03", "HOPPA", GastCueAction.CommandJump, GastGameplayCommand.Jump);
-            AddUntimed(asset, "command_slide_01", "section_03", "DUCKA", GastCueAction.CommandSlide, GastGameplayCommand.Slide);
-            AddUntimed(asset, "command_left_01", "section_03", "VÄNSTER", GastCueAction.CommandLaneLeft, GastGameplayCommand.LaneLeft);
-            AddUntimed(asset, "command_right_01", "section_03", "HÖGER", GastCueAction.CommandLaneRight, GastGameplayCommand.LaneRight);
+            ApplyCommandTimes(asset);
             const string path = "Assets/Resources/GastSong.asset";
             AssetDatabase.CreateAsset(asset, path);
             AssetDatabase.SaveAssets();
             return asset;
+        }
+        // Edit the four vocal times HERE. Both new and existing assets use them.
+        private static bool ApplyCommandTimes(GastSongAsset asset)
+        {
+            bool changed = false;
+            changed |= AddEstimatedCommand(asset, "command_jump_01", "section_03", "HOPPA", 89.435f, GastCueAction.CommandJump, GastGameplayCommand.Jump);
+            changed |= AddEstimatedCommand(asset, "command_slide_01", "section_03", "DUCKA", 91.295f, GastCueAction.CommandSlide, GastGameplayCommand.Slide);
+            changed |= AddEstimatedCommand(asset, "command_left_01", "section_03", "VÄNSTER", 92.200f, GastCueAction.CommandLaneLeft, GastGameplayCommand.LaneLeft);
+            changed |= AddEstimatedCommand(asset, "command_right_01", "section_03", "HÖGER", 92.750f, GastCueAction.CommandLaneRight, GastGameplayCommand.LaneRight);
+            return changed;
+        }
+        private static bool IsSourceTimedCommand(string id)
+            => id == "command_jump_01" || id == "command_slide_01" || id == "command_left_01" || id == "command_right_01";
+
+        private static bool AddEstimatedCommand(GastSongAsset asset, string id, string section, string lyric, float time, GastCueAction action, GastGameplayCommand command)
+        {
+            foreach (GastSongCue cue in asset.cues)
+            {
+                if (cue == null || cue.id != id) continue;
+                if (cue.vocalTimeSeconds == time) return false;
+                cue.vocalTimeSeconds = time;
+                cue.hasVocalTime = true;
+                cue.timingStatus = GastTimingStatus.Estimated;
+                return true;
+            }
+            asset.cues.Add(new GastSongCue { id = id, sectionId = section, lyric = lyric,
+                timingStatus = GastTimingStatus.Estimated, hasVocalTime = true, vocalTimeSeconds = time,
+                warningLeadSeconds = 0.65f, impactOffsetSeconds = 0.35f, windowBeforeSeconds = 0.7f,
+                action = action, gameplayCommand = true, command = command });
+            return true;
         }
         private static void AddUntimed(GastSongAsset asset, string id, string section, string lyric, GastCueAction action, GastGameplayCommand command)
         { asset.cues.Add(new GastSongCue { id = id, sectionId = section, lyric = lyric, timingStatus = GastTimingStatus.Untimed, hasVocalTime = false, action = action, gameplayCommand = true, command = command }); }

@@ -43,9 +43,9 @@ then transitions back to the old sheet's `chase_near` and extended-hand `reach`
 poses when close. His world-space size also grows with chase distance, while the
 player jump combines its sprite sequence with a full vertical arc. Jump, duck
 and lane gestures are one-shot commands: the full movement completes after the
-Kinect pose or key first triggers it. Ducking freezes the streamed world while
-Greve Gast advances. A failed dodge likewise freezes the world for authored
-fall and get-up sequences before running resumes.
+Kinect pose or key first triggers it. The corridor continues through player
+animations. Song obstacles use absolute audio positions independently of
+world speed, so a duck, recovery or skipped frame cannot delay their arrival.
 The newly cut `new_*` environment sprites supply corridor decorations, fog and
 the illustrated kitchen vista. Missing sequences still fall back to the
 earlier single-pose sprites.
@@ -58,31 +58,99 @@ the `KinectKids/Greve Gast/Cue Editor` window edits sections, cue timing,
 global/section/cue offsets, vocal marks and lead windows. Runtime cue position
 is read from `AudioSource.timeSamples / clip.frequency`; only cues with a vocal
 time and a non-`Untimed` status are dispatched. The 21.5 s SPRING mark is an
-estimate from Dennis and is visibly labelled as such. Untimed HOPPA, DUCKA,
-VÄNSTER and HÖGER markers are seeded for the first refrain and do not trigger
-gameplay. Existing keyboard and Kinect controls continue to operate the
-runner.
+estimate from Dennis and is visibly labelled as such. The first refrain's
+HOPPA, DUCKA, VÄNSTER and HÖGER cues use local word-alignment estimates
+(89.435, 91.295, 91.792 and 92.686 s), all labelled Estimated and adjusted
+by the user during playtesting. Two local Whisper
+passes on the actual WAV placed the command group around 89–93 s; the former
+legacy-plan times (64.3, 69.8, 75.3 and 80.8 s) were in the preceding verse.
+These estimates still require an audible in-scene check before marking them
+VerifiedByListening. They create a warned obstacle,
+evaluate the matching jump/slide/screen-lane input once in its editable timing
+window, and play a short Gast reaction. Existing keyboard and Kinect controls
+operate the same runner and are used for cue grading.
+When song data is loaded, untimed random obstacles are disabled, including
+when the timeline has no timed commands yet. Each timed command displays an
+existing action icon: `haz_20` (jump), `haz_21` (duck), `haz_18` (screen left)
+or `haz_19` (screen right). The HUD no longer lists movement instructions as
+text. Obstacles reach the player at the vocal mark by default; an editable
+impact offset can deliberately shift that point. The first four command
+encounters currently use +0.35 s, so the obstacle arrives after the sung command
+and leaves time to react. Their warning lead is 0.65 s. Closely spaced edited
+commands can have overlapping warnings; the earliest encounter owns the prompt.
+Matching input is latched
+through the full response window, and the result is evaluated at its end.
+These four cues accept input from 0.35 s before to 0.85 s after the vocal mark.
+Their prompts advance shortly after impact, independently of the later grading.
 
 Open **KinectKids → Greve Gast → Cue Editor** to edit the timeline. Use its
 playhead to add voice marks, set a cue's status after checking the WAV, and
 adjust the independent offsets. The editor displays the decoded master
 waveform and can validate IDs and cue bounds. Sections 4–17 deliberately have
 no fabricated boundaries. The former `Resources/GreveGast/GreveGastTimeline.json`
-is an older estimate-only plan; it is not authoritative runtime data.
+is not runtime data; its first-refrain timings are obsolete and no longer seed
+the editable command cues.
+The editor always opens the active `Assets/Resources/GastSong.asset` and shows
+its path, effective vocal time, obstacle appearance time and player encounter
+time. While playing, it displays the runner's actual asset and audio position.
+The four command vocal times have one authoritative editing location:
+`ApplyCommandTimes` in `GastSongEditor.cs`. After script compilation, those
+times are synchronized into the existing asset and saved automatically; the
+same method initializes a new asset. Existing command cues are updated by ID,
+without duplicating them or resetting their other timing settings. Their vocal
+time fields in the editor window are read-only and show the source location.
+Other settings edited in the window are saved automatically. Runtime timing
+edits clear stale obstacles and re-arm the revised
+schedule at the current audio position, including when a warning already fired.
 
 The active game's existing sprite sequences animate the chase, player jump,
 slide, lane changes, singing, and duck reaction. The source artwork does not
 provide a separately rigged face, mouth, arms, hat, and coat, so the remaining
-fine-grained Gast gestures are still whole-sprite prototypes. The full song
-cue pass, authored cue-driven hazard placement/result grading, connected pause
-and seek lifecycle, and visual in-Unity review remain unfinished; don't mark
-the corresponding cues Verified until they have been listened to and played
-in the scene.
+fine-grained Gast gestures are still whole-sprite prototypes. The rest-of-song
+cue pass, connected platform pause lifecycle, and visual in-Unity review remain
+unfinished; don't mark the corresponding cues Verified until they have been
+listened to and played in the scene.
+Backward audio seeks clear stale obstacles and rebuild commands whose warning
+windows are active at the new position. The audio clock holds the clip's final
+position on natural completion instead of returning to zero.
+Playback is audible from sample zero, including the opening greeting; the
+intro crawl no longer mutes the first 3.2 seconds. A streamed clip waiting to
+start holds its initial position rather than dispatching the song's cues early.
+Jump spikes are lifted by their scaled height when vertically flipped around
+their bottom pivot, keeping them above the floor. Warning travel starts beyond
+the camera's floor visibility limit so the whole obstacle is in view.
+A missed song obstacle only causes damage if its rendered bounds were visible
+above the floor at least 0.35 s before impact. Missing art, off-screen placement
+or late dispatch cannot produce an invisible hit.
 
 ## Controls
 
-Same as the platform (`W`/up = jump, `S`/down = duck, `A`/`D` or arrows = weave,
-`Shift` = run). Kinect maps head height to jump/duck and body centre to weave.
+`W`, up arrow or Space = jump; `S` or down arrow = slide; `A`/`D` or arrows =
+change lane. Hold `Shift` or run in place with Kinect to push Greve farther
+back. Corridor and obstacle speed remain constant. Kinect maps head height to
+jump/slide and body centre to lane changes.
+
+Recurring wall doors, generated stair geometry, kitchen hearths and central
+cellar portals are omitted from the streamed corridor until they receive
+authored environment cues. Wall torches remain wall decorations.
+The song-driven runner no longer runs the legacy elapsed-time room cycle.
+It remains in the castle corridor until a real environment change is requested.
+The room label follows the foreground segment around the camera, so a room
+farther down the track cannot change the label prematurely. The stairwell
+placeholder is labelled as a dark passage because it has no staircase.
+
+The wide run-distance indicator is centered at the top of the screen. Its top
+edge illuminates from the same Kinect run-energy or Shift state that drives
+chase distance. No player portraits are drawn in this HUD. Its distance bar follows
+`1 - chase`; Greve's marker moves away from the player as the gap grows, with a
+green arrow while distance is actually gained. Running at maximum distance
+still lights the input indicator without claiming additional gain.
+
+`dotnet run --project tools/GastTimelineVerify` from the repository root checks
+the production cue scheduler and audio clock with lightweight audio stubs:
+phase order across skipped frames, single dispatch, untimed cues, offsets,
+rewind, pause/resume and natural clip completion. Scene visuals and Kinect
+gestures still require an in-Unity playthrough.
 
 ## Legacy assets
 

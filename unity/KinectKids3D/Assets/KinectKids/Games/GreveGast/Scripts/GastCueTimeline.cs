@@ -8,11 +8,50 @@ namespace KinectKids.Games.GreveGast
     public sealed class GastCueTimeline
     {
         private readonly GastSongAsset song;
+        private int scheduleRevision;
         private readonly HashSet<string> fired = new HashSet<string>();
         private readonly List<KeyValuePair<float, string>> due = new List<KeyValuePair<float, string>>(32);
         public event Action<GastSongCue, string> Cue;
 
-        public GastCueTimeline(GastSongAsset asset) { song = asset; }
+        public GastCueTimeline(GastSongAsset asset)
+        { song = asset; scheduleRevision = CalculateRevision(); }
+
+        /// <summary>Re-arm edited future cues; the runner must rebuild existing obstacles.</summary>
+        public bool RefreshAt(float songTime)
+        {
+            if (scheduleRevision == CalculateRevision()) return false;
+            RestoreAt(songTime);
+            return true;
+        }
+
+        private int CalculateRevision()
+        {
+            unchecked
+            {
+                int hash = 17;
+                if (song == null || song.cues == null) return hash;
+                hash = hash * 31 + song.cues.Count;
+                for (int i = 0; i < song.cues.Count; i++)
+                {
+                    GastSongCue cue = song.cues[i];
+                    if (cue == null) { hash *= 31; continue; }
+                    hash = hash * 31 + (cue.id != null ? cue.id.GetHashCode() : 0);
+                    hash = hash * 31 + cue.EffectiveTime(song).GetHashCode();
+                    hash = hash * 31 + cue.hasVocalTime.GetHashCode();
+                    hash = hash * 31 + (int)cue.timingStatus;
+                    hash = hash * 31 + cue.gameplayCommand.GetHashCode();
+                    hash = hash * 31 + cue.gestureLeadSeconds.GetHashCode();
+                    hash = hash * 31 + cue.warningLeadSeconds.GetHashCode();
+                    hash = hash * 31 + cue.impactOffsetSeconds.GetHashCode();
+                    hash = hash * 31 + cue.windowBeforeSeconds.GetHashCode();
+                    hash = hash * 31 + cue.windowAfterSeconds.GetHashCode();
+                    hash = hash * 31 + (int)cue.action;
+                    hash = hash * 31 + (int)cue.command;
+                    hash = hash * 31 + cue.reactionDurationSeconds.GetHashCode();
+                }
+                return hash;
+            }
+        }
 
         public void Tick(float previousTime, float currentTime)
         {
@@ -58,9 +97,10 @@ namespace KinectKids.Games.GreveGast
             if (time >= from && time <= to && !fired.Contains(eventId)) list.Add(new KeyValuePair<float, string>(time, eventId));
         }
 
-        public void Reset() { fired.Clear(); }
+        public void Reset() { fired.Clear(); scheduleRevision = CalculateRevision(); }
         public void RestoreAt(float songTime)
         {
+            scheduleRevision = CalculateRevision();
             fired.Clear();
             if (song == null || song.cues == null) return;
             for (int i = 0; i < song.cues.Count; i++)

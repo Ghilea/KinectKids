@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 using KinectKids.Scene25D;
 using KinectKids3D;
 using KinectKids3D.Platform;
@@ -23,10 +24,9 @@ namespace KinectKids.Games.GreveGast
         public float segmentLength = 16f;
         public float corridorWidth = 22f;
         public float corridorHeight = 18f;
-        public float runningSpeed = 14f;
-        public float idleSpeed = 8f;
-        [Tooltip("Speed multiplier while running in place or holding Shift.")]
-        public float sprintSpeedMultiplier = 1.4f;
+        [Tooltip("Constant corridor and obstacle speed during the chase. Running only changes Greve Gast's distance.")]
+        [FormerlySerializedAs("idleSpeed")]
+        public float corridorSpeed = 8f;
 
         [Header("Perspective camera")]
         [Range(40f, 80f)] public float fieldOfView = 70f;
@@ -105,6 +105,11 @@ namespace KinectKids.Games.GreveGast
         private float lastSongCueTime;
         private float lastGestureCueTime = -1f;
         private GastCueAction activeGestureCue;
+        private float lastDodgeSongTime = -1f;
+        private DodgeAction lastDodgeAction;
+        private float resultPoseUntil;
+        private bool lastCueSucceeded;
+        private bool songDrivenHazards;
         private EnvironmentTheme requestedTheme = EnvironmentTheme.CastleCorridor;
         private EnvironmentTheme activeTheme = EnvironmentTheme.CastleCorridor;
         private EnvironmentTheme transitionFrom = EnvironmentTheme.CastleCorridor;
@@ -114,6 +119,8 @@ namespace KinectKids.Games.GreveGast
         private float lateral;
         private float worldSpeed;
         private float chase = 0.35f;
+        private bool sprinting;
+        private bool gainingDistance;
         private bool greveFinalReachPose;
         private float elapsed;
         private float hazardTimer = 1.8f;
@@ -146,7 +153,6 @@ namespace KinectKids.Games.GreveGast
         private Transform introWall;
         private Light introPoofLight;
         private bool chaseStarted;
-        private bool introMusicStarted;
         private float introElapsed;
         private const float IntroFadeDuration = 2.2f;
         private const float FinalStageWarningDelay = 2.5f;
@@ -162,6 +168,8 @@ namespace KinectKids.Games.GreveGast
         public DodgeAction CurrentDodge => currentDodge;
         public float LateralPosition => Mathf.Clamp(lateral, -1f, 1f);
         public EnvironmentTheme CurrentTheme => activeTheme;
+        public GastSongAsset SongData => gastSong;
+        public float SongTimeSeconds => songClock != null ? songClock.TimeSeconds : 0f;
         private bool WorldPaused => false;
 
         private void Start()
@@ -248,7 +256,7 @@ namespace KinectKids.Games.GreveGast
                 CreateTiledMaterial(new Color(0.54f, 0.68f, 0.72f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.34f, 0.46f, 0.50f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.58f, 0.74f, 0.76f), wallTexture, accentTiling),
-                new Color(1f, 0.53f, 0.25f), "new_door", "sheet_window");
+                new Color(1f, 0.53f, 0.25f), "sheet_cobweb", "sheet_window");
             themeStyles[EnvironmentTheme.Stairwell] = new ThemeStyle(EnvironmentTheme.Stairwell,
                 CreateTiledMaterial(new Color(0.55f, 0.51f, 0.50f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.55f, 0.51f, 0.52f), wallTexture, wallTiling),
@@ -260,7 +268,7 @@ namespace KinectKids.Games.GreveGast
                 CreateTiledMaterial(new Color(0.42f, 0.46f, 0.55f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.27f, 0.30f, 0.38f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.35f, 0.38f, 0.44f), wallTexture, accentTiling),
-                new Color(1f, 0.46f, 0.18f), "new_door", "new_chain");
+                new Color(1f, 0.46f, 0.18f), "sheet_cobweb", "new_chain");
         }
 
         private static Material CreateTiledMaterial(Color tint, Texture2D texture, Vector2 tiling, float metallic = 0f)
@@ -527,11 +535,6 @@ namespace KinectKids.Games.GreveGast
                 if (restingPortrait != null)
                     restingPortrait.color = new Color(1f, 1f, 1f, dissolve);
             }
-            if (introElapsed >= IntroCrawlEnd && !introMusicStarted)
-            {
-                introMusicStarted = true;
-                if (music != null) music.volume = 0.8f;
-            }
             Vector3 position = player.transform.localPosition;
             if (introElapsed < IntroCrawlEnd)
             {
@@ -603,7 +606,7 @@ namespace KinectKids.Games.GreveGast
         {
             chaseStarted = true;
             elapsed = 0f;
-            worldSpeed = idleSpeed;
+            worldSpeed = Mathf.Max(0f, corridorSpeed);
             playerRunCycle = 0f;
             if (introPoofLight != null) introPoofLight.intensity = 0f;
             if (greve != null) greve.color = Color.white;
@@ -1273,6 +1276,7 @@ namespace KinectKids.Games.GreveGast
                 return;
             }
             body.Update();
+            TickSongCues();
             if (!chaseStarted)
             {
                 introElapsed += dt;
@@ -1281,7 +1285,6 @@ namespace KinectKids.Games.GreveGast
                 return;
             }
             elapsed += dt;
-            TickSongCues();
             ReadInput(dt);
             DriveWorld(dt);
             TickThemeSequence();
@@ -1361,7 +1364,8 @@ namespace KinectKids.Games.GreveGast
             bool freshAction = raw != previousRawAction;
             if (playerMotion == PlayerMotion.Running)
             {
-                if (freshAction && raw == GreveGastAction.Jump) BeginMotion(PlayerMotion.Jumping);
+                if ((freshAction && raw == GreveGastAction.Jump) || Input.GetKeyDown(KeyCode.W))
+                    BeginMotion(PlayerMotion.Jumping);
                 else if (freshAction && raw == GreveGastAction.Duck) BeginMotion(PlayerMotion.Ducking);
                 else
                 {
@@ -1421,6 +1425,12 @@ namespace KinectKids.Games.GreveGast
         {
             playerMotion = motion;
             playerMotionTime = 0f;
+            if (motion == PlayerMotion.Jumping) lastDodgeAction = DodgeAction.Jump;
+            else if (motion == PlayerMotion.Ducking) lastDodgeAction = DodgeAction.Duck;
+            else if (motion == PlayerMotion.ChangingLane)
+                lastDodgeAction = laneMoveDirection < 0 ? DodgeAction.Left : DodgeAction.Right;
+            else return;
+            lastDodgeSongTime = songClock != null ? songClock.TimeSeconds : -1f;
         }
 
         private float MotionDuration(PlayerMotion motion)
@@ -1438,6 +1448,9 @@ namespace KinectKids.Games.GreveGast
 
         private void DriveWorld(float dt)
         {
+            sprinting = body.RunEnergy > 0.4f || Input.GetKey(KeyCode.LeftShift) ||
+                        Input.GetKey(KeyCode.RightShift);
+            gainingDistance = false;
             if (WorldPaused)
             {
                 // The room, obstacles and vista stop. Greve Gast does not: this
@@ -1449,17 +1462,14 @@ namespace KinectKids.Games.GreveGast
                 return;
             }
 
-            bool sprinting = body.RunEnergy > 0.4f || Input.GetKey(KeyCode.LeftShift) ||
-                             Input.GetKey(KeyCode.RightShift);
-            bool running = body.Current == GreveGastAction.Run || Input.GetKey(KeyCode.W) || sprinting;
-            float targetSpeed = sprinting ? runningSpeed * Mathf.Max(1f, sprintSpeedMultiplier)
-                : running ? runningSpeed : idleSpeed;
-            worldSpeed = Mathf.Lerp(worldSpeed, targetSpeed, 1f - Mathf.Exp(-4f * dt));
-            // Forward motion alone is not an escape. Greve gains ground until
-            // the player actively sprints; dodging only prevents a hit.
-            float chasePressure = Mathf.Max(0f, passivePressurePerSecond) * (running ? 0.5f : 1f);
+            worldSpeed = Mathf.Max(0f, corridorSpeed);
+            // Running changes only the gap to Greve. The corridor, hazards and
+            // illustrated vista keep the same speed for every input state.
+            float chasePressure = Mathf.Max(0f, passivePressurePerSecond) * (sprinting ? 0.5f : 1f);
             if (sprinting) chasePressure -= Mathf.Max(0f, runDrainPerSecond);
+            float previousChase = chase;
             chase = Mathf.Clamp01(chase + chasePressure * dt);
+            gainingDistance = chase < previousChase;
         }
 
         private void StreamSegments(float dt)
@@ -1508,7 +1518,10 @@ namespace KinectKids.Games.GreveGast
             float closest = float.MaxValue;
             for (int i = 0; i < segments.Count; i++)
             {
-                float distance = Mathf.Abs(segments[i].transform.localPosition.z - playerZ);
+                // The foreground walls around the camera determine the room
+                // the child sees, rather than a segment farther down the track.
+                float visibleZ = cameraPosition.z + (worldCamera != null ? worldCamera.nearClipPlane : 0.1f) + 1f;
+                float distance = Mathf.Abs(segments[i].transform.localPosition.z - visibleZ);
                 if (distance >= closest) continue;
                 closest = distance;
                 activeTheme = segments[i].Theme;
@@ -1614,6 +1627,8 @@ namespace KinectKids.Games.GreveGast
                 if (chase >= 0.94f) greveFinalReachPose = true;
                 else if (chase <= 0.86f) greveFinalReachPose = false;
                 if (greveFinalReachPose) sprite = ResolveGreve("reach");
+                else if (songClock != null && songClock.TimeSeconds < resultPoseUntil)
+                    sprite = ResolveGreve(lastCueSucceeded ? "stunned" : "sad");
                 else if (lastGestureCueTime >= 0f && songClock != null && songClock.TimeSeconds - lastGestureCueTime < 1.1f)
                 {
                     switch (activeGestureCue)
@@ -1700,11 +1715,30 @@ namespace KinectKids.Games.GreveGast
 
         private void TickHazards(float dt)
         {
-            if (WorldPaused) return;
+            float songTime = songClock != null ? songClock.TimeSeconds : 0f;
+            Plane[] viewPlanes = worldCamera != null ? GeometryUtility.CalculateFrustumPlanes(worldCamera) : null;
+            bool suppressRandom = songDrivenHazards && NearAuthoredCue(songClock != null ? songClock.TimeSeconds : 0f);
             for (int i = hazards.Count - 1; i >= 0; i--)
             {
                 RunHazard hazard = hazards[i];
-                hazard.root.localPosition += Vector3.forward * (worldSpeed * dt);
+                if (suppressRandom && !hazard.authoredCueHazard)
+                {
+                    if (hazard.root != null) Destroy(hazard.root.gameObject);
+                    hazards.RemoveAt(i);
+                    continue;
+                }
+                if (hazard.authoredCueHazard)
+                {
+                    // Absolute audio position keeps obstacles aligned through frame
+                    // stalls and player animations, including ducks and recovery.
+                    Vector3 position = hazard.root.localPosition;
+                    position.z = playerZ + (songTime - hazard.impactTime) * hazard.travelSpeed;
+                    hazard.root.localPosition = position;
+                    if (!hazard.resolved)
+                        hazard.succeeded |= Avoided(hazard);
+                }
+                else
+                    hazard.root.localPosition += Vector3.forward * (worldSpeed * dt);
                 if (hazard.sprite != null)
                 {
                     hazard.sprite.sortingOrder = DepthSortOrder(hazard.root.localPosition.z);
@@ -1715,17 +1749,29 @@ namespace KinectKids.Games.GreveGast
                             Mathf.FloorToInt(hazard.animationTime * 7f) % hazard.frames.Length];
                     }
                 }
-                if (!hazard.resolved && hazard.root.localPosition.z >= player.transform.localPosition.z - 0.35f)
+                if (hazard.authoredCueHazard && !hazard.wasVisibleBeforeImpact &&
+                    songTime <= hazard.impactTime - 0.35f && viewPlanes != null &&
+                    hazard.visual != null && hazard.visual.enabled &&
+                    hazard.visual.gameObject.activeInHierarchy && hazard.visual.bounds.max.y > 0.05f &&
+                    GeometryUtility.TestPlanesAABB(viewPlanes, hazard.visual.bounds))
+                    hazard.wasVisibleBeforeImpact = true;
+                bool readyToResolve = hazard.authoredCueHazard
+                    ? songTime >= hazard.windowCloseTime
+                    : hazard.root.localPosition.z >= player.transform.localPosition.z - 0.35f;
+                if (!hazard.resolved && readyToResolve)
                 {
                     hazard.resolved = true;
-                    ResolveHazard(hazard, Avoided(hazard));
+                    ResolveHazard(hazard, hazard.authoredCueHazard ? hazard.succeeded : Avoided(hazard));
                 }
-                if (hazard.root.localPosition.z > 82f)
+                if (hazard.resolved && hazard.root.localPosition.z > 82f)
                 {
                     if (hazard.root != null) Destroy(hazard.root.gameObject);
                     hazards.RemoveAt(i);
                 }
             }
+            // Song data owns gameplay obstacles. Random obstacles would create
+            // warnings without a matching lyric and can overlap authored cues.
+            if (songDrivenHazards) return;
             hazardTimer -= dt;
             if (hazardTimer > 0f) return;
             hazardTimer = Mathf.Lerp(2.1f, 1.25f, chase);
@@ -1736,12 +1782,75 @@ namespace KinectKids.Games.GreveGast
         {
             bool jump = index % 2 == 0;
             Lane obstacleLane = (Lane)(index % 3);
-            GameObject root = new GameObject(jump ? "Jump obstacle" : "Lane obstacle");
+            SpawnHazard(index, jump, obstacleLane, GastGameplayCommand.None, null, null);
+        }
+
+        private bool NearAuthoredCue(float songTime)
+        {
+            if (gastSong == null || gastSong.cues == null) return false;
+            for (int i = 0; i < gastSong.cues.Count; i++)
+            {
+                GastSongCue cue = gastSong.cues[i];
+                if (cue == null || !cue.gameplayCommand || !cue.hasVocalTime || cue.timingStatus == GastTimingStatus.Untimed) continue;
+                float warning = cue.EffectiveTime(gastSong) - cue.warningLeadSeconds;
+                float impact = cue.EffectiveTime(gastSong) + cue.impactOffsetSeconds + cue.windowAfterSeconds;
+                if (songTime >= warning - 3f && songTime <= impact) return true;
+            }
+            return false;
+        }
+
+        private void SpawnCueHazard(GastSongCue cue)
+        {
+            if (songClock == null || songClock.TimeSeconds >
+                cue.EffectiveTime(gastSong) + cue.impactOffsetSeconds + cue.windowAfterSeconds) return;
+            for (int i = 0; i < hazards.Count; i++)
+                if (hazards[i].cueId == cue.id) return;
+            bool jump = cue.command == GastGameplayCommand.Jump;
+            SpawnHazard(hazardCounter++, jump, lane, cue.command, cue.id, cue);
+            if (hazards.Count > 0 && songClock != null)
+            {
+                RunHazard created = hazards[hazards.Count - 1];
+                float secondsToImpact = Mathf.Max(0.15f, cue.warningLeadSeconds + cue.impactOffsetSeconds);
+                // Begin just inside the camera view. The cue hazard receives
+                // its own speed so it still reaches the player at ImpactTime.
+                // A floor obstacle must be above the bottom of the camera's
+                // frustum from its first warning frame, including in side lanes.
+                float floorVisibleDistance = cameraPosition.y /
+                    Mathf.Tan(worldCamera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                float visibleStartZ = cameraPosition.z + Mathf.Max(floorVisibleDistance + 1.5f,
+                    worldCamera.nearClipPlane + 1f);
+                float distance = Mathf.Max(0.5f, playerZ - visibleStartZ);
+                created.travelSpeed = distance / secondsToImpact;
+                created.root.localPosition = new Vector3(LaneX(created.lane), 0f,
+                    playerZ + (songClock.TimeSeconds - created.impactTime) * created.travelSpeed);
+            }
+        }
+
+        private void SpawnHazard(int index, bool jump, Lane obstacleLane,
+            GastGameplayCommand expectedCommand, string cueId, GastSongCue cue)
+        {
+            string objectName = expectedCommand == GastGameplayCommand.None
+                ? (jump ? "Jump obstacle" : "Lane obstacle") : "Song cue obstacle " + cueId;
+            GameObject root = new GameObject(objectName);
             root.transform.SetParent(hazardRoot, false);
             // Obstacles belong to the environment: they enter from just behind
             // the camera and move away from it on the same +Z axis as the track.
             root.transform.localPosition = new Vector3(LaneX(obstacleLane), 0f, cameraPosition.z - 1.5f);
-            RunHazard hazard = new RunHazard { root = root.transform, lane = obstacleLane, jump = jump };
+            float vocalTime = cue != null ? cue.EffectiveTime(gastSong) : 0f;
+            RunHazard hazard = new RunHazard
+            {
+                root = root.transform,
+                lane = obstacleLane,
+                jump = jump,
+                expectedCommand = expectedCommand,
+                cueId = cueId,
+                impactTime = vocalTime + (cue != null ? cue.impactOffsetSeconds : 0f),
+                windowOpenTime = cue != null ? vocalTime + cue.impactOffsetSeconds - cue.windowBeforeSeconds : 0f,
+                windowCloseTime = cue != null ? vocalTime + cue.impactOffsetSeconds + cue.windowAfterSeconds : 0f,
+                reactionDuration = cue != null ? cue.reactionDurationSeconds : 0.8f,
+                authoredCueHazard = expectedCommand != GastGameplayCommand.None,
+                travelSpeed = worldSpeed
+            };
             if (hazardShadowMaterial == null)
                 hazardShadowMaterial = MaterialFactory.Solid(new Color(0.07f, 0.07f, 0.09f));
             CreatePrimitive("Obstacle floor shadow", PrimitiveType.Cylinder, root.transform,
@@ -1749,37 +1858,42 @@ namespace KinectKids.Games.GreveGast
                 hazardShadowMaterial);
             // The environment art has floor-level pivots. Keep physical obstacles
             // in the running lanes instead of reusing them as wall decorations.
-            bool swingingAxe = !jump && index % 6 == 3;
-            string spriteKey = swingingAxe ? "sheet_axe" : jump
+            bool cueSlide = expectedCommand == GastGameplayCommand.Slide;
+            bool swingingAxe = expectedCommand == GastGameplayCommand.None && !jump && index % 6 == 3;
+            string spriteKey = cueSlide ? "haz_1" : swingingAxe ? "sheet_axe" : jump
                 ? (index % 4 == 0 ? "new_spike_trap" : "new_rubble")
                 : (index % 4 == 1 ? "new_barrel" : "new_crate");
             Sprite[] animation = swingingAxe ? GreveEnvironmentSheets.SwingingAxe : null;
-            Sprite sprite = swingingAxe && animation.Length > 0
+            Sprite sprite = cueSlide ? GreveChaseSprites.Hazard("haz_1") : swingingAxe && animation.Length > 0
                 ? animation[0] : GreveChaseSprites.Environment(spriteKey);
             if (sprite != null)
             {
                 GameObject obstacle = new GameObject("Floor obstacle " + spriteKey);
                 obstacle.transform.SetParent(root.transform, false);
                 bool floorSpikes = spriteKey == "new_spike_trap";
+                float obstacleHeight = cueSlide ? 3.0f : swingingAxe ? 3.4f :
+                    jump ? (floorSpikes ? 0.85f : 1.25f) : 2.3f;
                 obstacle.transform.localPosition = new Vector3(0f,
-                    swingingAxe ? 0.75f : floorSpikes ? 0.008f : 0.04f, 0f);
+                    cueSlide ? 2.25f : swingingAxe ? 0.75f :
+                    floorSpikes ? obstacleHeight + 0.04f : 0.04f, 0f);
                 SpriteRenderer renderer = obstacle.AddComponent<SpriteRenderer>();
                 renderer.sprite = sprite;
                 // This illustration has spikes below its beam. On the floor,
                 // turn it over so the wood rests on the ground and spikes rise.
+                // flipY reflects around the bottom pivot: lift by its full
+                // scaled height so the flipped sprite stays above the floor.
                 renderer.flipY = floorSpikes;
                 renderer.sharedMaterial = player.sharedMaterial;
                 renderer.sortingOrder = DepthSortOrder(root.transform.localPosition.z);
                 hazard.sprite = renderer;
                 hazard.visual = renderer;
                 hazard.frames = animation;
-                SizeSpriteToHeight(renderer, swingingAxe ? 3.4f :
-                    jump ? (floorSpikes ? 0.55f : 1.25f) : 2.3f);
+                SizeSpriteToHeight(renderer, obstacleHeight);
             }
             else
             {
                 hazard.visual = CreatePrimitive("Fallback obstacle", PrimitiveType.Cube, root.transform,
-                    new Vector3(0f, jump ? 0.55f : 1.15f, 0f),
+                    new Vector3(0f, cueSlide ? 2.2f : jump ? 0.55f : 1.15f, 0f),
                     new Vector3(2.2f, jump ? 1.1f : 2.3f, 0.9f),
                     themeStyles[requestedTheme].accentMaterial).GetComponent<Renderer>();
             }
@@ -1821,13 +1935,37 @@ namespace KinectKids.Games.GreveGast
         private bool Avoided(RunHazard hazard)
         {
             bool sameLane = Mathf.Abs(lateral * laneSpacing - LaneX(hazard.lane)) < laneSpacing * 0.45f;
+            if (hazard.expectedCommand != GastGameplayCommand.None)
+            {
+                float now = songClock != null ? songClock.TimeSeconds : -1f;
+                bool inWindow = lastDodgeSongTime >= hazard.windowOpenTime &&
+                    lastDodgeSongTime <= hazard.windowCloseTime && lastDodgeSongTime <= now;
+                if (!inWindow) return false;
+                switch (hazard.expectedCommand)
+                {
+                    case GastGameplayCommand.Jump: return sameLane && lastDodgeAction == DodgeAction.Jump;
+                    case GastGameplayCommand.Slide: return sameLane && lastDodgeAction == DodgeAction.Duck;
+                    case GastGameplayCommand.LaneLeft: return lastDodgeAction == DodgeAction.Left;
+                    case GastGameplayCommand.LaneRight: return lastDodgeAction == DodgeAction.Right;
+                    default: return true;
+                }
+            }
             if (!sameLane) return true;
             return hazard.jump && currentDodge == DodgeAction.Jump;
         }
 
         private void ResolveHazard(RunHazard hazard, bool avoided)
         {
+            // No penalty for an obstacle that was missing, below the floor,
+            // off screen or spawned too late to give the player warning.
+            if (hazard.authoredCueHazard && !avoided && !hazard.wasVisibleBeforeImpact) return;
+            if (hazard.expectedCommand != GastGameplayCommand.None)
+            {
+                lastCueSucceeded = avoided;
+                resultPoseUntil = (songClock != null ? songClock.TimeSeconds : 0f) + hazard.reactionDuration;
+            }
             if (avoided) return;
+            gainingDistance = false;
             chase = Mathf.Clamp01(chase + catchOnHit);
             hitFlashUntil = Time.unscaledTime + 0.48f;
             currentDodge = DodgeAction.None;
@@ -1846,6 +1984,9 @@ namespace KinectKids.Games.GreveGast
 
         private void TickThemeSequence()
         {
+            // The old demo cycles room names on guessed elapsed times. Song
+            // mode stays in its actual corridor until an authored room change.
+            if (gastSong != null) return;
             if (elapsed >= kitchenTransitionAt && requestedTheme == EnvironmentTheme.CastleCorridor)
                 RequestTheme(EnvironmentTheme.Kitchen);
             if (!cycleAllThemes) return;
@@ -1862,7 +2003,7 @@ namespace KinectKids.Games.GreveGast
             switch (theme)
             {
                 case EnvironmentTheme.Kitchen: return "Kök";
-                case EnvironmentTheme.Stairwell: return "Trappa till källaren";
+                case EnvironmentTheme.Stairwell: return "Mörk passage";
                 case EnvironmentTheme.Cellar: return "Källare";
                 case EnvironmentTheme.GreatHall: return "Stora salen";
                 case EnvironmentTheme.Passage: return "Passage";
@@ -1882,17 +2023,19 @@ namespace KinectKids.Games.GreveGast
 
         private void StartMusic()
         {
-            AudioClip clip = Resources.Load<AudioClip>("Audio/Music/GreveGastsJakt");
+            gastSong = Resources.Load<GastSongAsset>("GastSong");
+            AudioClip clip = gastSong != null ? gastSong.master : null;
+            if (clip == null) clip = Resources.Load<AudioClip>("Audio/Music/GreveGastsJakt");
             if (clip == null) clip = Resources.Load<AudioClip>("Audio/CustomRideMusic");
             if (clip == null) return;
             music = gameObject.AddComponent<AudioSource>();
-            music.clip = clip; music.loop = false; music.playOnAwake = false; music.volume = 0f; music.spatialBlend = 0f;
+            music.clip = clip; music.loop = false; music.playOnAwake = false; music.volume = 0.8f; music.spatialBlend = 0f;
             songClock = new GastSongClock(music, clip);
-            gastSong = Resources.Load<GastSongAsset>("GastSong");
             if (gastSong != null)
             {
                 gastCueTimeline = new GastCueTimeline(gastSong);
                 gastCueTimeline.Cue += OnGastCue;
+                songDrivenHazards = true;
             }
             songClock.PlayFrom(0f);
         }
@@ -1901,9 +2044,26 @@ namespace KinectKids.Games.GreveGast
         {
             if (music == null || gastCueTimeline == null || music.clip == null) return;
             float now = songClock.TimeSeconds;
-            if (now < lastSongCueTime)
+            if (now < lastSongCueTime || gastCueTimeline.RefreshAt(now))
             {
+                for (int i = 0; i < hazards.Count; i++)
+                    if (hazards[i].root != null) Destroy(hazards[i].root.gameObject);
+                hazards.Clear();
+                lastDodgeSongTime = -1f;
+                lastGestureCueTime = -1f;
+                resultPoseUntil = 0f;
                 gastCueTimeline.RestoreAt(now);
+                if (gastSong.cues != null)
+                    for (int i = 0; i < gastSong.cues.Count; i++)
+                    {
+                        GastSongCue cue = gastSong.cues[i];
+                        if (cue == null || !cue.gameplayCommand || !cue.hasVocalTime ||
+                            cue.timingStatus == GastTimingStatus.Untimed) continue;
+                        float vocal = cue.EffectiveTime(gastSong);
+                        if (now >= vocal - cue.warningLeadSeconds &&
+                            now <= vocal + cue.impactOffsetSeconds + cue.windowAfterSeconds)
+                            SpawnCueHazard(cue);
+                    }
                 lastSongCueTime = now;
                 return;
             }
@@ -1920,9 +2080,7 @@ namespace KinectKids.Games.GreveGast
             }
             else if (phase == "warning" && cue.gameplayCommand)
             {
-                // Timed obstacle authoring is deliberately driven by song cues;
-                // untimed commands never enter this path.
-                Debug.Log("Gast cue warning: " + cue.id + " / " + cue.command, this);
+                SpawnCueHazard(cue);
             }
         }
 
@@ -1973,6 +2131,7 @@ namespace KinectKids.Games.GreveGast
 
         private GUIStyle hud;
         private GUIStyle sensorHud;
+        private GUIStyle distanceHud;
         private Sprite hazardWarningIcon;
         private void OnGUI()
         {
@@ -1984,11 +2143,7 @@ namespace KinectKids.Games.GreveGast
             }
             if (!captureStarted)
             {
-                if (!chaseStarted)
-                    GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + ThemeLabel(activeTheme), hud);
-                else
-                    GUI.Label(new Rect(30, 24, 1050, 34), "RUM: " + ThemeLabel(activeTheme) + "  |  BANA: " + lane +
-                        "  |  Spring (W), byt bana (A/D), center (S), hoppa (Space)", hud);
+                GUI.Label(new Rect(30, chaseStarted ? 94f : 24f, 1050, 34), "RUM: " + ThemeLabel(activeTheme), hud);
 
                 KinectKidsInputManager input = KinectKidsInputManager.Instance;
                 if (sensorHud == null)
@@ -2000,12 +2155,15 @@ namespace KinectKids.Games.GreveGast
                 string sensorText = tracked ? "KINECT: SPELARE HITTAD" :
                     input != null && input.KinectConnected ? "KINECT: VISA HELA KROPPEN" :
                     "KINECT: VÄNTAR PÅ KAMERA";
-                GUI.Label(new Rect(Mathf.Max(0f, Screen.width - 490f), 62f,
+                GUI.Label(new Rect(Mathf.Max(0f, Screen.width - 490f), chaseStarted ? 94f : 62f,
                     Mathf.Min(Screen.width - 20f, 460f), 30f), sensorText, sensorHud);
             }
 
             if (chaseStarted && !captureStarted)
+            {
                 DrawHazardWarning();
+                DrawRunDistanceIndicator();
+            }
 
             Rect screen = new Rect(0f, 0f, Screen.width, Screen.height);
             if (chaseStarted && !captureStarted && finalStageElapsed >= FinalStageWarningDelay)
@@ -2044,9 +2202,65 @@ namespace KinectKids.Games.GreveGast
             GUI.color = Color.white;
         }
 
+        private void DrawRunDistanceIndicator()
+        {
+            float width = Mathf.Min(680f, Screen.width * 0.55f);
+            float x = (Screen.width - width) * 0.5f;
+            float y = 12f;
+            Color active = new Color(0.35f, 1f, 0.65f);
+            Color idle = new Color(0.55f, 0.6f, 0.7f);
+            GUI.color = new Color(0.025f, 0.035f, 0.06f, 0.85f);
+            GUI.DrawTexture(new Rect(x, y, width, 72f), Texture2D.whiteTexture);
+
+            // This state comes directly from DriveWorld, so Kinect and either
+            // Shift key illuminate the same indicator used by chase gameplay.
+            GUI.color = sprinting ? active : idle;
+            float pulse = sprinting ? 0.8f + 0.2f * Mathf.Sin(Time.unscaledTime * 8f) : 0.35f;
+            GUI.color = new Color(GUI.color.r, GUI.color.g, GUI.color.b, pulse);
+            GUI.DrawTexture(new Rect(x, y, width, 3f), Texture2D.whiteTexture);
+
+            float barX = x + 20f;
+            float barWidth = width - 40f;
+            float distance = 1f - chase;
+            GUI.color = gainingDistance ? active : Color.white;
+            if (distanceHud == null)
+                distanceHud = new GUIStyle(hud) { alignment = TextAnchor.MiddleCenter };
+            GUI.Label(new Rect(barX, y + 6f, barWidth, 26f), "AVSTÅND", distanceHud);
+            GUI.color = new Color(0.2f, 0.24f, 0.3f, 1f);
+            GUI.DrawTexture(new Rect(barX, y + 58f, barWidth, 10f), Texture2D.whiteTexture);
+            GUI.color = Color.Lerp(new Color(1f, 0.3f, 0.25f), active, distance);
+            // The right endpoint is the player; only Greve has a picture marker.
+            // His marker moves left as the actual gap grows.
+            float greveX = barX + (1f - distance) * (barWidth - 26f);
+            GUI.DrawTexture(new Rect(greveX, y + 58f, barX + barWidth - greveX, 10f), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            DrawHudSprite(ResolveGreve("chase"), new Rect(greveX - 8f, y + 28f, 26f, 28f));
+            if (gainingDistance)
+            {
+                GUI.color = active;
+                DrawHudSprite(GreveChaseSprites.Hazard("haz_18"),
+                    new Rect(barX + 4f, y + 32f, 27f, 20f));
+            }
+            GUI.color = Color.white;
+        }
+
+        private static void DrawHudSprite(Sprite sprite, Rect box)
+        {
+            if (sprite == null) return;
+            Rect pixels = sprite.textureRect;
+            Texture2D texture = sprite.texture;
+            float scale = Mathf.Min(box.width / pixels.width, box.height / pixels.height);
+            Rect fitted = new Rect(box.center.x - pixels.width * scale * 0.5f,
+                box.center.y - pixels.height * scale * 0.5f, pixels.width * scale, pixels.height * scale);
+            GUI.DrawTextureWithTexCoords(fitted, texture,
+                new Rect(pixels.x / texture.width, pixels.y / texture.height,
+                    pixels.width / texture.width, pixels.height / texture.height), true);
+        }
+
         private void DrawHazardWarning()
         {
             if (worldCamera == null) return;
+            DrawAuthoredCuePrompt();
             Plane[] frustum = GeometryUtility.CalculateFrustumPlanes(worldCamera);
             RunHazard approaching = null;
             float nearest = float.MaxValue;
@@ -2065,7 +2279,8 @@ namespace KinectKids.Games.GreveGast
                 approaching = candidate;
             }
             if (approaching == null) return;
-            float seconds = nearest / Mathf.Max(idleSpeed, Mathf.Max(worldSpeed, 0.1f));
+            float warningSpeed = approaching.authoredCueHazard ? approaching.travelSpeed : worldSpeed;
+            float seconds = nearest / Mathf.Max(warningSpeed, 0.1f);
             if (seconds > 2.2f) return;
             if (hazardWarningIcon == null) hazardWarningIcon = GreveChaseSprites.Hazard("haz_22");
             if (hazardWarningIcon == null) return;
@@ -2089,6 +2304,46 @@ namespace KinectKids.Games.GreveGast
             GUI.color = Color.white;
         }
 
+        private void DrawAuthoredCuePrompt()
+        {
+            RunHazard cueHazard = null;
+            float soonest = float.MaxValue;
+            float now = songClock != null ? songClock.TimeSeconds : 0f;
+            for (int i = 0; i < hazards.Count; i++)
+            {
+                RunHazard candidate = hazards[i];
+                if (!candidate.authoredCueHazard || candidate.resolved || candidate.root == null) continue;
+                float remaining = candidate.impactTime - now;
+                // Feedback can still be graded after impact, but the prompt
+                // must advance to the next approaching obstacle promptly.
+                if (remaining < -0.15f || remaining >= soonest) continue;
+                soonest = remaining;
+                cueHazard = candidate;
+            }
+            if (cueHazard == null) return;
+
+            string iconName;
+            switch (cueHazard.expectedCommand)
+            {
+                case GastGameplayCommand.Jump: iconName = "haz_20"; break;
+                case GastGameplayCommand.Slide: iconName = "haz_21"; break;
+                case GastGameplayCommand.LaneLeft: iconName = "haz_18"; break;
+                case GastGameplayCommand.LaneRight: iconName = "haz_19"; break;
+                default: return;
+            }
+            Sprite actionIcon = GreveChaseSprites.Hazard(iconName);
+            if (actionIcon == null) return;
+            Rect pixels = actionIcon.textureRect;
+            Texture2D texture = actionIcon.texture;
+            float size = Mathf.Clamp(Screen.height * 0.17f, 90f, 180f);
+            float width = size * pixels.width / Mathf.Max(pixels.width, pixels.height);
+            float height = size * pixels.height / Mathf.Max(pixels.width, pixels.height);
+            Rect box = new Rect((Screen.width - width) * 0.5f, Screen.height * 0.13f, width, height);
+            GUI.color = Color.white;
+            GUI.DrawTextureWithTexCoords(box, texture, new Rect(pixels.x / texture.width,
+                pixels.y / texture.height, pixels.width / texture.width, pixels.height / texture.height), true);
+        }
+
         private int DepthSortOrder(float z)
         {
             // All actor and obstacle sprites share a render queue. Sorting by
@@ -2110,6 +2365,16 @@ namespace KinectKids.Games.GreveGast
             public Transform root;
             public Lane lane;
             public bool jump;
+            public GastGameplayCommand expectedCommand;
+            public string cueId;
+            public float impactTime;
+            public bool succeeded;
+            public bool wasVisibleBeforeImpact;
+            public float windowOpenTime;
+            public float windowCloseTime;
+            public float reactionDuration;
+            public bool authoredCueHazard;
+            public float travelSpeed;
             public bool resolved;
             public SpriteRenderer sprite;
             public Renderer visual;
@@ -2218,8 +2483,6 @@ namespace KinectKids.Games.GreveGast
             Color flame = Color.Lerp(from.lightColor, to.lightColor, blend);
             float side = variant % 2 == 0 ? -1f : 1f;
             // Reserve space for large pieces before placing smaller details.
-            if (dominant.theme == CorridorRunnerDirector.EnvironmentTheme.Kitchen && variant % 3 == 0)
-                AddWallVista(GreveEnvironmentSheets.KitchenHearth, "Kitchen hearth on side wall", 6.2f, -side);
             AddWallDecoration(from.decorationA, side, -1.7f, flame);
             AddWallDecoration(to.decorationB, -side, 1.7f, flame);
             AddWallDecoration("new_torch", side, -5.1f, flame);
@@ -2236,20 +2499,11 @@ namespace KinectKids.Games.GreveGast
             else if (variant % 2 == 0)
                 AddWallDecoration("sheet_cobweb", 1f, -3.3f, flame);
             AddThemeProp(dominant.theme, side);
-            if (dominant.theme != CorridorRunnerDirector.EnvironmentTheme.Stairwell)
-                AddCorridorRug();
+            AddCorridorRug();
             if (dominant.theme == CorridorRunnerDirector.EnvironmentTheme.Kitchen)
             {
                 AddCauldron(side);
             }
-            if (dominant.theme == CorridorRunnerDirector.EnvironmentTheme.Stairwell)
-            {
-                AddStairDetails(accentRenderers[0].sharedMaterial);
-                if (variant % 3 == 0) AddVista(GreveEnvironmentSheets.Staircase,
-                    "Stairway down", 8f);
-            }
-            if (dominant.theme == CorridorRunnerDirector.EnvironmentTheme.Cellar && variant % 3 == 0)
-                AddVista(GreveEnvironmentSheets.CellarArch, "Cellar entrance", 7f);
         }
 
         private void AddVista(Sprite sprite, string name, float height)
@@ -2330,28 +2584,6 @@ namespace KinectKids.Games.GreveGast
             return material;
         }
 
-        private void AddStairDetails(Material stone)
-        {
-            // The treads descend into the distance while keeping the playable
-            // lanes clear of colliders in this 2.5D runner.
-            for (int step = 0; step < 6; step++)
-            {
-                float z = -segmentLength * 0.38f + step * segmentLength * 0.15f;
-                float rise = 0.72f - step * 0.11f;
-                GameObject tread = CorridorRunnerDirector.CreatePrimitive("Cellar stair tread " + step,
-                    PrimitiveType.Cube, transform, new Vector3(0f, rise * 0.5f, z),
-                    new Vector3(halfWidth * 1.55f, rise, segmentLength * 0.15f), stone);
-                details.Add(tread);
-            }
-            for (int side = -1; side <= 1; side += 2)
-            {
-                GameObject rail = CorridorRunnerDirector.CreatePrimitive("Stair side wall", PrimitiveType.Cube,
-                    transform, new Vector3(side * halfWidth * 0.78f, 0.55f, 0f),
-                    new Vector3(0.48f, 1.1f, segmentLength * 0.87f), stone);
-                details.Add(rail);
-            }
-        }
-
         private Renderer AddBox(string objectName, Vector3 position, Vector3 scale, Material material)
         {
             return CorridorRunnerDirector.CreatePrimitive(objectName, PrimitiveType.Cube, transform, position, scale, material).GetComponent<Renderer>();
@@ -2380,7 +2612,6 @@ namespace KinectKids.Games.GreveGast
             float height;
             switch (spriteKey)
             {
-                case "new_door": y = 0f; height = 5.4f; break;
                 case "new_banner": y = 7.5f; height = 5.2f; break;
                 case "new_chain": y = 10.5f; height = 5.5f; break;
                 case "sheet_banner": y = 6.5f; height = 3.6f; break;

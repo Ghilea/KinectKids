@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 829726e723244cb3ae5e17b02e71a112, type: 3}
   m_Name: GastSong
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   master: {fileID: 8300000, guid: 9067d3fe7b8cded4eac52700f1c59e3b, type: 3}
   globalOffsetSeconds: 0
   sections:
@@ -25,7 +25,7 @@ MonoBehaviour:
     endTimingStatus: 0
     offsetSeconds: 0
   - id: section_02
-    title: Första versen
+    title: "F\xF6rsta versen"
     hasStartTime: 0
     startSeconds: 0
     startTimingStatus: 0
@@ -34,7 +34,7 @@ MonoBehaviour:
     endTimingStatus: 0
     offsetSeconds: 0
   - id: section_03
-    title: Första refrängen
+    title: "F\xF6rsta refr\xE4ngen"
     hasStartTime: 0
     startSeconds: 0
     startTimingStatus: 0
@@ -52,7 +52,7 @@ MonoBehaviour:
     endTimingStatus: 0
     offsetSeconds: 0
   - id: section_05
-    title: Köket
+    title: "K\xF6ket"
     hasStartTime: 0
     startSeconds: 0
     startTimingStatus: 0
@@ -61,7 +61,7 @@ MonoBehaviour:
     endTimingStatus: 0
     offsetSeconds: 0
   - id: section_06
-    title: Rörelseföljd
+    title: "R\xF6relsef\xF6ljd"
     hasStartTime: 0
     startSeconds: 0
     startTimingStatus: 0
@@ -70,7 +70,7 @@ MonoBehaviour:
     endTimingStatus: 0
     offsetSeconds: 0
   - id: section_07
-    title: Refräng och vasen
+    title: "Refr\xE4ng och vasen"
     hasStartTime: 0
     startSeconds: 0
     startTimingStatus: 0
@@ -88,7 +88,7 @@ MonoBehaviour:
     endTimingStatus: 0
     offsetSeconds: 0
   - id: section_09
-    title: Ny rörelsepaus
+    title: "Ny r\xF6relsepaus"
     hasStartTime: 0
     startSeconds: 0
     startTimingStatus: 0
@@ -106,7 +106,7 @@ MonoBehaviour:
     endTimingStatus: 0
     offsetSeconds: 0
   - id: section_11
-    title: Källaren
+    title: "K\xE4llaren"
     hasStartTime: 0
     startSeconds: 0
     startTimingStatus: 0
@@ -133,7 +133,7 @@ MonoBehaviour:
     endTimingStatus: 0
     offsetSeconds: 0
   - id: section_14
-    title: Slutrefräng
+    title: "Slutrefr\xE4ng"
     hasStartTime: 0
     startSeconds: 0
     startTimingStatus: 0
@@ -142,7 +142,7 @@ MonoBehaviour:
     endTimingStatus: 0
     offsetSeconds: 0
   - id: section_15
-    title: Finalrörelser
+    title: "Finalr\xF6relser"
     hasStartTime: 0
     startSeconds: 0
     startTimingStatus: 0
@@ -151,7 +151,7 @@ MonoBehaviour:
     endTimingStatus: 0
     offsetSeconds: 0
   - id: section_16
-    title: Nedräkning
+    title: "Nedr\xE4kning"
     hasStartTime: 0
     startSeconds: 0
     startTimingStatus: 0
@@ -171,7 +171,7 @@ MonoBehaviour:
   cues:
   - id: intro_spring_01
     sectionId: section_01
-    lyric: SPRING (startmarkör från Dennis)
+    lyric: "SPRING (startmark\xF6r fr\xE5n Dennis)"
     gameplayCommand: 0
     hasVocalTime: 1
     vocalTimeSeconds: 21.5
@@ -179,9 +179,9 @@ MonoBehaviour:
     cueOffsetSeconds: 0
     gestureLeadSeconds: 0.45
     warningLeadSeconds: 1.2
-    impactOffsetSeconds: 0.8
+    impactOffsetSeconds: 0
     windowBeforeSeconds: 0.35
-    windowAfterSeconds: 0.35
+    windowAfterSeconds: 0.5
     action: 3
     command: 5
     reactionDurationSeconds: 0.8
@@ -189,15 +189,15 @@ MonoBehaviour:
     sectionId: section_03
     lyric: HOPPA
     gameplayCommand: 1
-    hasVocalTime: 0
-    vocalTimeSeconds: 0
-    timingStatus: 0
+    hasVocalTime: 1
+    vocalTimeSeconds: 89.435
+    timingStatus: 1
     cueOffsetSeconds: 0
     gestureLeadSeconds: 0.45
-    warningLeadSeconds: 1.2
-    impactOffsetSeconds: 0.8
-    windowBeforeSeconds: 0.35
-    windowAfterSeconds: 0.35
+    warningLeadSeconds: 0.65
+    impactOffsetSeconds: 0.35
+    windowBeforeSeconds: 0.7
+    windowAfterSeconds: 0.5
     action: 6
     command: 1
     reactionDurationSeconds: 0.8
@@ -205,47 +205,47 @@ MonoBehaviour:
     sectionId: section_03
     lyric: DUCKA
     gameplayCommand: 1
-    hasVocalTime: 0
-    vocalTimeSeconds: 0
-    timingStatus: 0
+    hasVocalTime: 1
+    vocalTimeSeconds: 91.295
+    timingStatus: 1
     cueOffsetSeconds: 0
     gestureLeadSeconds: 0.45
-    warningLeadSeconds: 1.2
-    impactOffsetSeconds: 0.8
-    windowBeforeSeconds: 0.35
-    windowAfterSeconds: 0.35
+    warningLeadSeconds: 0.65
+    impactOffsetSeconds: 0.35
+    windowBeforeSeconds: 0.7
+    windowAfterSeconds: 0.5
     action: 7
     command: 2
     reactionDurationSeconds: 0.8
   - id: command_left_01
     sectionId: section_03
-    lyric: VÄNSTER
+    lyric: "V\xC4NSTER"
     gameplayCommand: 1
-    hasVocalTime: 0
-    vocalTimeSeconds: 0
-    timingStatus: 0
+    hasVocalTime: 1
+    vocalTimeSeconds: 92.2
+    timingStatus: 1
     cueOffsetSeconds: 0
     gestureLeadSeconds: 0.45
-    warningLeadSeconds: 1.2
-    impactOffsetSeconds: 0.8
-    windowBeforeSeconds: 0.35
-    windowAfterSeconds: 0.35
+    warningLeadSeconds: 0.65
+    impactOffsetSeconds: 0.35
+    windowBeforeSeconds: 0.7
+    windowAfterSeconds: 0.5
     action: 8
     command: 3
     reactionDurationSeconds: 0.8
   - id: command_right_01
     sectionId: section_03
-    lyric: HÖGER
+    lyric: "H\xD6GER"
     gameplayCommand: 1
-    hasVocalTime: 0
-    vocalTimeSeconds: 0
-    timingStatus: 0
+    hasVocalTime: 1
+    vocalTimeSeconds: 92.75
+    timingStatus: 1
     cueOffsetSeconds: 0
     gestureLeadSeconds: 0.45
-    warningLeadSeconds: 1.2
-    impactOffsetSeconds: 0.8
-    windowBeforeSeconds: 0.35
-    windowAfterSeconds: 0.35
+    warningLeadSeconds: 0.65
+    impactOffsetSeconds: 0.35
+    windowBeforeSeconds: 0.7
+    windowAfterSeconds: 0.5
     action: 9
     command: 4
     reactionDurationSeconds: 0.8

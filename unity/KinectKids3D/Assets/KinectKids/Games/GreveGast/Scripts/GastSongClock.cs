@@ -15,7 +15,17 @@ namespace KinectKids.Games.GreveGast
             get
             {
                 if (source != null && source.clip != null && source.isPlaying)
-                    return (float)source.timeSamples / source.clip.frequency;
+                {
+                    heldTime = (float)source.timeSamples / source.clip.frequency;
+                    return heldTime;
+                }
+                // A streamed clip can spend its first frames loading after
+                // Play(). Silence during startup is not the end of the song.
+                if (running && clip != null && heldTime >= clip.length - 0.25f)
+                {
+                    heldTime = clip.length;
+                    running = false;
+                }
                 return heldTime;
             }
         }
