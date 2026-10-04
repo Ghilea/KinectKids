@@ -7,6 +7,7 @@ Shader "KinectKids/GreveWindowParallax"
         _FarOffset ("Far offset", Float) = 0
         _NearOffset ("Near offset", Float) = 0
         _WindowAspect ("Opening width / height", Float) = 0.19
+        _Tint ("Night tint", Color) = (1, 1, 1, 1)
     }
     SubShader
     {
@@ -24,6 +25,7 @@ Shader "KinectKids/GreveWindowParallax"
             float _FarOffset;
             float _NearOffset;
             float _WindowAspect;
+            fixed4 _Tint;
             float4 _FarTex_TexelSize;
             float4 _NearTex_TexelSize;
 
@@ -56,7 +58,7 @@ Shader "KinectKids/GreveWindowParallax"
                 fixed4 farColor = tex2D(_FarTex, farUv);
                 fixed4 nearColor = tex2D(_NearTex, nearUv);
                 return fixed4(lerp(farColor.rgb, nearColor.rgb,
-                    nearColor.a * 0.38), 1.0);
+                    nearColor.a * 0.38) * _Tint.rgb, 1.0);
             }
             ENDCG
         }

@@ -17,6 +17,28 @@ namespace KinectKids.Games.GreveGast
         public List<GastSongCue> cues = new List<GastSongCue>();
     }
 
+    /// <summary>Keep timed jump and duck responses when a following action interrupts the animation.</summary>
+    public sealed class GastDodgeHistory
+    {
+        private float jumpTime = -1f;
+        private float duckTime = -1f;
+
+        public void Record(GastGameplayCommand command, float songTime)
+        {
+            if (command == GastGameplayCommand.Jump) jumpTime = songTime;
+            else if (command == GastGameplayCommand.Slide) duckTime = songTime;
+        }
+
+        public bool InWindow(GastGameplayCommand command, float open, float close, float now)
+        {
+            float time = command == GastGameplayCommand.Jump ? jumpTime :
+                command == GastGameplayCommand.Slide ? duckTime : -1f;
+            return time >= 0f && time >= open && time <= close && time <= now;
+        }
+
+        public void Reset() { jumpTime = -1f; duckTime = -1f; }
+    }
+
     /// <summary>Lane masks use bit 0 = left, bit 1 = centre, bit 2 = right.</summary>
     public static class GastRunnerRules
     {

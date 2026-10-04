@@ -7,6 +7,24 @@ static void Check(bool condition, string name)
     Console.WriteLine("PASS " + name);
 }
 
+var dodgeHistory = new GastDodgeHistory();
+dodgeHistory.Record(GastGameplayCommand.Slide, 10f);
+dodgeHistory.Record(GastGameplayCommand.LaneLeft, 10.1f);
+Check(dodgeHistory.InWindow(GastGameplayCommand.Slide, 9.8f, 10.5f, 10.2f),
+    "sidestep after duck preserves the timed duck response");
+dodgeHistory.Record(GastGameplayCommand.Jump, 10.2f);
+Check(dodgeHistory.InWindow(GastGameplayCommand.Slide, 9.8f, 10.5f, 10.3f) &&
+    dodgeHistory.InWindow(GastGameplayCommand.Jump, 10.1f, 10.7f, 10.3f),
+    "jump after duck records both responses independently");
+Check(!dodgeHistory.InWindow(GastGameplayCommand.Slide, 10.1f, 10.7f, 10.3f),
+    "old duck cannot satisfy a later obstacle outside its window");
+Check(!dodgeHistory.InWindow(GastGameplayCommand.Jump, 10.1f, 10.7f, 10.15f),
+    "future movement cannot satisfy an earlier song position");
+dodgeHistory.Reset();
+Check(!dodgeHistory.InWindow(GastGameplayCommand.Slide, 9.8f, 10.5f, 10.3f) &&
+    !dodgeHistory.InWindow(GastGameplayCommand.Jump, 10.1f, 10.7f, 10.3f),
+    "seek or player change clears previous movement responses");
+
 var song = new GastSongAsset();
 var jump = new GastSongCue { id = "jump", vocalTimeSeconds = 10f,
     hasVocalTime = true, timingStatus = GastTimingStatus.Estimated,
@@ -91,6 +109,26 @@ Check(clock.TimeSeconds == 0f, "explicit stop resets the clock");
 string assetPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
     "../../../../../unity/KinectKids3D/Assets/Resources/GastSong.asset"));
 string assetText = File.ReadAllText(assetPath);
+string introFields = System.Text.RegularExpressions.Regex.Match(assetText,
+    @"(?ms)^  - id: intro_spring_01\r?\n(?<fields>.*?)(?=^  - id: |\z)").Groups["fields"].Value;
+float IntroField(string name) => float.Parse(System.Text.RegularExpressions.Regex.Match(
+    introFields, @"(?m)^    " + name + @": ([-\d.]+)").Groups[1].Value,
+    System.Globalization.CultureInfo.InvariantCulture);
+var introSong = new GastSongAsset();
+introSong.cues.Add(new GastSongCue { id = "intro_spring_01", hasVocalTime = true,
+    timingStatus = GastTimingStatus.Estimated, gameplayCommand = false,
+    vocalTimeSeconds = IntroField("vocalTimeSeconds"), gestureLeadSeconds = IntroField("gestureLeadSeconds"),
+    action = GastCueAction.ChaseLaunch, command = GastGameplayCommand.RunStart });
+Check(introSong.cues[0].EffectiveTime(introSong) == 21f, "shipped SPRING marker is at 21 seconds");
+var introTimeline = new GastCueTimeline(introSong);
+var introEvents = new List<string>();
+introTimeline.Cue += (_, phase) => introEvents.Add(phase);
+introTimeline.Tick(0f, 20.99f);
+Check(introEvents.Count == 0, "SPRING gesture does not interrupt idle early");
+introTimeline.Tick(20.99f, 21f);
+Check(introEvents.SequenceEqual(new[] { "gesture" }), "SPRING gesture starts on its sung marker");
+introTimeline.Tick(21f, 22f);
+Check(introEvents.Count == 1, "SPRING gesture fires once without gameplay hazards");
 var authoredSong = new GastSongAsset();
 foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
     assetText, @"(?ms)^  - id: (command_[^\r\n]+)\r?\n(?<fields>.*?)(?=^  - id: |\z)"))

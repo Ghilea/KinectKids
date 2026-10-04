@@ -236,7 +236,6 @@ namespace KinectKids3D.Editor
             asset.master = Resources.Load<AudioClip>("Audio/Music/GreveGastsJakt");
             string[] names = { "Introduktion", "Första versen", "Första refrängen", "Instrumental jakt", "Köket", "Rörelseföljd", "Refräng och vasen", "Galleriet", "Ny rörelsepaus", "Falsk trygghet", "Källaren", "Kommandon och svar", "Sista uppbyggnaden", "Slutrefräng", "Rörelser", "Nedräkning", "Slutet" };
             for (int i = 0; i < names.Length; i++) asset.sections.Add(new GastSongSection { id = "section_" + (i + 1).ToString("00"), title = names[i], hasStartTime = false, hasEndTime = false });
-            asset.cues.Add(new GastSongCue { id = "intro_spring_01", sectionId = "section_01", lyric = "SPRING (startmarkör från Dennis)", hasVocalTime = true, vocalTimeSeconds = 21.5f, timingStatus = GastTimingStatus.Estimated, action = GastCueAction.ChaseLaunch, command = GastGameplayCommand.RunStart, gameplayCommand = false });
             ApplyCommandTimes(asset);
             const string path = "Assets/Resources/GastSong.asset";
             AssetDatabase.CreateAsset(asset, path);
@@ -246,7 +245,7 @@ namespace KinectKids3D.Editor
         // Edit the four vocal times HERE. Both new and existing assets use them.
         private static bool ApplyCommandTimes(GastSongAsset asset)
         {
-            bool changed = false;
+            bool changed = ApplyIntroTiming(asset);
             changed |= AddEstimatedCommand(asset, "command_jump_01", "section_03", "HOPPA", 89.435f, GastCueAction.CommandJump, GastGameplayCommand.Jump);
             changed |= AddEstimatedCommand(asset, "command_slide_01", "section_03", "DUCKA", 91.295f, GastCueAction.CommandSlide, GastGameplayCommand.Slide);
             changed |= AddEstimatedCommand(asset, "command_left_01", "section_03", "VÄNSTER", 92.200f, GastCueAction.CommandLaneLeft, GastGameplayCommand.LaneLeft);
@@ -254,7 +253,32 @@ namespace KinectKids3D.Editor
             return changed;
         }
         private static bool IsSourceTimedCommand(string id)
-            => id == "command_jump_01" || id == "command_slide_01" || id == "command_left_01" || id == "command_right_01";
+            => id == "intro_spring_01" || id == "command_jump_01" || id == "command_slide_01" || id == "command_left_01" || id == "command_right_01";
+
+        private static bool ApplyIntroTiming(GastSongAsset asset)
+        {
+            // Single source for the intro launch: the runner reads this marker too.
+            const float runVocalTime = 21f;
+            GastSongCue run = asset.cues.Find(cue => cue != null && cue.id == "intro_spring_01");
+            bool created = run == null;
+            if (created)
+            {
+                run = new GastSongCue { id = "intro_spring_01", sectionId = "section_01", lyric = "SPRING" };
+                asset.cues.Add(run);
+            }
+            bool changed = created || run.vocalTimeSeconds != runVocalTime || run.gestureLeadSeconds != 0f ||
+                !run.hasVocalTime || run.action != GastCueAction.ChaseLaunch ||
+                run.command != GastGameplayCommand.RunStart || run.gameplayCommand;
+            if (!changed) return false;
+            run.vocalTimeSeconds = runVocalTime;
+            run.gestureLeadSeconds = 0f;
+            run.hasVocalTime = true;
+            run.timingStatus = GastTimingStatus.Estimated;
+            run.action = GastCueAction.ChaseLaunch;
+            run.command = GastGameplayCommand.RunStart;
+            run.gameplayCommand = false;
+            return true;
+        }
 
         private static bool AddEstimatedCommand(GastSongAsset asset, string id, string section, string lyric, float time, GastCueAction action, GastGameplayCommand command)
         {

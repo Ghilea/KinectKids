@@ -16,7 +16,11 @@ namespace KinectKids.Games.GreveGast
         private static readonly Dictionary<string, Sprite> cache = new Dictionary<string, Sprite>();
 
         public static Sprite Player(string pose) => Load("Player/player_" + pose);
-        public static Sprite Greve(string pose) => Load("GreveGast/greve_" + pose);
+        public static Sprite Greve(string pose)
+        {
+            Sprite[] frames = GreveAnimation(pose);
+            return frames.Length > 0 ? frames[0] : null;
+        }
         public static Sprite Environment(string name) => Load("Environment/" + name);
         public static Sprite Hazard(string name) => Load("Hazards/" + name);
 
@@ -28,8 +32,51 @@ namespace KinectKids.Games.GreveGast
         public static Sprite[] PlayerAnimation(string prefix, int maximumFrames = 16)
             => LoadSequence("Player/player_" + prefix + "_", maximumFrames);
 
+        private static readonly Dictionary<string, Sprite[]> greveClips = new Dictionary<string, Sprite[]>();
+
         public static Sprite[] GreveAnimation(string prefix, int maximumFrames = 16)
-            => LoadSequence("GreveGast/greve_" + prefix + "_", maximumFrames);
+        {
+            // Compatibility names used by the other chase scenes resolve to the new art too.
+            switch (prefix)
+            {
+                case "idle": case "stunned": case "sad": case "mist": case "dissolve":
+                case "duck_react": prefix = "idle_loop"; break;
+                case "fly": case "chase": case "chase_near": case "far": prefix = "chase_fast_loop"; break;
+                case "sing": case "cast": prefix = "shout_run"; break;
+                case "lean": prefix = "shout_duck"; break;
+                case "threaten": case "victory": prefix = "surge_forward"; break;
+                // reach_center's supplied sheet has an opaque backdrop and numbered frames.
+                case "reach": case "reach_center": prefix = "surge_forward"; break;
+            }
+            if (greveClips.TryGetValue(prefix, out Sprite[] cached)) return cached;
+            int columns;
+            switch (prefix)
+            {
+                case "intro_taunt": case "intro_to_idle": case "idle_loop":
+                case "chase_fast_loop": case "surge_forward": columns = 4; break;
+                case "strafe_left": case "strafe_right": case "reach_left": case "reach_right":
+                case "shout_run": case "shout_jump": case "shout_duck":
+                case "shout_left": case "shout_right": columns = 3; break;
+                default: return System.Array.Empty<Sprite>();
+            }
+            Texture2D sheet = Resources.Load<Texture2D>(Root + "GreveAnimations/greve_" + prefix);
+            if (sheet == null) return System.Array.Empty<Sprite>();
+            // These are isolated, padded atlases produced by Prepare-GreveGastAnimations.py,
+            // not the original irregularly spaced sheets. Read top row, then bottom.
+            // Equal canvases and the common foot pivot prevent frame-to-frame resizing.
+            int width = sheet.width / columns;
+            int height = sheet.height / 2;
+            var frames = new Sprite[columns * 2];
+            for (int i = 0; i < frames.Length; i++)
+            {
+                frames[i] = Sprite.Create(sheet,
+                    new Rect(i % columns * width, (1 - i / columns) * height, width, height),
+                    new Vector2(0.5f, 0f), 100f, 0, SpriteMeshType.FullRect);
+                frames[i].name = "greve_" + prefix + "_" + (i + 1);
+            }
+            greveClips[prefix] = frames;
+            return frames;
+        }
 
         public static bool HasPlayerArt => Player("idle") != null;
         public static bool HasGreveArt => Greve("idle") != null;

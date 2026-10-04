@@ -43,22 +43,22 @@ namespace KinectKids.Games.GreveGast
         [Tooltip("Extra world-space height at the top of the jump arc.")]
         public float playerJumpHeight = 1.35f;
         public float playerJumpDuration = 0.68f;
-        public float playerDuckDuration = 0.82f;
+        public float playerDuckDuration = 0.45f;
         public float playerHitDuration = 0.72f;
         public float playerRecoverDuration = 0.86f;
-        public float greveFarZ = 16f;
-        public float greveNearZ = 4.8f;
+        public float greveFarZ = 20f;
+        public float greveNearZ = 6.8f;
         public float greveHeight = 5.8f;
 
         [Header("Chase")]
-        public float catchOnHit = 0.14f;
+        public float catchOnHit = 0.045f;
         [Tooltip("How quickly Greve closes in when the player lets the corridor carry them.")]
-        public float passivePressurePerSecond = 0.028f;
+        public float passivePressurePerSecond = 0.006f;
         [Tooltip("Additional distance gained by running in place or holding Shift.")]
-        public float runDrainPerSecond = 0.055f;
+        public float runDrainPerSecond = 0.015f;
         [Tooltip("Extra distance Greve Gast gains while the player ducks.")]
-        public float duckPressurePerSecond = 0.11f;
-        public float hitPressurePerSecond = 0.14f;
+        public float duckPressurePerSecond = 0.006f;
+        public float hitPressurePerSecond = 0.02f;
 
         [Header("Theme demonstration")]
         [Tooltip("Streams Kitchen segments in behind CastleCorridor after this many seconds.")]
@@ -72,16 +72,13 @@ namespace KinectKids.Games.GreveGast
         private readonly List<EnvironmentSegment3D> segments = new List<EnvironmentSegment3D>();
         private readonly List<RunHazard> hazards = new List<RunHazard>();
         private Material hazardShadowMaterial;
+        private Material lowDuckArchMaterial;
         private readonly Dictionary<EnvironmentTheme, ThemeStyle> themeStyles = new Dictionary<EnvironmentTheme, ThemeStyle>();
 
         private SpriteRenderer player;
         private SpriteRenderer greve;
         private SpriteRenderer introPortrait;
-        private SpriteRenderer restingPortrait;
-        private SpriteRenderer[] choirGhosts;
         private Sprite[] portraitFrames;
-        private Sprite[] choirFrames;
-        private readonly List<Vector2> choirSections = new List<Vector2>();
         private Transform darknessRoot;
         private GastLivingFog livingFogMass;
         private GastFogController livingFogController;
@@ -94,9 +91,11 @@ namespace KinectKids.Games.GreveGast
         private Sprite[] playerDuckFrames;
         private Sprite[] playerHitFrames;
         private Sprite[] playerRecoverFrames;
-        private Sprite[] greveSingFrames;
-        private Sprite[] greveFlyFrames;
-        private Sprite[] greveDuckReactFrames;
+        private string greveAnimation;
+        private float greveAnimationElapsed;
+        private float greveAnimationCueTime = -1f;
+        private Sprite[] greveTransitionFrames;
+        private Sprite[] greveIdleFrames;
         private GreveGastBodyInput body;
         private AudioSource music;
         private GastSongClock songClock;
@@ -105,8 +104,7 @@ namespace KinectKids.Games.GreveGast
         private float lastSongCueTime;
         private float lastGestureCueTime = -1f;
         private GastCueAction activeGestureCue;
-        private float lastDodgeSongTime = -1f;
-        private DodgeAction lastDodgeAction;
+        private readonly GastDodgeHistory dodgeHistory = new GastDodgeHistory();
         private float resultPoseUntil;
         private bool lastCueSucceeded;
         private bool songDrivenHazards;
@@ -118,7 +116,7 @@ namespace KinectKids.Games.GreveGast
         private DodgeAction currentDodge = DodgeAction.None;
         private float lateral;
         private float worldSpeed;
-        private float chase = 0.35f;
+        private float chase = 0.22f;
         private bool sprinting;
         private bool gainingDistance;
         private bool greveFinalReachPose;
@@ -141,17 +139,21 @@ namespace KinectKids.Games.GreveGast
         private const float IntroCrawlEnd = 3.2f;
         private const float IntroLookEnd = 6.2f;
         private const float IntroWalkEnd = 10.2f;
-        private const float IntroGreveReveal = 17.5f;
-        private const float IntroPortraitStart = IntroGreveReveal - 0.9f;
-        private const float IntroGreveEmerge = IntroGreveReveal + 1.1f;
-        private const float PortraitCrossfadeDuration = 0.85f;
+        private float IntroGreveReveal => IntroChaseStart - 8f;
+        private float IntroPortraitStart => IntroChaseStart - 9f;
+        private float IntroGreveEmerge => IntroChaseStart - 6.5f;
         private const float GreveEmergenceDuration = 1.5f;
-        private static readonly Vector2[] PortraitFrameAnchors =
+        private float IntroChaseStart
         {
-            new Vector2(82f, 135f), new Vector2(89f, 135f),
-            new Vector2(97f, 133f), new Vector2(126f, 128f)
-        };
-        private const float IntroChaseStart = 22f;
+            get
+            {
+                if (gastSong != null && gastSong.cues != null)
+                    foreach (GastSongCue cue in gastSong.cues)
+                        if (cue != null && cue.id == "intro_spring_01" && cue.hasVocalTime)
+                            return cue.EffectiveTime(gastSong);
+                return 21f;
+            }
+        }
         private const float IntroWallZ = 14.5f;
         private Transform introWall;
         private Light introPoofLight;
@@ -188,7 +190,6 @@ namespace KinectKids.Games.GreveGast
             BuildCharacters();
             BuildIntroWall();
             BuildIntroPortrait();
-            ReadChoirSections();
             BeginIntro();
             StartMusic();
         }
@@ -208,7 +209,7 @@ namespace KinectKids.Games.GreveGast
             worldCamera.farClipPlane = 150f;
             worldCamera.depthTextureMode |= DepthTextureMode.Depth;
             worldCamera.clearFlags = CameraClearFlags.SolidColor;
-            worldCamera.backgroundColor = new Color(0.035f, 0.045f, 0.07f, 1f);
+            worldCamera.backgroundColor = new Color(0.006f, 0.008f, 0.017f, 1f);
 
             if (FindFirstObjectByType<AudioListener>() == null)
                 cameraGo.AddComponent<AudioListener>();
@@ -253,7 +254,7 @@ namespace KinectKids.Games.GreveGast
                 CreateTiledMaterial(new Color(0.90f, 0.78f, 0.62f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.56f, 0.46f, 0.38f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.66f, 0.48f, 0.30f), wallTexture, accentTiling),
-                new Color(1f, 0.64f, 0.30f), "env_8", "new_chain");
+                new Color(1f, 0.64f, 0.30f), "env_8", "sheet_plaque");
             themeStyles[EnvironmentTheme.Passage] = new ThemeStyle(EnvironmentTheme.Passage,
                 CreateTiledMaterial(new Color(0.60f, 0.72f, 0.74f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.54f, 0.68f, 0.72f), wallTexture, wallTiling),
@@ -265,17 +266,18 @@ namespace KinectKids.Games.GreveGast
                 CreateTiledMaterial(new Color(0.55f, 0.51f, 0.52f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.36f, 0.33f, 0.38f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.45f, 0.39f, 0.36f), wallTexture, accentTiling),
-                new Color(1f, 0.48f, 0.20f), "new_torch", "new_chain");
+                new Color(1f, 0.48f, 0.20f), "new_torch", "sheet_gargoyle");
             themeStyles[EnvironmentTheme.Cellar] = new ThemeStyle(EnvironmentTheme.Cellar,
                 CreateTiledMaterial(new Color(0.42f, 0.46f, 0.51f), floorTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.42f, 0.46f, 0.55f), wallTexture, wallTiling),
                 CreateTiledMaterial(new Color(0.27f, 0.30f, 0.38f), wallTexture, floorTiling),
                 CreateTiledMaterial(new Color(0.35f, 0.38f, 0.44f), wallTexture, accentTiling),
-                new Color(1f, 0.46f, 0.18f), "sheet_cobweb", "new_chain");
+                new Color(1f, 0.46f, 0.18f), "sheet_cobweb", "sheet_plaque");
         }
 
         private static Material CreateTiledMaterial(Color tint, Texture2D texture, Vector2 tiling, float metallic = 0f)
         {
+            tint = new Color(tint.r * 0.48f, tint.g * 0.50f, tint.b * 0.58f, tint.a);
             if (texture == null) return MaterialFactory.Solid(tint, metallic);
             Material material = MaterialFactory.Textured(tint, texture, metallic);
             if (material.HasProperty("_MainTex")) material.SetTextureScale("_MainTex", tiling);
@@ -286,12 +288,12 @@ namespace KinectKids.Games.GreveGast
         private void BuildLighting()
         {
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.11f, 0.12f, 0.16f);
+            RenderSettings.ambientLight = new Color(0.022f, 0.028f, 0.050f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = worldCamera.backgroundColor;
-            RenderSettings.fogStartDistance = 24f;
-            RenderSettings.fogEndDistance = 88f;
+            RenderSettings.fogStartDistance = 18f;
+            RenderSettings.fogEndDistance = 48f;
 
         }
 
@@ -346,23 +348,21 @@ namespace KinectKids.Games.GreveGast
             playerDuckFrames = GreveChaseSprites.PlayerAnimation("duck");
             playerHitFrames = GreveChaseSprites.PlayerAnimation("hit");
             playerRecoverFrames = GreveChaseSprites.PlayerAnimation("recover");
-            greveSingFrames = GreveChaseSprites.GreveAnimation("sing");
-            greveFlyFrames = GreveChaseSprites.GreveAnimation("fly");
-            greveDuckReactFrames = GreveChaseSprites.GreveAnimation("duck_react");
+            greveTransitionFrames = GreveChaseSprites.GreveAnimation("intro_to_idle");
+            greveIdleFrames = GreveChaseSprites.GreveAnimation("idle_loop");
 
             Sprite playerStart = playerRunFrames.Length > 0 ? playerRunFrames[0] : ResolvePlayer("run_near");
-            Sprite greveStart = greveSingFrames.Length > 0 ? greveSingFrames[0] : ResolveGreve("chase");
+            Sprite greveStart = ResolveGreve("idle");
             player = BuildActor("Player", playerStart, playerHeight,
                 new Vector3(0f, 0f, Mathf.Max(playerZ, playerStartZ)));
             greve = BuildActor("Greve Gast (singing)", greveStart, greveHeight,
                 new Vector3(0f, 0.25f, greveFarZ));
-            BuildChoirGhosts();
             BuildDarknessFront();
         }
 
         private void BuildIntroPortrait()
         {
-            portraitFrames = GreveEnvironmentSheets.Portrait;
+            portraitFrames = GreveChaseSprites.GreveAnimation("intro_taunt");
             if (portraitFrames.Length == 0 || portraitFrames[0] == null || introWall == null) return;
             GameObject painting = new GameObject("Greve emerges from painting");
             painting.transform.SetParent(introWall, false);
@@ -375,60 +375,6 @@ namespace KinectKids.Games.GreveGast
             introPortrait.sortingOrder = 14;
             SizeSpriteToHeight(introPortrait, 4.3f);
             introPortrait.enabled = true;
-            PositionPortraitFrame(introPortrait, 0);
-            GameObject resting = new GameObject("Painting after Greve leaves");
-            resting.transform.SetParent(introWall, false);
-            resting.transform.localRotation = painting.transform.localRotation;
-            restingPortrait = resting.AddComponent<SpriteRenderer>();
-            restingPortrait.sprite = portraitFrames[0];
-            restingPortrait.sortingOrder = 13;
-            restingPortrait.color = new Color(1f, 1f, 1f, 0f);
-            PositionPortraitFrame(restingPortrait, 0);
-        }
-
-        private void PositionPortraitFrame(SpriteRenderer renderer, int frame)
-        {
-            SizeSpriteToHeight(renderer, 4.3f);
-            Vector2 anchor = PortraitFrameAnchors[Mathf.Min(frame, PortraitFrameAnchors.Length - 1)];
-            Sprite sprite = renderer.sprite;
-            float pixelScale = renderer.transform.localScale.x / sprite.pixelsPerUnit;
-            // The final artwork extends to the right of the frame. Anchor all
-            // images to the painting itself rather than their canvas centres.
-            renderer.transform.localPosition = new Vector3(
-                (sprite.rect.width * 0.5f - anchor.x) * pixelScale,
-                6.75f - anchor.y * pixelScale, -0.85f);
-        }
-
-        private void BuildChoirGhosts()
-        {
-            choirFrames = GreveEnvironmentSheets.Choir;
-            if (choirFrames.Length == 0 || choirFrames[0] == null) return;
-            choirGhosts = new SpriteRenderer[2];
-            for (int i = 0; i < choirGhosts.Length; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                choirGhosts[i] = BuildActor("Singing little ghost " + i, choirFrames[0], 2.6f,
-                    new Vector3(side * (corridorWidth * 0.5f - 1.8f), 0.9f, 8.5f));
-                choirGhosts[i].flipX = i == 1;
-                choirGhosts[i].color = new Color(1f, 1f, 1f, 0f);
-            }
-        }
-
-        private void ReadChoirSections()
-        {
-            TextAsset timelineJson = Resources.Load<TextAsset>("GreveGast/GreveGastTimeline");
-            if (timelineJson == null) return;
-            GreveGastTimelineData timeline = JsonUtility.FromJson<GreveGastTimelineData>(timelineJson.text);
-            if (timeline == null || timeline.sections == null) return;
-            for (int i = 0; i < timeline.sections.Length; i++)
-            {
-                GreveGastSection section = timeline.sections[i];
-                if (section == null || string.IsNullOrEmpty(section.name) ||
-                    !section.name.ToLowerInvariant().Contains("refr")) continue;
-                float end = i + 1 < timeline.sections.Length
-                    ? timeline.sections[i + 1].start : timeline.songLength;
-                choirSections.Add(new Vector2(section.start, end));
-            }
         }
 
         private void BuildIntroWall()
@@ -522,21 +468,11 @@ namespace KinectKids.Games.GreveGast
             if (player == null || greve == null) return;
             if (introPortrait != null)
             {
-                float portraitProgress = Mathf.Clamp01(
-                    (introElapsed - IntroPortraitStart) / (IntroGreveEmerge - IntroPortraitStart));
-                int frame = Mathf.Min(portraitFrames.Length - 1,
-                    Mathf.FloorToInt(portraitProgress * portraitFrames.Length));
-                if (portraitFrames[frame] != null && introPortrait.sprite != portraitFrames[frame])
-                {
-                    introPortrait.sprite = portraitFrames[frame];
-                    PositionPortraitFrame(introPortrait, frame);
-                }
-                float dissolve = Mathf.SmoothStep(0f, 1f,
-                    (introElapsed - IntroGreveEmerge) / PortraitCrossfadeDuration);
-                introPortrait.color = new Color(1f, 1f, 1f, 1f - dissolve);
-                introPortrait.enabled = dissolve < 1f;
-                if (restingPortrait != null)
-                    restingPortrait.color = new Color(1f, 1f, 1f, dissolve);
+                // Hold the framed portrait until the reveal, then play the entire taunt once.
+                float progress = Mathf.Clamp01((introElapsed - IntroPortraitStart) /
+                    (IntroGreveEmerge - IntroPortraitStart));
+                introPortrait.sprite = FrameProgress(portraitFrames, progress);
+                introPortrait.enabled = introElapsed < IntroGreveEmerge;
             }
             Vector3 position = player.transform.localPosition;
             if (introElapsed < IntroCrawlEnd)
@@ -584,18 +520,20 @@ namespace KinectKids.Games.GreveGast
             if (introElapsed >= emergeAt)
             {
                 if (!greve.gameObject.activeSelf) greve.gameObject.SetActive(true);
-                float appear = Mathf.SmoothStep(0f, 1f,
-                    (introElapsed - emergeAt) / PortraitCrossfadeDuration);
                 float movement = Mathf.SmoothStep(0f, 1f,
                     (introElapsed - emergeAt) / GreveEmergenceDuration);
-                greve.sprite = ResolveGreve("threaten");
-                greve.color = new Color(1f, 1f, 1f, appear);
+                float transitionTime = introElapsed - emergeAt;
+                greve.sprite = transitionTime < GreveEmergenceDuration
+                    ? FrameProgress(greveTransitionFrames, transitionTime / GreveEmergenceDuration)
+                    : Frame(greveIdleFrames, transitionTime - GreveEmergenceDuration, 7f, false);
+                greve.color = Color.white;
                 float chaseEase = Mathf.SmoothStep(0f, 1f, chase);
-                float chaseHeight = greveHeight * Mathf.Lerp(1.05f, 1.58f, chaseEase);
-                SizeSpriteToHeight(greve, Mathf.Lerp(3.3f, chaseHeight, movement));
-                Vector3 paintingOrigin = new Vector3(1.65f, 4.8f, IntroWallZ - 1.05f);
-                Vector3 chasePosition = new Vector3(0f, 0.38f, Mathf.Lerp(greveFarZ, greveNearZ, chase));
-                greve.transform.localPosition = Vector3.Lerp(paintingOrigin, chasePosition, movement);
+                float chaseHeight = greveHeight * Mathf.Lerp(1.05f, 1.38f, chaseEase);
+                SizeSpriteToHeight(greve, Mathf.Lerp(4.3f, chaseHeight, movement));
+                Vector3 paintingOrigin = introPortrait != null ? introPortrait.transform.position :
+                    transform.TransformPoint(new Vector3(0f, 4.55f, IntroWallZ - 0.85f));
+                Vector3 chasePosition = new Vector3(0f, 0.38f, GreveDepthInFrontOfWall());
+                greve.transform.localPosition = Vector3.Lerp(transform.InverseTransformPoint(paintingOrigin), chasePosition, movement);
                 greve.sortingOrder = DepthSortOrder(greve.transform.localPosition.z);
                 if (introPoofLight != null)
                     introPoofLight.transform.localPosition = greve.transform.localPosition + Vector3.up * 2f;
@@ -662,7 +600,7 @@ namespace KinectKids.Games.GreveGast
             floorFogVolumeMaterial = BuildFogVolume("Raymarchad blåvit 3D-golvdimma", transform,
                 new Vector3(0f, 1.55f, -3.0f),
                 new Vector3(corridorWidth * 1.16f, 4.5f, 14f),
-                new Color(0.37f, 0.48f, 0.68f, 0.25f),
+                new Color(0.13f, 0.19f, 0.32f, 0.22f),
                 1.25f,
                 0.30f,
                 1f,
@@ -683,7 +621,7 @@ namespace KinectKids.Games.GreveGast
             foregroundFloorFogMaterial = BuildFogVolume("Blåvit 3D-golvdimma vid spelaren", transform,
                 new Vector3(0f, 0.75f, -2.5f),
                 new Vector3(corridorWidth * 1.06f, 2.6f, 9f),
-                new Color(0.36f, 0.46f, 0.65f, 0.27f),
+                new Color(0.12f, 0.18f, 0.30f, 0.22f),
                 1.1f,
                 0.22f,
                 1f,
@@ -1265,6 +1203,8 @@ namespace KinectKids.Games.GreveGast
             if (captureStarted)
             {
                 captureFadeElapsed += Time.unscaledDeltaTime;
+                if (greve != null && greveAnimation != null)
+                    ShowGreveAnimation(greveAnimation, Time.unscaledDeltaTime, 8f, false);
                 if (music != null)
                 {
                     music.volume = captureMusicVolume * (1f - Mathf.SmoothStep(0f, 1f,
@@ -1282,7 +1222,8 @@ namespace KinectKids.Games.GreveGast
             TickSongCues();
             if (!chaseStarted)
             {
-                introElapsed += dt;
+                introElapsed = songClock != null && music != null && music.clip != null
+                    ? songClock.TimeSeconds : introElapsed + dt;
                 DriveIntro(dt);
                 if (introElapsed >= IntroChaseStart) BeginChase();
                 return;
@@ -1294,7 +1235,6 @@ namespace KinectKids.Games.GreveGast
             StreamSegments(dt);
             MoveIllustratedVista(dt);
             DriveCharacters(dt);
-            UpdateChoirGhosts();
             if (darknessRoot != null)
             {
                 float growth = Mathf.SmoothStep(0f, 1f, elapsed / 3f);
@@ -1336,6 +1276,7 @@ namespace KinectKids.Games.GreveGast
                 manualLaneMode = false;
                 lastBodySide = body.BodySide;
                 previousRawAction = GreveGastAction.None;
+                dodgeHistory.Reset();
                 if (player != null)
                 {
                     Vector3 position = player.transform.localPosition;
@@ -1365,11 +1306,14 @@ namespace KinectKids.Games.GreveGast
 
             GreveGastAction raw = body.Current;
             bool freshAction = raw != previousRawAction;
-            if (playerMotion == PlayerMotion.Running)
+            // Ducking may immediately yield to a sidestep or jump. The animation
+            // should never consume the next action while nearby obstacles approach.
+            if (playerMotion == PlayerMotion.Running || playerMotion == PlayerMotion.Ducking)
             {
                 if ((freshAction && raw == GreveGastAction.Jump) || Input.GetKeyDown(KeyCode.W))
                     BeginMotion(PlayerMotion.Jumping);
-                else if (freshAction && raw == GreveGastAction.Duck) BeginMotion(PlayerMotion.Ducking);
+                else if (playerMotion == PlayerMotion.Running && freshAction && raw == GreveGastAction.Duck)
+                    BeginMotion(PlayerMotion.Ducking);
                 else
                 {
                     int direction = 0;
@@ -1428,12 +1372,9 @@ namespace KinectKids.Games.GreveGast
         {
             playerMotion = motion;
             playerMotionTime = 0f;
-            if (motion == PlayerMotion.Jumping) lastDodgeAction = DodgeAction.Jump;
-            else if (motion == PlayerMotion.Ducking) lastDodgeAction = DodgeAction.Duck;
-            else if (motion == PlayerMotion.ChangingLane)
-                lastDodgeAction = laneMoveDirection < 0 ? DodgeAction.Left : DodgeAction.Right;
-            else return;
-            lastDodgeSongTime = songClock != null ? songClock.TimeSeconds : -1f;
+            float now = songClock != null ? songClock.TimeSeconds : -1f;
+            if (motion == PlayerMotion.Jumping) dodgeHistory.Record(GastGameplayCommand.Jump, now);
+            else if (motion == PlayerMotion.Ducking) dodgeHistory.Record(GastGameplayCommand.Slide, now);
         }
 
         private bool ActiveSongSideCommand(int direction)
@@ -1630,62 +1571,103 @@ namespace KinectKids.Games.GreveGast
             }
             if (greve != null)
             {
-                // Greven måste alltid läsas som en hel figur under jakten. De
-                // beskurna sånghuvudena används därför inte här: flygsekvensen
-                // bär sången; nära spelaren håller Greve en stadig jaktpose.
-                Sprite sprite;
-                bool sillyDuck = false;
-                bool nearPlayer = chase >= 0.76f;
-                // Enter the reaching pose only at the final approach. A wider
-                // exit threshold prevents rapid pose switching near the limit.
                 if (chase >= 0.94f) greveFinalReachPose = true;
                 else if (chase <= 0.86f) greveFinalReachPose = false;
-                if (greveFinalReachPose) sprite = ResolveGreve("reach");
-                else if (songClock != null && songClock.TimeSeconds < resultPoseUntil)
-                    sprite = ResolveGreve(lastCueSucceeded ? "stunned" : "sad");
-                else if (lastGestureCueTime >= 0f && songClock != null && songClock.TimeSeconds - lastGestureCueTime < 1.1f)
+                string clip = "chase_fast_loop";
+                bool loop = true;
+                float fps = 10f;
+                float animationTriggerTime = -1f;
+                float cueTime = songClock != null ? songClock.TimeSeconds : elapsed;
+                bool gesture = lastGestureCueTime >= 0f && cueTime >= lastGestureCueTime &&
+                    cueTime - lastGestureCueTime < 1.1f &&
+                    (activeGestureCue == GastCueAction.ChaseLaunch ||
+                     activeGestureCue == GastCueAction.CommandJump ||
+                     activeGestureCue == GastCueAction.CommandSlide ||
+                     activeGestureCue == GastCueAction.CommandLaneLeft ||
+                     activeGestureCue == GastCueAction.CommandLaneRight);
+                if (greveFinalReachPose)
+                {
+                    float targetX = player != null ? player.transform.localPosition.x : lateral * laneSpacing;
+                    clip = targetX < -laneSpacing * 0.35f ? "reach_left" :
+                        targetX > laneSpacing * 0.35f ? "reach_right" : "reach_center";
+                    loop = false;
+                    fps = 8f;
+                }
+                else if (gesture)
                 {
                     switch (activeGestureCue)
                     {
-                        case GastCueAction.ChaseLaunch: sprite = ResolveGreve("threaten"); break;
-                        case GastCueAction.CommandJump: sprite = ResolveGreve("cast"); break;
-                        case GastCueAction.CommandSlide: sprite = ResolveGreve("lean"); break;
-                        case GastCueAction.CommandLaneLeft:
-                        case GastCueAction.CommandLaneRight: sprite = ResolveGreve("cast"); break;
-                        default: sprite = nearPlayer ? ResolveGreve("chase_near") :
-                            (greveFlyFrames.Length > 0 ? Frame(greveFlyFrames, elapsed, 7.5f, true) : ResolveGreve("chase")); break;
+                        case GastCueAction.CommandJump: clip = "shout_jump"; break;
+                        case GastCueAction.CommandSlide: clip = "shout_duck"; break;
+                        case GastCueAction.CommandLaneLeft: clip = "shout_left"; break;
+                        case GastCueAction.CommandLaneRight: clip = "shout_right"; break;
+                        case GastCueAction.ChaseLaunch: clip = "shout_run"; break;
                     }
+                    loop = false;
+                    fps = 7f;
+                    animationTriggerTime = lastGestureCueTime;
                 }
-                else if (nearPlayer) sprite = ResolveGreve("chase_near");
-                else if (playerMotion == PlayerMotion.Ducking && greveDuckReactFrames.Length > 0)
+                else if (songClock != null && cueTime < resultPoseUntil)
                 {
-                    sprite = Frame(greveDuckReactFrames, playerMotionTime, 6f, true);
-                    sillyDuck = true;
+                    clip = lastCueSucceeded ? "idle_loop" : "surge_forward";
+                    loop = lastCueSucceeded;
+                    fps = 8f;
+                    animationTriggerTime = resultPoseUntil;
                 }
-                else if (Mathf.Repeat(elapsed, 2.35f) < 0.38f) sprite = ResolveGreve("threaten");
-                else if (greveFlyFrames.Length > 0) sprite = Frame(greveFlyFrames, elapsed, 7.5f, true);
-                else sprite = ResolveGreve("chase");
-                if (sprite != null && greve.sprite != sprite)
-                    greve.sprite = sprite;
+                else if (playerMotion == PlayerMotion.ChangingLane)
+                {
+                    clip = laneMoveDirection < 0 ? "strafe_left" : "strafe_right";
+                    loop = false;
+                    fps = 6f / Mathf.Max(0.1f, laneChangeDuration);
+                }
+                ShowGreveAnimation(clip, dt, fps, loop, animationTriggerTime);
 
                 // Perspective already contributes to apparent size, but the
                 // authored chase also calls for an unmistakable far/near read.
                 // Recalculate from the current frame every tick (no accumulated
                 // scaling), small in the distance and imposing near the player.
                 float chaseEase = chase * chase * (3f - 2f * chase);
-                float distanceScale = Mathf.Lerp(1.05f, 1.58f, chaseEase);
-                SizeSpriteToHeight(greve, greveHeight * distanceScale * (sillyDuck ? 1.05f : 1f));
+                float distanceScale = Mathf.Lerp(1.05f, 1.38f, chaseEase);
+                SizeSpriteToHeight(greve, greveHeight * distanceScale);
                 Vector3 p = greve.transform.localPosition;
                 float hoverX = Mathf.Sin(elapsed * 1.15f) * Mathf.Lerp(1.15f, 0.28f, chaseEase);
                 p.x = Mathf.Lerp(p.x, lateral * laneSpacing * 0.72f + hoverX, 1f - Mathf.Exp(-4f * dt));
-                p.y = 0.38f + Mathf.Sin(elapsed * (sillyDuck ? 8f : 2.1f)) * (sillyDuck ? 0.20f : 0.22f);
-                p.z = Mathf.Lerp(greveFarZ, greveNearZ, chase);
+                p.y = 0.38f + Mathf.Sin(elapsed * 2.1f) * 0.22f;
+                float targetDepth = GreveDepthInFrontOfWall();
+                p.z = Mathf.MoveTowards(p.z, targetDepth, 2f * dt);
+                if (introWall != null && introWall.gameObject.activeSelf)
+                    p.z = Mathf.Min(p.z, introWall.localPosition.z - 1.4f);
                 greve.transform.localPosition = p;
                 greve.sortingOrder = DepthSortOrder(p.z);
                 greve.transform.localRotation = Quaternion.Euler(0f, 0f,
-                    sillyDuck ? Mathf.Sin(elapsed * 9f) * 7f : -hoverX * 1.8f);
+                    -hoverX * 1.8f);
                 UpdateDarknessFront(p, chaseEase);
             }
+        }
+
+        private float GreveDepthInFrontOfWall()
+        {
+            float desired = Mathf.Lerp(greveFarZ, greveNearZ, chase);
+            // The portrait wall occludes transparent sprites even with high sorting orders.
+            // Keep the whole flat figure on the camera side until the wall passes.
+            return introWall != null && introWall.gameObject.activeSelf
+                ? Mathf.Min(desired, introWall.localPosition.z - 1.4f) : desired;
+        }
+
+        private void ShowGreveAnimation(string clip, float dt, float fps, bool loop, float cueTime = -1f)
+        {
+            if (greveAnimation != clip || greveAnimationCueTime != cueTime)
+            {
+                greveAnimation = clip;
+                greveAnimationCueTime = cueTime;
+                greveAnimationElapsed = 0f;
+            }
+            else greveAnimationElapsed += dt;
+            Sprite[] frames = GreveChaseSprites.GreveAnimation(clip);
+            if (frames.Length == 0) return;
+            int frame = Mathf.FloorToInt(greveAnimationElapsed * fps);
+            frame = loop ? frame % frames.Length : Mathf.Min(frame, frames.Length - 1);
+            greve.sprite = frames[frame];
         }
 
         private void UpdateDarknessFront(Vector3 grevePosition, float chaseEase)
@@ -1701,10 +1683,10 @@ namespace KinectKids.Games.GreveGast
                 Mathf.InverseLerp(0.60f, 0.87f, chaseEase));
             if (floorFogVolumeMaterial != null)
                 floorFogVolumeMaterial.SetColor("_FogColor",
-                    new Color(0.37f, 0.48f, 0.68f, 0.25f * volumeFade));
+                    new Color(0.13f, 0.19f, 0.32f, 0.22f * volumeFade));
             if (foregroundFloorFogMaterial != null)
                 foregroundFloorFogMaterial.SetColor("_FogColor",
-                    new Color(0.36f, 0.46f, 0.65f, 0.27f * volumeFade));
+                    new Color(0.12f, 0.18f, 0.30f, 0.22f * volumeFade));
         }
 
         private static Sprite FrameProgress(Sprite[] frames, float progress)
@@ -1926,81 +1908,71 @@ namespace KinectKids.Games.GreveGast
             CreatePrimitive("Obstacle floor shadow", PrimitiveType.Cylinder, root.transform,
                 new Vector3(0f, 0.012f, 0f), new Vector3(jump ? 2.2f : 2.7f, 0.018f, 1.2f),
                 hazardShadowMaterial);
-            // The environment art has floor-level pivots. Keep physical obstacles
-            // in the running lanes instead of reusing them as wall decorations.
+            // Duck beneath a low, ground-supported arch, not a trap hanging
+            // from the eighteen-metre ceiling. Jump and side hazards stay on the floor.
             bool cueSlide = expectedCommand == GastGameplayCommand.Slide;
-            bool swingingAxe = expectedCommand == GastGameplayCommand.None && !jump && index % 6 == 3;
-            string spriteKey = cueSlide ? "haz_1" : swingingAxe ? "sheet_axe" : jump
-                ? (index % 4 == 0 ? "new_spike_trap" : "new_rubble")
-                : (index % 4 == 1 ? "new_barrel" : "new_crate");
-            Sprite[] animation = swingingAxe ? GreveEnvironmentSheets.SwingingAxe : null;
-            Sprite sprite = cueSlide ? GreveChaseSprites.Hazard("haz_1") : swingingAxe && animation.Length > 0
-                ? animation[0] : GreveChaseSprites.Environment(spriteKey);
-            if (sprite != null)
+            if (cueSlide)
             {
-                GameObject obstacle = new GameObject("Floor obstacle " + spriteKey);
-                obstacle.transform.SetParent(root.transform, false);
-                bool floorSpikes = spriteKey == "new_spike_trap";
-                float obstacleHeight = cueSlide ? (cue != null ? 3.0f : 1.2f) : swingingAxe ? 3.4f :
-                    jump ? (floorSpikes ? 0.85f : 1.25f) : 2.3f;
-                obstacle.transform.localPosition = new Vector3(0f,
-                    cueSlide ? (cue != null ? 2.25f : 1.8f) : swingingAxe ? 0.75f :
-                    floorSpikes ? obstacleHeight + 0.04f : 0.04f, 0f);
-                SpriteRenderer renderer = obstacle.AddComponent<SpriteRenderer>();
-                renderer.sprite = sprite;
-                // This illustration has spikes below its beam. On the floor,
-                // turn it over so the wood rests on the ground and spikes rise.
-                // flipY reflects around the bottom pivot: lift by its full
-                // scaled height so the flipped sprite stays above the floor.
-                renderer.flipY = floorSpikes;
-                renderer.sharedMaterial = player.sharedMaterial;
-                renderer.sortingOrder = DepthSortOrder(root.transform.localPosition.z);
-                hazard.sprite = renderer;
-                hazard.visual = renderer;
-                hazard.frames = animation;
-                SizeSpriteToHeight(renderer, obstacleHeight);
+                hazard.visual = BuildLowDuckArch(root.transform);
             }
             else
             {
-                hazard.visual = CreatePrimitive("Fallback obstacle", PrimitiveType.Cube, root.transform,
-                    new Vector3(0f, cueSlide ? (cue != null ? 2.2f : 2.4f) : jump ? 0.55f : 1.15f, 0f),
-                    new Vector3(2.2f, cueSlide && cue == null ? 1.2f : jump ? 1.1f : 2.3f, 0.9f),
-                    themeStyles[requestedTheme].accentMaterial).GetComponent<Renderer>();
+                string spriteKey = jump
+                    ? (index % 3 == 0 ? "new_crate" : "new_rubble")
+                    : (index % 2 == 0 ? "new_barrel" : "new_crate");
+                Sprite sprite = GreveChaseSprites.Environment(spriteKey);
+                if (sprite != null)
+                {
+                    GameObject obstacle = new GameObject("Floor obstacle " + spriteKey);
+                    obstacle.transform.SetParent(root.transform, false);
+                    obstacle.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+                    SpriteRenderer renderer = obstacle.AddComponent<SpriteRenderer>();
+                    renderer.sprite = sprite;
+                    renderer.sharedMaterial = player.sharedMaterial;
+                    renderer.sortingOrder = DepthSortOrder(root.transform.localPosition.z);
+                    hazard.sprite = renderer;
+                    hazard.visual = renderer;
+                    SizeSpriteToHeight(renderer, jump ? 1.0f : 2.3f);
+                }
+                else
+                {
+                    hazard.visual = CreatePrimitive("Floor obstacle", PrimitiveType.Cube, root.transform,
+                        new Vector3(0f, jump ? 0.5f : 1.15f, 0f),
+                        new Vector3(2.2f, jump ? 1f : 2.3f, 0.9f),
+                        themeStyles[requestedTheme].accentMaterial).GetComponent<Renderer>();
+                }
             }
             hazards.Add(hazard);
             CollectHazardVisuals(hazard);
         }
 
-        private void UpdateChoirGhosts()
+        private Renderer BuildLowDuckArch(Transform parent)
         {
-            if (choirGhosts == null || music == null || choirFrames == null) return;
-            float songTime = music.time;
-            float visibility = 0f;
-            for (int section = 0; section < choirSections.Count; section++)
+            // Visible feet and supports make the low opening independent of the ceiling.
+            float clearance = playerHeight * 0.60f;
+            float thickness = 0.55f;
+            float halfWidth = laneSpacing * 0.36f;
+            if (lowDuckArchMaterial == null)
             {
-                Vector2 range = choirSections[section];
-                if (songTime < range.x || songTime >= range.y) continue;
-                visibility = Mathf.Min(Mathf.InverseLerp(range.x, range.x + 0.8f, songTime),
-                    1f - Mathf.InverseLerp(range.y - 0.8f, range.y, songTime));
-                break;
+                lowDuckArchMaterial = MaterialFactory.Textured(new Color(0.65f, 0.60f, 0.54f),
+                    Resources.Load<Texture2D>("Textures/CastleStone"), 0f);
+                // Keep the silhouette readable between torches in the darker corridor.
+                lowDuckArchMaterial.EnableKeyword("_EMISSION");
+                lowDuckArchMaterial.SetColor("_EmissionColor", new Color(0.065f, 0.052f, 0.038f));
             }
-            for (int i = 0; i < choirGhosts.Length; i++)
+            Material stone = lowDuckArchMaterial;
+            for (int side = -1; side <= 1; side += 2)
             {
-                SpriteRenderer ghost = choirGhosts[i];
-                if (ghost == null) continue;
-                int frame = Mathf.FloorToInt(songTime * 4f + i * 1.5f) % choirFrames.Length;
-                if (choirFrames[frame] != null && ghost.sprite != choirFrames[frame])
-                {
-                    ghost.sprite = choirFrames[frame];
-                    SizeSpriteToHeight(ghost, 2.6f);
-                }
-                float side = i == 0 ? -1f : 1f;
-                float emerge = Mathf.SmoothStep(0f, 1f, visibility);
-                ghost.transform.localPosition = new Vector3(
-                    side * (corridorWidth * 0.5f - Mathf.Lerp(1.8f, 3.5f, emerge)),
-                    0.9f + Mathf.Sin(songTime * 2.8f + i * 1.7f) * 0.18f, 8.5f);
-                ghost.color = new Color(1f, 1f, 1f, emerge);
+                CreatePrimitive("Low arch stone support", PrimitiveType.Cube, parent,
+                    new Vector3(side * halfWidth, clearance * 0.5f, 0f),
+                    new Vector3(0.48f, clearance, 0.65f), stone);
+                CreatePrimitive("Low arch stone foot", PrimitiveType.Cube, parent,
+                    new Vector3(side * halfWidth, 0.12f, 0f),
+                    new Vector3(0.72f, 0.24f, 0.9f), stone);
             }
+            return CreatePrimitive("Low arch duck beam", PrimitiveType.Cube, parent,
+                new Vector3(0f, clearance + thickness * 0.5f, 0f),
+                new Vector3(halfWidth * 2f + 0.60f, thickness, 0.7f), stone).GetComponent<Renderer>();
         }
 
         private bool Avoided(RunHazard hazard)
@@ -2009,15 +1981,13 @@ namespace KinectKids.Games.GreveGast
             if (hazard.authoredCueHazard)
             {
                 float now = songClock != null ? songClock.TimeSeconds : -1f;
-                bool inWindow = lastDodgeSongTime >= hazard.windowOpenTime &&
-                    lastDodgeSongTime <= hazard.windowCloseTime && lastDodgeSongTime <= now;
                 bool sideCommand = hazard.expectedCommand == GastGameplayCommand.LaneLeft ||
                     hazard.expectedCommand == GastGameplayCommand.LaneRight;
                 if (now < hazard.windowOpenTime || (!sideCommand && now > hazard.windowCloseTime)) return false;
                 int actualLane = Mathf.Clamp(Mathf.RoundToInt(player.transform.localPosition.x / laneSpacing) + 1, 0, 2);
                 return GastRunnerRules.SongResponse(hazard.expectedCommand, actualLane,
-                    inWindow && lastDodgeAction == DodgeAction.Jump,
-                    inWindow && lastDodgeAction == DodgeAction.Duck);
+                    dodgeHistory.InWindow(GastGameplayCommand.Jump, hazard.windowOpenTime, hazard.windowCloseTime, now),
+                    dodgeHistory.InWindow(GastGameplayCommand.Slide, hazard.windowOpenTime, hazard.windowCloseTime, now));
             }
             if (!sameLane) return true;
             return hazard.jump ? currentDodge == DodgeAction.Jump :
@@ -2120,7 +2090,7 @@ namespace KinectKids.Games.GreveGast
                 for (int i = 0; i < hazards.Count; i++)
                     if (hazards[i].root != null) Destroy(hazards[i].root.gameObject);
                 hazards.Clear();
-                lastDodgeSongTime = -1f;
+                dodgeHistory.Reset();
                 lastGestureCueTime = -1f;
                 resultPoseUntil = 0f;
                 gastCueTimeline.RestoreAt(now);
@@ -2514,6 +2484,7 @@ namespace KinectKids.Games.GreveGast
         private readonly List<SpriteRenderer> decorations = new List<SpriteRenderer>();
         private readonly List<AnimatedDecoration> animatedDecorations = new List<AnimatedDecoration>();
         private readonly List<GameObject> details = new List<GameObject>();
+        private readonly List<Light> torchLights = new List<Light>();
         private readonly List<Material> transitionMaterials = new List<Material>();
         private readonly List<Rect> leftWallAreas = new List<Rect>();
         private readonly List<Rect> rightWallAreas = new List<Rect>();
@@ -2551,6 +2522,12 @@ namespace KinectKids.Games.GreveGast
 
         private void Update()
         {
+            // Slow, irregular flame movement, with a stable minimum brightness.
+            for (int i = 0; i < torchLights.Count; i++)
+                if (torchLights[i] != null)
+                    torchLights[i].intensity = 0.70f + 0.20f *
+                        Mathf.PerlinNoise(variant * 7.3f + i * 2.1f, Time.time * 0.65f);
+
             for (int i = 0; i < animatedDecorations.Count; i++)
             {
                 AnimatedDecoration decoration = animatedDecorations[i];
@@ -2621,6 +2598,7 @@ namespace KinectKids.Games.GreveGast
             vista.transform.localPosition = new Vector3(0f, 0.02f, segmentLength * 0.34f);
             SpriteRenderer renderer = vista.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
+            renderer.color = new Color(0.42f, 0.45f, 0.54f);
             renderer.sortingOrder = 8;
             float spriteHeight = sprite.bounds.size.y;
             vista.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? height / spriteHeight : 1f);
@@ -2673,6 +2651,7 @@ namespace KinectKids.Games.GreveGast
             pot.transform.localPosition = new Vector3(side * (halfWidth - 2.4f), 0.02f, -4.4f);
             SpriteRenderer renderer = pot.AddComponent<SpriteRenderer>();
             renderer.sprite = frames[0];
+            renderer.color = new Color(0.42f, 0.45f, 0.54f);
             renderer.sortingOrder = 8;
             float spriteHeight = frames[0].bounds.size.y;
             pot.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? 2.3f / spriteHeight : 1f);
@@ -2720,7 +2699,6 @@ namespace KinectKids.Games.GreveGast
             switch (spriteKey)
             {
                 case "new_banner": y = 7.5f; height = 5.2f; break;
-                case "new_chain": y = 10.5f; height = 5.5f; break;
                 case "sheet_banner": y = 6.5f; height = 3.6f; break;
                 case "sheet_gargoyle": y = 4.4f; height = 2.8f; break;
                 case "sheet_plaque": y = 6.8f; height = 1.7f; break;
@@ -2736,6 +2714,7 @@ namespace KinectKids.Games.GreveGast
             go.transform.localPosition = new Vector3(side * (halfWidth - 0.16f), y, z);
             go.transform.localRotation = Quaternion.Euler(0f, side < 0f ? 90f : -90f, 0f);
             SpriteRenderer renderer = go.AddComponent<SpriteRenderer>(); renderer.sprite = sprite; renderer.sortingOrder = 10;
+            renderer.color = new Color(0.36f, 0.40f, 0.50f);
             // Wall rotation already reverses the right-hand screen projection.
             // Mirror the left sculpture so both faces look into the corridor.
             if (spriteKey == "sheet_gargoyle") renderer.flipX = side < 0f;
@@ -2752,8 +2731,9 @@ namespace KinectKids.Games.GreveGast
                 Light light = flameLight.AddComponent<Light>();
                 light.type = LightType.Point;
                 light.color = lightColor;
-                light.range = 10f;
-                light.intensity = 2.3f;
+                light.range = 6.5f;
+                light.intensity = 0.8f;
+                torchLights.Add(light);
                 light.shadows = LightShadows.None;
             }
         }
@@ -2783,6 +2763,7 @@ namespace KinectKids.Games.GreveGast
             if (collider != null) Destroy(collider);
             Material scenery = new Material(shader);
             scenery.SetTexture("_FarTex", landscape);
+            scenery.SetColor("_Tint", new Color(0.25f, 0.32f, 0.48f));
             scenery.SetTexture("_NearTex", mist);
             scenery.SetFloat("_WindowAspect", outside.transform.localScale.x / outside.transform.localScale.y);
             MeshRenderer backdrop = outside.GetComponent<MeshRenderer>();
@@ -2793,6 +2774,7 @@ namespace KinectKids.Games.GreveGast
             stonework.transform.localPosition = new Vector3(0f, 0f, 0.045f);
             SpriteRenderer renderer = stonework.AddComponent<SpriteRenderer>();
             renderer.sprite = frame;
+            renderer.color = new Color(0.36f, 0.40f, 0.50f);
             renderer.sortingOrder = 10;
             float spriteHeight = frame.bounds.size.y;
             stonework.transform.localScale = Vector3.one * (spriteHeight > 0.001f ? 6.8f / spriteHeight : 1f);
@@ -2842,6 +2824,7 @@ namespace KinectKids.Games.GreveGast
             go.transform.SetParent(transform, false);
             SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
+            renderer.color = new Color(0.42f, 0.45f, 0.54f);
             renderer.sortingOrder = 8;
             float spriteHeight = sprite.bounds.size.y;
             float scale = spriteHeight > 0.001f ? height / spriteHeight : 1f;
@@ -2865,6 +2848,7 @@ namespace KinectKids.Games.GreveGast
             }
             decorations.Clear();
             animatedDecorations.Clear();
+            torchLights.Clear();
             leftWallAreas.Clear();
             rightWallAreas.Clear();
             for (int i = 0; i < details.Count; i++)

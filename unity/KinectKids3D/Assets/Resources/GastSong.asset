@@ -174,10 +174,10 @@ MonoBehaviour:
     lyric: "SPRING (startmark\xF6r fr\xE5n Dennis)"
     gameplayCommand: 0
     hasVocalTime: 1
-    vocalTimeSeconds: 21.5
+    vocalTimeSeconds: 21
     timingStatus: 1
     cueOffsetSeconds: 0
-    gestureLeadSeconds: 0.45
+    gestureLeadSeconds: 0
     warningLeadSeconds: 1.2
     impactOffsetSeconds: 0
     windowBeforeSeconds: 0.35

@@ -113,7 +113,7 @@ namespace KinectKids3D.Platform
                 music.Play();
             }
             menuLogo = Resources.Load<Texture2D>("KinectKidsMenuLogo");
-            gateGreve = Resources.Load<Sprite>("GreveChase/GreveGast/greve_reach");
+            gateGreve = KinectKids.Games.GreveGast.GreveChaseSprites.Greve("reach");
             LoadSongs();
         }
 
@@ -333,7 +333,7 @@ namespace KinectKids3D.Platform
             if (menuLogo != null)
                 GUI.DrawTexture(new Rect(25f, 18f, 430f, 215f), menuLogo, ScaleMode.ScaleToFit, true);
             if (gateGreve != null)
-                GUI.DrawTexture(new Rect(1000f, 360f, 250f, 295f), gateGreve.texture, ScaleMode.ScaleToFit, true);
+                DrawSpritePreview(new Rect(1000f, 360f, 250f, 295f), gateGreve);
 
             if (iconSheet == null) return;
             float shimmer = 0.55f + Mathf.Sin(Time.unscaledTime * 2.4f) * 0.24f;

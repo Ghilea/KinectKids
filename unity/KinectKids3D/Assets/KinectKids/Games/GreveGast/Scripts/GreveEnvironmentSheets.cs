@@ -31,20 +31,6 @@ namespace KinectKids.Games.GreveGast
         public static Sprite[] SwingingAxe => IsolatedSequence("axe", 4, 0, 235, 145, 0, 145, 290, 435, 580);
         public static Sprite[] Choir => Sequence("choir", 5, 0, 225, 170, 715, 885, 1065, 1240);
 
-        public static Sprite[] Portrait
-        {
-            get
-            {
-                return new[]
-                {
-                    Cut("portrait_0", 5, 492, 220, 185, 250, true),
-                    Cut("portrait_1", 5, 677, 220, 190, 250, true),
-                    Cut("portrait_2", 5, 868, 220, 185, 250, true),
-                    Cut("portrait_3", 5, 1053, 220, 380, 250, true)
-                };
-            }
-        }
-
         private static Sprite[] Sequence(string name, int sheet, int top, int height,
             int width, params int[] lefts)
         {
