@@ -69,8 +69,7 @@ VerifiedByListening. They create a warned obstacle,
 evaluate the matching jump/slide/screen-lane input once in its editable timing
 window, and play a short Gast reaction. Existing keyboard and Kinect controls
 operate the same runner and are used for cue grading.
-When song data is loaded, untimed random obstacles are disabled, including
-when the timeline has no timed commands yet. Each timed command displays an
+Random obstacles fill gaps between song commands. Each timed command displays an
 existing action icon: `haz_20` (jump), `haz_21` (duck), `haz_18` (screen left)
 or `haz_19` (screen right). The HUD no longer lists movement instructions as
 text. Obstacles reach the player at the vocal mark by default; an editable
@@ -82,6 +81,29 @@ Matching input is latched
 through the full response window, and the result is evaluated at its end.
 These four cues accept input from 0.35 s before to 0.85 s after the vocal mark.
 Their prompts advance shortly after impact, independently of the later grading.
+
+Song jumps and ducks block all three lanes and require the matching timed
+movement regardless of the player's lane. Side commands block the two lanes
+opposite the named safe edge: left leaves only the left lane open, right only
+the right lane. A player already at that edge can hold their position. While a
+song-side command is active, a matching keyboard or Kinect direction moves to
+that edge in one animation, even from the opposite edge; free movement still
+uses ordinary one-lane steps. Side commands check actual position at impact,
+so the next command cannot retroactively fail the previous one.
+
+Random encounters choose a jump obstacle, overhead duck beam or side-step
+obstacle in the player's actual lane at warning time. The lane remains fixed
+after that, allowing the player to dodge without being followed. The spawn
+interval is 4–6 s with only one unresolved random encounter at a time.
+A movement icon appears over the threatened lane 0.8 s before the obstacle is
+activated. The obstacle then enters from the camera-side floor edge, starting
+behind the near clipping plane with 2.4 s travel to the player, rather than
+popping into the middle of the view. Random duck beams are kept below the
+camera's eye level so they also enter naturally from the bottom of the view.
+Their advance warning, complete travel plus 0.8 s recovery must fit before the next authored
+warning. Random spawning remains suspended through the song response window
+and recovery, and stale random hazards are removed if edited song timings
+bring them into a protected interval. Song cue times are unaffected.
 
 Open **KinectKids → Greve Gast → Cue Editor** to edit the timeline. Use its
 playhead to add voice marks, set a cue's status after checking the WAV, and

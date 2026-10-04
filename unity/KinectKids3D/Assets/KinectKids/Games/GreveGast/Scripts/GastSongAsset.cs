@@ -17,6 +17,64 @@ namespace KinectKids.Games.GreveGast
         public List<GastSongCue> cues = new List<GastSongCue>();
     }
 
+    /// <summary>Lane masks use bit 0 = left, bit 1 = centre, bit 2 = right.</summary>
+    public static class GastRunnerRules
+    {
+        public static int PlayerLane(float playerX, float laneSpacing)
+        {
+            if (laneSpacing <= 0f) return 1;
+            return System.Math.Max(0, System.Math.Min(2, (int)System.Math.Round(playerX / laneSpacing) + 1));
+        }
+
+        public static int NextLane(int currentLane, int direction, bool songSideCommand)
+        {
+            if (direction == 0) return currentLane;
+            if (songSideCommand) return direction < 0 ? 0 : 2;
+            return System.Math.Max(0, System.Math.Min(2, currentLane + direction));
+        }
+
+        public static int BlockedLanes(GastGameplayCommand command)
+        {
+            switch (command)
+            {
+                case GastGameplayCommand.Jump:
+                case GastGameplayCommand.Slide: return 7;
+                case GastGameplayCommand.LaneLeft: return 6;
+                case GastGameplayCommand.LaneRight: return 3;
+                default: return 0;
+            }
+        }
+
+        public static bool SongResponse(GastGameplayCommand command, int lane,
+            bool jumpInWindow, bool duckInWindow)
+        {
+            switch (command)
+            {
+                case GastGameplayCommand.Jump: return jumpInWindow;
+                case GastGameplayCommand.Slide: return duckInWindow;
+                case GastGameplayCommand.LaneLeft: return lane == 0;
+                case GastGameplayCommand.LaneRight: return lane == 2;
+                default: return false;
+            }
+        }
+
+        public static bool CanSpawnRandom(GastSongAsset song, float now, float travelSeconds, float recoverySeconds)
+        {
+            if (song == null || song.cues == null) return true;
+            float finish = now + travelSeconds + recoverySeconds;
+            foreach (GastSongCue cue in song.cues)
+            {
+                if (cue == null || !cue.gameplayCommand || !cue.hasVocalTime ||
+                    cue.timingStatus == GastTimingStatus.Untimed) continue;
+                float vocal = cue.EffectiveTime(song);
+                float start = vocal - cue.warningLeadSeconds;
+                float end = vocal + cue.impactOffsetSeconds + cue.windowAfterSeconds + recoverySeconds;
+                if (now <= end && finish >= start) return false;
+            }
+            return true;
+        }
+    }
+
     [Serializable]
     public sealed class GastSongSection
     {

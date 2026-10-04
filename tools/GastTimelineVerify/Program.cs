@@ -166,3 +166,58 @@ foreach (var command in new[] { GastGameplayCommand.Slide, GastGameplayCommand.L
     editedCue.impactOffsetSeconds += 1f;
     Check(editedTimeline.RefreshAt(15.6f), command + " impact-only change also rebuilds");
 }
+
+for (int lane = 0; lane < 3; lane++)
+{
+    Check((GastRunnerRules.BlockedLanes(GastGameplayCommand.Jump) & (1 << lane)) != 0 &&
+        (GastRunnerRules.BlockedLanes(GastGameplayCommand.Slide) & (1 << lane)) != 0,
+        "jump and duck visibly block lane " + lane);
+    Check(!GastRunnerRules.SongResponse(GastGameplayCommand.Jump, lane, false, true) &&
+        !GastRunnerRules.SongResponse(GastGameplayCommand.Slide, lane, true, false),
+        "changing lane cannot bypass jump or duck in lane " + lane);
+    Check(GastRunnerRules.SongResponse(GastGameplayCommand.Jump, lane, true, false) &&
+        GastRunnerRules.SongResponse(GastGameplayCommand.Slide, lane, false, true),
+        "matching timed jump and duck succeed in lane " + lane);
+    Check(GastRunnerRules.NextLane(lane, -1, true) == 0 && GastRunnerRules.NextLane(lane, 1, true) == 2,
+        "one song-side gesture reaches the named safe lane from lane " + lane);
+}
+Check(GastRunnerRules.BlockedLanes(GastGameplayCommand.LaneLeft) == 6 &&
+    GastRunnerRules.BlockedLanes(GastGameplayCommand.LaneRight) == 3, "side commands leave only the named edge lane open");
+Check(GastRunnerRules.SongResponse(GastGameplayCommand.LaneLeft, 0, false, false) &&
+    GastRunnerRules.SongResponse(GastGameplayCommand.LaneRight, 2, false, false),
+    "already at the named edge can hold safely without an impossible extra step");
+Check(!GastRunnerRules.SongResponse(GastGameplayCommand.LaneLeft, 1, false, false) &&
+    !GastRunnerRules.SongResponse(GastGameplayCommand.LaneRight, 0, false, false),
+    "wrong-side or middle lane cannot satisfy a side command");
+Check(GastRunnerRules.NextLane(0, 1, false) == 1 && GastRunnerRules.NextLane(0, -1, false) == 0,
+    "free movement retains single steps and clamps the corridor edges");
+
+var guardedSong = new GastSongAsset();
+guardedSong.cues.Add(new GastSongCue { id = "guard", vocalTimeSeconds = 10f,
+    hasVocalTime = true, gameplayCommand = true, timingStatus = GastTimingStatus.Estimated,
+    warningLeadSeconds = 0.65f, impactOffsetSeconds = 0.35f });
+Check(GastRunnerRules.CanSpawnRandom(guardedSong, 3f, 1.8f, 0.8f), "random encounters fill quiet parts of the song");
+Check(!GastRunnerRules.CanSpawnRandom(guardedSong, 8f, 1.8f, 0.8f),
+    "random spawn is rejected when its travel and recovery overlap the next warning");
+Check(!GastRunnerRules.CanSpawnRandom(guardedSong, 10f, 1.8f, 0.8f), "song encounter takes priority over random obstacles");
+Check(GastRunnerRules.CanSpawnRandom(guardedSong, 12f, 1.8f, 0.8f), "random encounters resume after song recovery");
+guardedSong.cues[0].cueOffsetSeconds = 5f;
+Check(GastRunnerRules.CanSpawnRandom(guardedSong, 8f, 1.8f, 0.8f) &&
+    !GastRunnerRules.CanSpawnRandom(guardedSong, 13f, 1.8f, 0.8f),
+    "random protection follows edited song offsets");
+guardedSong.cues[0].timingStatus = GastTimingStatus.Untimed;
+Check(GastRunnerRules.CanSpawnRandom(guardedSong, 15f, 1.8f, 0.8f), "untimed cues do not suppress random play");
+
+Check(GastRunnerRules.PlayerLane(0f, 4.2f) == 1, "random obstacle targets centre when the player is centred");
+Check(GastRunnerRules.PlayerLane(-4.2f, 4.2f) == 0 && GastRunnerRules.PlayerLane(4.2f, 4.2f) == 2,
+    "random obstacle targets either edge when the player is there");
+Check(GastRunnerRules.PlayerLane(-1.7f, 4.2f) == 1 && GastRunnerRules.PlayerLane(1.7f, 4.2f) == 1,
+    "small player offsets do not create unrelated side-lane obstacles");
+Check(GastRunnerRules.PlayerLane(-100f, 4.2f) == 0 && GastRunnerRules.PlayerLane(100f, 4.2f) == 2,
+    "random target remains inside the playable lanes");
+guardedSong.cues[0].timingStatus = GastTimingStatus.Estimated;
+guardedSong.cues[0].cueOffsetSeconds = 0f;
+Check(!GastRunnerRules.CanSpawnRandom(guardedSong, 6f, 0.8f + 2.4f, 0.8f),
+    "random protection includes both advance warning and visible travel");
+Check(GastRunnerRules.CanSpawnRandom(guardedSong, 5f, 0.8f + 2.4f, 0.8f),
+    "the longer random encounter still fits sufficiently early in a quiet gap");
